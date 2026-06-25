@@ -65,13 +65,13 @@ cd kyverno-governance-platform
 
 ### 2단계: Host OS에 Kind 설치 및 클러스터 생성
 개발 환경의 스크립트([.devcontainer/scripts/setup.sh](file:///home/asdf/kyverno-governance-platform/.devcontainer/scripts/setup.sh)) 설정과 연동되도록 클러스터 이름을 `k8s-lab`으로 지정하여 생성합니다.
-
+See also : https://kind.sigs.k8s.io/docs/user/quick-start/#installing-from-release-binaries
 ```bash
 # 1. Kind CLI 설치 (Linux / WSL2 기준)
-[ $(uname -m) = x86_64 ] && curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.23.0/kind-linux-amd64
+# For AMD64 / x86_64
+[ $(uname -m) = x86_64 ] && curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.32.0/kind-linux-amd64
 chmod +x ./kind
 sudo mv ./kind /usr/local/bin/kind
-
 # 2. 클러스터 생성 (이때 Docker 'kind' 네트워크가 자동 구성됩니다)
 kind create cluster --name k8s-lab
 ```
