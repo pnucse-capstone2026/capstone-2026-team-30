@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+.next/
+out/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Prisma
+apps/backend/prisma/migrations/
+
+# Logs
+*.log
+pino.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+
+# AI Agents & Copilots
+.gemini/
+.continue/
+.cursor/
+.aider*
+.agents/
+*chat.history.md
+openai-*.log
+anthropic-*.log
+gemini-*.log
+*.prompt
+

@@ -1,0 +1,61 @@
+name: Project CI
+
+on:
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: devuser
+          POSTGRES_PASSWORD: devpassword
+          POSTGRES_DB: kyverno_dashboard
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install Dependencies
+        run: pnpm install
+
+      - name: Lint (Backend)
+        run: pnpm --filter @kyverno-platform/backend lint
+
+      - name: Lint (Frontend)
+        run: pnpm --filter @kyverno-platform/frontend lint
+
+      - name: Prisma Generate & DB Push
+        env:
+          DATABASE_URL: postgresql://devuser:devpassword@localhost:5432/kyverno_dashboard?schema=public
+        run: |
+          pnpm --filter @kyverno-platform/backend exec prisma generate
+          pnpm --filter @kyverno-platform/backend exec prisma db push
+
+      - name: Build Backend (NestJS)
+        run: pnpm --filter @kyverno-platform/backend build
+
+      - name: Build Frontend (Next.js)
+        run: pnpm --filter @kyverno-platform/frontend build
