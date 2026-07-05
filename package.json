@@ -6,7 +6,25 @@
     "dev": "pnpm --parallel -r dev",
     "build": "pnpm --parallel -r build",
     "lint": "pnpm --parallel -r lint",
-    "format": "pnpm --parallel -r format"
+    "format": "pnpm --parallel -r format",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.0.11",
+    "lint-staged": "^15.2.7"
+  },
+  "lint-staged": {
+    "apps/backend/src/**/*.ts": [
+      "pnpm --filter @kyverno-platform/backend lint --fix",
+      "pnpm --filter @kyverno-platform/backend format"
+    ],
+    "apps/frontend/src/**/*.{ts,tsx}": [
+      "pnpm --filter @kyverno-platform/frontend lint --fix",
+      "pnpm --filter @kyverno-platform/frontend format"
+    ],
+    "k8s-manifests/policies/**/*.yaml": [
+      "kyverno validate"
+    ]
   },
   "engines": {
     "node": ">=20",
