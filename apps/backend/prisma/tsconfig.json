@@ -1,0 +1,6 @@
+{
+  "extends": "../tsconfig.seed.json",
+  "include": [
+    "*.ts"
+  ]
+}
