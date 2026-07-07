@@ -40,8 +40,6 @@ model ViolationHistory {
   id            String   @id @default(uuid())
   policyName    String
   ruleName      String
-  rawMessage    String   @db.Text
-  parsedMessage String   @db.Text
   occurredAt    DateTime
 
   @@index([policyName])
