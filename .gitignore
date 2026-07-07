@@ -6,14 +6,12 @@ node_modules/
 dist/
 .next/
 out/
+*.tsbuildinfo
 
 # Environment files
 .env
 .env.local
 .env.*.local
-
-# Prisma
-apps/backend/prisma/migrations/
 
 # Logs
 *.log
