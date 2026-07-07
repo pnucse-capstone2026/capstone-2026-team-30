@@ -10,6 +10,76 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// =====================
-// TODO : add actual thing here
-// =====================
+enum Role {
+  ADMIN
+  APPROVER
+  REQUESTER
+  VIEWER
+}
+
+enum ExceptionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+model User {
+  id      String @id @default(uuid())
+  email   String @unique
+  pwdHash String
+  role    Role
+
+  requestedExceptionRequests PolicyExceptionRequest[] @relation("PolicyExceptionRequestRequester")
+  approvedExceptionRequests  PolicyExceptionRequest[] @relation("PolicyExceptionRequestApprover")
+  auditLogs                  AuditLog[]
+}
+
+model ViolationHistory {
+  id            String   @id @default(uuid())
+  policyName    String
+  ruleName      String
+  rawMessage    String   @db.Text
+  parsedMessage String   @db.Text
+  occurredAt    DateTime
+
+  @@index([policyName])
+  @@index([occurredAt])
+}
+
+model PolicyExceptionRequest {
+  id               String          @id @default(uuid())
+  status           ExceptionStatus
+  reason           String          @db.Text
+  policyName       String
+  k8sExceptionName String
+  expiresAt        DateTime
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  requestUserId    String
+  approverUserId   String
+
+  requestUser  User @relation("PolicyExceptionRequestRequester", fields: [requestUserId], references: [id])
+  approverUser User @relation("PolicyExceptionRequestApprover", fields: [approverUserId], references: [id])
+
+  @@index([status])
+  @@index([policyName])
+  @@index([requestUserId])
+  @@index([approverUserId])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  action     String
+  entityType String
+  entityId   String
+  createdAt  DateTime @default(now())
+  userId     String
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+}
