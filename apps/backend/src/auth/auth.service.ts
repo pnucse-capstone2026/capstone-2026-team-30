@@ -5,23 +5,13 @@ import { Role } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
+import { AuthenticatedUser, JwtPayload } from './auth.types';
 
-type JwtPayload = {
-  sub: string;
-  email: string;
-  role: Role;
-};
-
-type AuthUser = {
-  id: string;
-  email: string;
-  role: Role;
-};
 
 type LoginResult = {
   accessToken: string;
   refreshToken: string;
-  user: AuthUser;
+  user: AuthenticatedUser;
 };
 
 @Injectable()
@@ -31,6 +21,10 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
   ) {}
+
+  me(user: AuthenticatedUser): AuthenticatedUser {
+    return user;
+  }
 
   async login(dto: LoginDto): Promise<LoginResult> {
     const email = dto.email.trim().toLowerCase();

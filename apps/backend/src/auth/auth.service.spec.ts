@@ -62,6 +62,17 @@ function createService() {
 }
 
 describe('AuthService', () => {
+  it('returns the authenticated user for me', () => {
+    const { service } = createService();
+    const user = {
+      id: 'user-1',
+      email: 'admin@example.com',
+      role: Role.ADMIN,
+    };
+
+    expect(service.me(user)).toBe(user);
+  });
+
   afterEach(() => {
     jest.restoreAllMocks();
   });
