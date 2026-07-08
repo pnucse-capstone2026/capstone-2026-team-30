@@ -6,7 +6,6 @@ import * as argon2 from 'argon2';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthenticatedUser, JwtPayload } from './auth.types';
 import { LoginDto } from './dto/login.dto';
-import { RefreshTokenDto } from './dto/refresh-token.dto';
 
 type LoginResult = {
   accessToken: string;
@@ -56,12 +55,12 @@ export class AuthService {
     });
   }
 
-  async refresh(dto: RefreshTokenDto): Promise<LoginResult> {
-    const payload = await this.verifyRefreshToken(dto.refreshToken);
+  async refresh(refreshToken: string): Promise<LoginResult> {
+    const payload = await this.verifyRefreshToken(refreshToken);
     const user = await this.getActiveUser(payload.sub);
     const tokenRecords = await this.findMatchingRefreshTokens(
       user.id,
-      dto.refreshToken,
+      refreshToken,
     );
 
     await this.revokeRefreshTokens(tokenRecords);
@@ -69,12 +68,16 @@ export class AuthService {
     return this.issueTokens(user);
   }
 
-  async logout(dto: RefreshTokenDto): Promise<LogoutResult> {
+  async logout(refreshToken?: string): Promise<LogoutResult> {
     try {
-      const payload = await this.verifyRefreshToken(dto.refreshToken);
+      if (!refreshToken) {
+        return { success: true };
+      }
+
+      const payload = await this.verifyRefreshToken(refreshToken);
       const tokenRecords = await this.findMatchingRefreshTokens(
         payload.sub,
-        dto.refreshToken,
+        refreshToken,
       );
 
       await this.revokeRefreshTokens(tokenRecords);

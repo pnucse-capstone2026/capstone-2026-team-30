@@ -164,7 +164,7 @@ describe('AuthService', () => {
     jest.spyOn(argon2, 'verify').mockResolvedValue(true);
     jest.spyOn(argon2, 'hash').mockResolvedValue('new-refresh-token-hash');
 
-    const result = await service.refresh({ refreshToken: 'old-refresh-token' });
+    const result = await service.refresh('old-refresh-token');
 
     expect(jwtService.verifyAsync).toHaveBeenCalledWith('old-refresh-token', {
       secret: 'refresh-secret',
@@ -198,7 +198,7 @@ describe('AuthService', () => {
     prisma.refreshToken.findMany.mockResolvedValue([]);
 
     await expect(
-      service.refresh({ refreshToken: 'old-refresh-token' }),
+      service.refresh('old-refresh-token'),
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
@@ -207,7 +207,7 @@ describe('AuthService', () => {
     prisma.user.findUnique.mockResolvedValue(null);
 
     await expect(
-      service.refresh({ refreshToken: 'old-refresh-token' }),
+      service.refresh('old-refresh-token'),
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
@@ -221,7 +221,7 @@ describe('AuthService', () => {
     });
 
     await expect(
-      service.refresh({ refreshToken: 'old-refresh-token' }),
+      service.refresh('old-refresh-token'),
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
@@ -233,7 +233,7 @@ describe('AuthService', () => {
     jest.spyOn(argon2, 'verify').mockResolvedValue(true);
 
     await expect(
-      service.logout({ refreshToken: 'old-refresh-token' }),
+      service.logout('old-refresh-token'),
     ).resolves.toEqual({ success: true });
     expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
       where: { id: { in: ['refresh-token-1'] } },
@@ -246,7 +246,7 @@ describe('AuthService', () => {
     prisma.refreshToken.findMany.mockResolvedValue([]);
 
     await expect(
-      service.logout({ refreshToken: 'unknown-refresh-token' }),
+      service.logout('unknown-refresh-token'),
     ).resolves.toEqual({ success: true });
     expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
   });
