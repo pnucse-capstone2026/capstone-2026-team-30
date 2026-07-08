@@ -40,6 +40,27 @@ model User {
   refreshTokens              RefreshToken[]
 }
 
+model Permission {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  role         Role
+  permissionId String
+  createdAt    DateTime @default(now())
+
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([role, permissionId])
+  @@index([permissionId])
+}
+
 model ViolationHistory {
   id         String   @id @default(uuid())
   policyName String
