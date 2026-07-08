@@ -1,17 +1,26 @@
+import { randomUUID } from 'crypto';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { Role } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { PrismaService } from '../prisma/prisma.service';
-import { LoginDto } from './dto/login.dto';
 import { AuthenticatedUser, JwtPayload } from './auth.types';
-
+import { LoginDto } from './dto/login.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 
 type LoginResult = {
   accessToken: string;
   refreshToken: string;
   user: AuthenticatedUser;
+};
+
+type LogoutResult = {
+  success: true;
+};
+
+type RefreshTokenRecord = {
+  id: string;
+  tokenHash: string;
 };
 
 @Injectable()
@@ -40,10 +49,48 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials.');
     }
 
+    return this.issueTokens({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    });
+  }
+
+  async refresh(dto: RefreshTokenDto): Promise<LoginResult> {
+    const payload = await this.verifyRefreshToken(dto.refreshToken);
+    const user = await this.getActiveUser(payload.sub);
+    const tokenRecords = await this.findMatchingRefreshTokens(
+      user.id,
+      dto.refreshToken,
+    );
+
+    await this.revokeRefreshTokens(tokenRecords);
+
+    return this.issueTokens(user);
+  }
+
+  async logout(dto: RefreshTokenDto): Promise<LogoutResult> {
+    try {
+      const payload = await this.verifyRefreshToken(dto.refreshToken);
+      const tokenRecords = await this.findMatchingRefreshTokens(
+        payload.sub,
+        dto.refreshToken,
+      );
+
+      await this.revokeRefreshTokens(tokenRecords);
+    } catch {
+      // Logout is intentionally idempotent and does not reveal token validity.
+    }
+
+    return { success: true };
+  }
+
+  private async issueTokens(user: AuthenticatedUser): Promise<LoginResult> {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
       role: user.role,
+      jti: randomUUID(),
     };
 
     const accessTokenExpiresIn =
@@ -71,12 +118,78 @@ export class AuthService {
     return {
       accessToken,
       refreshToken,
-      user: {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-      },
+      user,
     };
+  }
+
+  private async verifyRefreshToken(refreshToken: string): Promise<JwtPayload> {
+    try {
+      return await this.jwtService.verifyAsync<JwtPayload>(refreshToken, {
+        secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token.');
+    }
+  }
+
+  private async getActiveUser(userId: string): Promise<AuthenticatedUser> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        disabledAt: true,
+      },
+    });
+
+    if (!user || user.disabledAt) {
+      throw new UnauthorizedException('Invalid refresh token.');
+    }
+
+    return {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    };
+  }
+
+  private async findMatchingRefreshTokens(
+    userId: string,
+    refreshToken: string,
+  ): Promise<RefreshTokenRecord[]> {
+    const candidates = await this.prisma.refreshToken.findMany({
+      where: {
+        userId,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      select: {
+        id: true,
+        tokenHash: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    const matches: RefreshTokenRecord[] = [];
+
+    for (const candidate of candidates) {
+      if (await argon2.verify(candidate.tokenHash, refreshToken)) {
+        matches.push(candidate);
+      }
+    }
+
+    if (matches.length === 0) {
+      throw new UnauthorizedException('Invalid refresh token.');
+    }
+
+    return matches;
+  }
+
+  private async revokeRefreshTokens(tokens: RefreshTokenRecord[]) {
+    await this.prisma.refreshToken.updateMany({
+      where: { id: { in: tokens.map((token) => token.id) } },
+      data: { revokedAt: new Date() },
+    });
   }
 
   private getExpiresAt(expiresIn: string): Date {
