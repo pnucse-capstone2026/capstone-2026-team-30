@@ -68,11 +68,26 @@ export class AuthService {
     };
     const preparedTokens = await this.prepareTokenPair(authenticatedUser);
 
-    await this.prisma.refreshToken.create({
-      data: {
-        ...preparedTokens.refreshTokenData,
-        userId: authenticatedUser.id,
-      },
+    await this.prisma.runSerializableTransaction(async (transaction) => {
+      const currentUser = await transaction.user.findUnique({
+        where: { id: user.id },
+        select: { pwdHash: true, disabledAt: true },
+      });
+
+      if (
+        !currentUser ||
+        currentUser.disabledAt ||
+        currentUser.pwdHash !== user.pwdHash
+      ) {
+        throw new UnauthorizedException('Invalid credentials.');
+      }
+
+      await transaction.refreshToken.create({
+        data: {
+          ...preparedTokens.refreshTokenData,
+          userId: authenticatedUser.id,
+        },
+      });
     });
 
     return preparedTokens.result;
@@ -88,6 +103,15 @@ export class AuthService {
     const preparedTokens = await this.prepareTokenPair(user);
 
     await this.prisma.runSerializableTransaction(async (transaction) => {
+      const currentUser = await transaction.user.findUnique({
+        where: { id: user.id },
+        select: { disabledAt: true },
+      });
+
+      if (!currentUser || currentUser.disabledAt) {
+        throw new UnauthorizedException('Invalid refresh token.');
+      }
+
       const revokedAt = new Date();
       const revokedTokens = await transaction.refreshToken.updateMany({
         where: {

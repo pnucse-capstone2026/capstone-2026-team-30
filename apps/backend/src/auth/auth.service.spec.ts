@@ -115,6 +115,9 @@ describe('AuthService', () => {
         expiresAt: new Date('2026-01-08T00:00:00.000Z'),
       },
     });
+    expect(prisma.runSerializableTransaction).toHaveBeenCalledWith(
+      expect.any(Function),
+    );
     expect(result).toEqual({
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
@@ -152,6 +155,26 @@ describe('AuthService', () => {
     await expect(
       service.login({ email: activeUser.email, password: 'plain-password' }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('rejects login when the password changes before token persistence', async () => {
+    const { service, prisma } = createService();
+    prisma.user.findUnique
+      .mockResolvedValueOnce(activeUser)
+      .mockResolvedValueOnce({
+        pwdHash: 'changed-password-hash',
+        disabledAt: null,
+      });
+    jest.spyOn(argon2, 'verify').mockResolvedValue(true);
+    jest.spyOn(argon2, 'hash').mockResolvedValue('refresh-token-hash');
+
+    await expect(
+      service.login({
+        email: activeUser.email,
+        password: 'plain-password',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(prisma.refreshToken.create).not.toHaveBeenCalled();
   });
 
   it('refreshes tokens with rotation', async () => {
@@ -260,6 +283,29 @@ describe('AuthService', () => {
     await expect(
       service.refresh('old-refresh-token'),
     ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('rejects refresh when the user becomes disabled before rotation', async () => {
+    const { service, prisma } = createService();
+    prisma.user.findUnique
+      .mockResolvedValueOnce({
+        id: activeUser.id,
+        email: activeUser.email,
+        role: activeUser.role,
+        disabledAt: null,
+      })
+      .mockResolvedValueOnce({ disabledAt: new Date() });
+    prisma.refreshToken.findMany.mockResolvedValue([
+      { id: 'refresh-token-1', tokenHash: 'stored-refresh-token-hash' },
+    ]);
+    jest.spyOn(argon2, 'verify').mockResolvedValue(true);
+    jest.spyOn(argon2, 'hash').mockResolvedValue('new-refresh-token-hash');
+
+    await expect(
+      service.refresh('old-refresh-token'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
+    expect(prisma.refreshToken.create).not.toHaveBeenCalled();
   });
 
   it('logs out by revoking the matching refresh token', async () => {

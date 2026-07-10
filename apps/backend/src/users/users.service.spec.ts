@@ -17,12 +17,21 @@ const user = {
 
 function createService() {
   const prisma = {
+    runSerializableTransaction: jest.fn(),
     user: {
       findMany: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
     },
+    refreshToken: {
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
   };
+  prisma.runSerializableTransaction.mockImplementation(
+    async (
+      operation: (transaction: typeof prisma) => Promise<unknown>,
+    ): Promise<unknown> => operation(prisma),
+  );
 
   return {
     service: new UsersService(prisma as never),
@@ -110,6 +119,8 @@ describe('UsersService', () => {
       data: { role: Role.APPROVER },
       select: expect.any(Object),
     });
+    expect(prisma.runSerializableTransaction).not.toHaveBeenCalled();
+    expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
   });
 
   it('resets a user password', async () => {
@@ -125,6 +136,13 @@ describe('UsersService', () => {
       data: { pwdHash: 'new-hash' },
       select: expect.any(Object),
     });
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: { userId: user.id, revokedAt: null },
+      data: { revokedAt: expect.any(Date) },
+    });
+    expect(prisma.runSerializableTransaction).toHaveBeenCalledWith(
+      expect.any(Function),
+    );
   });
 
   it('sets disabledAt when disabling a user', async () => {
@@ -145,6 +163,13 @@ describe('UsersService', () => {
       data: { disabledAt: expect.any(Date) },
       select: expect.any(Object),
     });
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: { userId: user.id, revokedAt: null },
+      data: { revokedAt: expect.any(Date) },
+    });
+    expect(prisma.runSerializableTransaction).toHaveBeenCalledWith(
+      expect.any(Function),
+    );
   });
 
   it('clears disabledAt when enabling a user', async () => {
@@ -159,6 +184,8 @@ describe('UsersService', () => {
       data: { disabledAt: null },
       select: expect.any(Object),
     });
+    expect(prisma.runSerializableTransaction).not.toHaveBeenCalled();
+    expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
   });
 
   it('rejects updates for missing users', async () => {

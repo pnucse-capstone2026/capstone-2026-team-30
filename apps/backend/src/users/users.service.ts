@@ -81,8 +81,8 @@ export class UsersService {
   ): Promise<UserResponse> {
     const pwdHash = await argon2.hash(dto.password);
 
-    return this.updateExistingUser(() =>
-      this.prisma.user.update({
+    return this.updateUserAndRevokeSessions(userId, (transaction) =>
+      transaction.user.update({
         where: { id: userId },
         data: { pwdHash },
         select: USER_SELECT,
@@ -94,11 +94,41 @@ export class UsersService {
     userId: string,
     dto: SetUserDisabledDto,
   ): Promise<UserResponse> {
+    if (dto.disabled) {
+      return this.updateUserAndRevokeSessions(userId, (transaction) =>
+        transaction.user.update({
+          where: { id: userId },
+          data: { disabledAt: new Date() },
+          select: USER_SELECT,
+        }),
+      );
+    }
+
     return this.updateExistingUser(() =>
       this.prisma.user.update({
         where: { id: userId },
-        data: { disabledAt: dto.disabled ? new Date() : null },
+        data: { disabledAt: null },
         select: USER_SELECT,
+      }),
+    );
+  }
+
+  private async updateUserAndRevokeSessions(
+    userId: string,
+    operation: (
+      transaction: Prisma.TransactionClient,
+    ) => Promise<UserResponse>,
+  ): Promise<UserResponse> {
+    return this.updateExistingUser(() =>
+      this.prisma.runSerializableTransaction(async (transaction) => {
+        const updatedUser = await operation(transaction);
+
+        await transaction.refreshToken.updateMany({
+          where: { userId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+
+        return updatedUser;
       }),
     );
   }
