@@ -70,6 +70,16 @@ describe('RefreshTokenCookieService', () => {
     });
   });
 
+  it('rejects invalid refresh token expiration configuration', () => {
+    const { service } = createService('7 weeks');
+    const response = createResponse();
+
+    expect(() => service.set(response, 'refresh-token')).toThrow(
+      'Invalid expiration duration',
+    );
+    expect(response.cookie).not.toHaveBeenCalled();
+  });
+
   it('clears the refresh token cookie with matching options', () => {
     const { service } = createService();
     const response = createResponse();

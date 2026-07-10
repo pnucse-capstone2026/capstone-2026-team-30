@@ -23,6 +23,7 @@ const publicUser = {
 
 function createService() {
   const prisma = {
+    runSerializableTransaction: jest.fn(),
     user: {
       findUnique: jest.fn(),
     },
@@ -32,6 +33,11 @@ function createService() {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
   };
+  prisma.runSerializableTransaction.mockImplementation(
+    async (
+      operation: (transaction: typeof prisma) => Promise<unknown>,
+    ): Promise<unknown> => operation(prisma),
+  );
   const jwtService = {
     signAsync: jest
       .fn()
@@ -87,9 +93,11 @@ describe('AuthService', () => {
 
   it('logs in with valid credentials and stores only a refresh token hash', async () => {
     const { service, prisma, jwtService } = createService();
+    const nowMs = Date.parse('2026-01-01T00:00:00.000Z');
     prisma.user.findUnique.mockResolvedValue(activeUser);
     jest.spyOn(argon2, 'verify').mockResolvedValue(true);
     jest.spyOn(argon2, 'hash').mockResolvedValue('refresh-token-hash');
+    jest.spyOn(Date, 'now').mockReturnValue(nowMs);
 
     const result = await service.login({
       email: ' Admin@Example.com ',
@@ -104,7 +112,7 @@ describe('AuthService', () => {
       data: {
         tokenHash: 'refresh-token-hash',
         userId: activeUser.id,
-        expiresAt: expect.any(Date),
+        expiresAt: new Date('2026-01-08T00:00:00.000Z'),
       },
     });
     expect(result).toEqual({
@@ -170,7 +178,12 @@ describe('AuthService', () => {
       secret: 'refresh-secret',
     });
     expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: ['refresh-token-1'] } },
+      where: {
+        id: { in: ['refresh-token-1'] },
+        userId: activeUser.id,
+        revokedAt: null,
+        expiresAt: { gt: expect.any(Date) },
+      },
       data: { revokedAt: expect.any(Date) },
     });
     expect(prisma.refreshToken.create).toHaveBeenCalledWith({
@@ -180,11 +193,35 @@ describe('AuthService', () => {
         expiresAt: expect.any(Date),
       },
     });
+    expect(prisma.runSerializableTransaction).toHaveBeenCalledWith(
+      expect.any(Function),
+    );
     expect(result).toEqual({
       accessToken: 'new-access-token',
       refreshToken: 'new-refresh-token',
       user: publicUser,
     });
+  });
+
+  it('rejects refresh when another request has already claimed the token', async () => {
+    const { service, prisma } = createService();
+    prisma.user.findUnique.mockResolvedValue({
+      id: activeUser.id,
+      email: activeUser.email,
+      role: activeUser.role,
+      disabledAt: null,
+    });
+    prisma.refreshToken.findMany.mockResolvedValue([
+      { id: 'refresh-token-1', tokenHash: 'stored-refresh-token-hash' },
+    ]);
+    prisma.refreshToken.updateMany.mockResolvedValue({ count: 0 });
+    jest.spyOn(argon2, 'verify').mockResolvedValue(true);
+    jest.spyOn(argon2, 'hash').mockResolvedValue('new-refresh-token-hash');
+
+    await expect(
+      service.refresh('old-refresh-token'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(prisma.refreshToken.create).not.toHaveBeenCalled();
   });
 
   it('rejects a reused, revoked, or expired refresh token', async () => {

@@ -6,6 +6,11 @@ import * as argon2 from 'argon2';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthenticatedUser, JwtPayload } from './auth.types';
 import { LoginDto } from './dto/login.dto';
+import {
+  DEFAULT_ACCESS_TOKEN_EXPIRES_IN,
+  DEFAULT_REFRESH_TOKEN_EXPIRES_IN,
+  getExpiresAt,
+} from './token-expiration';
 
 type LoginResult = {
   accessToken: string;
@@ -20,6 +25,14 @@ type LogoutResult = {
 type RefreshTokenRecord = {
   id: string;
   tokenHash: string;
+};
+
+type PreparedTokenPair = {
+  result: LoginResult;
+  refreshTokenData: {
+    tokenHash: string;
+    expiresAt: Date;
+  };
 };
 
 @Injectable()
@@ -48,11 +61,21 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials.');
     }
 
-    return this.issueTokens({
+    const authenticatedUser = {
       id: user.id,
       email: user.email,
       role: user.role,
+    };
+    const preparedTokens = await this.prepareTokenPair(authenticatedUser);
+
+    await this.prisma.refreshToken.create({
+      data: {
+        ...preparedTokens.refreshTokenData,
+        userId: authenticatedUser.id,
+      },
     });
+
+    return preparedTokens.result;
   }
 
   async refresh(refreshToken: string): Promise<LoginResult> {
@@ -62,10 +85,33 @@ export class AuthService {
       user.id,
       refreshToken,
     );
+    const preparedTokens = await this.prepareTokenPair(user);
 
-    await this.revokeRefreshTokens(tokenRecords);
+    await this.prisma.runSerializableTransaction(async (transaction) => {
+      const revokedAt = new Date();
+      const revokedTokens = await transaction.refreshToken.updateMany({
+        where: {
+          id: { in: tokenRecords.map((token) => token.id) },
+          userId: user.id,
+          revokedAt: null,
+          expiresAt: { gt: revokedAt },
+        },
+        data: { revokedAt },
+      });
 
-    return this.issueTokens(user);
+      if (revokedTokens.count !== tokenRecords.length) {
+        throw new UnauthorizedException('Invalid refresh token.');
+      }
+
+      await transaction.refreshToken.create({
+        data: {
+          ...preparedTokens.refreshTokenData,
+          userId: user.id,
+        },
+      });
+    });
+
+    return preparedTokens.result;
   }
 
   async logout(refreshToken?: string): Promise<LogoutResult> {
@@ -92,7 +138,9 @@ export class AuthService {
     return { success: true };
   }
 
-  private async issueTokens(user: AuthenticatedUser): Promise<LoginResult> {
+  private async prepareTokenPair(
+    user: AuthenticatedUser,
+  ): Promise<PreparedTokenPair> {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
@@ -101,31 +149,31 @@ export class AuthService {
     };
 
     const accessTokenExpiresIn =
-      this.configService.get<string>('JWT_ACCESS_EXPIRES_IN') ?? '15m';
+      this.configService.get<string>('JWT_ACCESS_EXPIRES_IN') ??
+      DEFAULT_ACCESS_TOKEN_EXPIRES_IN;
     const accessToken = await this.jwtService.signAsync(payload, {
       secret: this.configService.getOrThrow<string>('JWT_ACCESS_SECRET'),
       expiresIn: accessTokenExpiresIn as never,
     });
     const refreshTokenExpiresIn =
-      this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') ?? '7d';
+      this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') ??
+      DEFAULT_REFRESH_TOKEN_EXPIRES_IN;
     const refreshToken = await this.jwtService.signAsync(payload, {
       secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
       expiresIn: refreshTokenExpiresIn as never,
     });
     const tokenHash = await argon2.hash(refreshToken);
 
-    await this.prisma.refreshToken.create({
-      data: {
-        tokenHash,
-        userId: user.id,
-        expiresAt: this.getExpiresAt(refreshTokenExpiresIn),
-      },
-    });
-
     return {
-      accessToken,
-      refreshToken,
-      user,
+      result: {
+        accessToken,
+        refreshToken,
+        user,
+      },
+      refreshTokenData: {
+        tokenHash,
+        expiresAt: getExpiresAt(refreshTokenExpiresIn),
+      },
     };
   }
 
@@ -199,26 +247,4 @@ export class AuthService {
     });
   }
 
-  private getExpiresAt(expiresIn: string): Date {
-    return new Date(Date.now() + this.parseExpiresIn(expiresIn));
-  }
-
-  private parseExpiresIn(expiresIn: string): number {
-    const match = /^(\d+)([smhd])$/.exec(expiresIn.trim());
-
-    if (!match) {
-      return 7 * 24 * 60 * 60 * 1000;
-    }
-
-    const value = Number(match[1]);
-    const unit = match[2];
-    const multipliers: Record<string, number> = {
-      s: 1000,
-      m: 60 * 1000,
-      h: 60 * 60 * 1000,
-      d: 24 * 60 * 60 * 1000,
-    };
-
-    return value * multipliers[unit];
-  }
 }
