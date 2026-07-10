@@ -2,7 +2,7 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { UsersService } from './users.service';
 
@@ -19,7 +19,6 @@ function createService() {
   const prisma = {
     user: {
       findMany: jest.fn(),
-      findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
     },
@@ -29,6 +28,13 @@ function createService() {
     service: new UsersService(prisma as never),
     prisma,
   };
+}
+
+function createPrismaError(code: string) {
+  return new Prisma.PrismaClientKnownRequestError('Prisma request failed.', {
+    code,
+    clientVersion: Prisma.prismaVersion.client,
+  });
 }
 
 describe('UsersService', () => {
@@ -56,7 +62,6 @@ describe('UsersService', () => {
 
   it('creates a user with normalized email and hashed password', async () => {
     const { service, prisma } = createService();
-    prisma.user.findUnique.mockResolvedValue(null);
     prisma.user.create.mockResolvedValue(user);
     jest.spyOn(argon2, 'hash').mockResolvedValue('hashed-password');
 
@@ -67,10 +72,6 @@ describe('UsersService', () => {
         role: Role.REQUESTER,
       }),
     ).resolves.toEqual(user);
-    expect(prisma.user.findUnique).toHaveBeenCalledWith({
-      where: { email: 'requester@example.com' },
-      select: { id: true },
-    });
     expect(argon2.hash).toHaveBeenCalledWith('plain-password');
     expect(prisma.user.create).toHaveBeenCalledWith({
       data: {
@@ -84,7 +85,8 @@ describe('UsersService', () => {
 
   it('rejects duplicate user emails', async () => {
     const { service, prisma } = createService();
-    prisma.user.findUnique.mockResolvedValue({ id: 'existing-user' });
+    prisma.user.create.mockRejectedValue(createPrismaError('P2002'));
+    jest.spyOn(argon2, 'hash').mockResolvedValue('hashed-password');
 
     await expect(
       service.create({
@@ -93,12 +95,11 @@ describe('UsersService', () => {
         role: Role.REQUESTER,
       }),
     ).rejects.toBeInstanceOf(ConflictException);
-    expect(prisma.user.create).not.toHaveBeenCalled();
+    expect(prisma.user.create).toHaveBeenCalledTimes(1);
   });
 
   it('updates a user role', async () => {
     const { service, prisma } = createService();
-    prisma.user.findUnique.mockResolvedValue({ id: user.id });
     prisma.user.update.mockResolvedValue({ ...user, role: Role.APPROVER });
 
     await expect(
@@ -113,7 +114,6 @@ describe('UsersService', () => {
 
   it('resets a user password', async () => {
     const { service, prisma } = createService();
-    prisma.user.findUnique.mockResolvedValue({ id: user.id });
     prisma.user.update.mockResolvedValue(user);
     jest.spyOn(argon2, 'hash').mockResolvedValue('new-hash');
 
@@ -129,7 +129,6 @@ describe('UsersService', () => {
 
   it('sets disabledAt when disabling a user', async () => {
     const { service, prisma } = createService();
-    prisma.user.findUnique.mockResolvedValue({ id: user.id });
     prisma.user.update.mockResolvedValue({
       ...user,
       disabledAt: new Date('2026-01-02T00:00:00.000Z'),
@@ -150,7 +149,6 @@ describe('UsersService', () => {
 
   it('clears disabledAt when enabling a user', async () => {
     const { service, prisma } = createService();
-    prisma.user.findUnique.mockResolvedValue({ id: user.id });
     prisma.user.update.mockResolvedValue(user);
 
     await expect(
@@ -165,11 +163,21 @@ describe('UsersService', () => {
 
   it('rejects updates for missing users', async () => {
     const { service, prisma } = createService();
-    prisma.user.findUnique.mockResolvedValue(null);
+    prisma.user.update.mockRejectedValue(createPrismaError('P2025'));
 
     await expect(
       service.updateRole('missing-user', { role: Role.VIEWER }),
     ).rejects.toBeInstanceOf(NotFoundException);
-    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(prisma.user.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not hide unexpected persistence errors', async () => {
+    const { service, prisma } = createService();
+    const databaseError = new Error('database unavailable');
+    prisma.user.update.mockRejectedValue(databaseError);
+
+    await expect(
+      service.updateRole(user.id, { role: Role.VIEWER }),
+    ).rejects.toBe(databaseError);
   });
 });

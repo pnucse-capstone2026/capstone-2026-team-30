@@ -250,4 +250,24 @@ describe('AuthService', () => {
     ).resolves.toEqual({ success: true });
     expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
   });
+
+  it('treats invalid refresh token signatures as successful logout', async () => {
+    const { service, prisma, jwtService } = createService();
+    jwtService.verifyAsync.mockRejectedValue(new Error('invalid signature'));
+
+    await expect(service.logout('invalid-refresh-token')).resolves.toEqual({
+      success: true,
+    });
+    expect(prisma.refreshToken.findMany).not.toHaveBeenCalled();
+  });
+
+  it('does not hide persistence failures during logout', async () => {
+    const { service, prisma } = createService();
+    const databaseError = new Error('database unavailable');
+    prisma.refreshToken.findMany.mockRejectedValue(databaseError);
+
+    await expect(service.logout('old-refresh-token')).rejects.toBe(
+      databaseError,
+    );
+  });
 });

@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -42,76 +42,85 @@ export class UsersService {
 
   async create(dto: CreateUserDto): Promise<UserResponse> {
     const email = dto.email.trim().toLowerCase();
-    const existingUser = await this.prisma.user.findUnique({
-      where: { email },
-      select: { id: true },
-    });
-
-    if (existingUser) {
-      throw new ConflictException('User email already exists.');
-    }
-
     const pwdHash = await argon2.hash(dto.password);
 
-    return this.prisma.user.create({
-      data: {
-        email,
-        pwdHash,
-        role: dto.role,
-      },
-      select: USER_SELECT,
-    });
+    try {
+      return await this.prisma.user.create({
+        data: {
+          email,
+          pwdHash,
+          role: dto.role,
+        },
+        select: USER_SELECT,
+      });
+    } catch (error) {
+      if (this.isPrismaError(error, 'P2002')) {
+        throw new ConflictException('User email already exists.');
+      }
+
+      throw error;
+    }
   }
 
   async updateRole(
     userId: string,
     dto: UpdateUserRoleDto,
   ): Promise<UserResponse> {
-    await this.ensureUserExists(userId);
-
-    return this.prisma.user.update({
-      where: { id: userId },
-      data: { role: dto.role },
-      select: USER_SELECT,
-    });
+    return this.updateExistingUser(() =>
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { role: dto.role },
+        select: USER_SELECT,
+      }),
+    );
   }
 
   async resetPassword(
     userId: string,
     dto: ResetUserPasswordDto,
   ): Promise<UserResponse> {
-    await this.ensureUserExists(userId);
-
     const pwdHash = await argon2.hash(dto.password);
 
-    return this.prisma.user.update({
-      where: { id: userId },
-      data: { pwdHash },
-      select: USER_SELECT,
-    });
+    return this.updateExistingUser(() =>
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { pwdHash },
+        select: USER_SELECT,
+      }),
+    );
   }
 
   async setDisabled(
     userId: string,
     dto: SetUserDisabledDto,
   ): Promise<UserResponse> {
-    await this.ensureUserExists(userId);
-
-    return this.prisma.user.update({
-      where: { id: userId },
-      data: { disabledAt: dto.disabled ? new Date() : null },
-      select: USER_SELECT,
-    });
+    return this.updateExistingUser(() =>
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { disabledAt: dto.disabled ? new Date() : null },
+        select: USER_SELECT,
+      }),
+    );
   }
 
-  private async ensureUserExists(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true },
-    });
+  private async updateExistingUser(
+    operation: () => Promise<UserResponse>,
+  ): Promise<UserResponse> {
+    try {
+      return await operation();
+    } catch (error) {
+      if (this.isPrismaError(error, 'P2025')) {
+        throw new NotFoundException('User not found.');
+      }
 
-    if (!user) {
-      throw new NotFoundException('User not found.');
+      throw error;
     }
+  }
+
+  private isPrismaError(error: unknown, code: string): boolean {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === code
+    );
   }
 }

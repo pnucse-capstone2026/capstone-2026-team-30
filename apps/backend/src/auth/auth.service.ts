@@ -81,8 +81,12 @@ export class AuthService {
       );
 
       await this.revokeRefreshTokens(tokenRecords);
-    } catch {
-      // Logout is intentionally idempotent and does not reveal token validity.
+    } catch (error) {
+      if (!(error instanceof UnauthorizedException)) {
+        throw error;
+      }
+
+      // Invalid tokens are intentionally treated as successful logout.
     }
 
     return { success: true };
