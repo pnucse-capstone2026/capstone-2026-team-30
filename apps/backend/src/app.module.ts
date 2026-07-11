@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
+import { PrismaModule } from './prisma/prisma.module';
+import { AuthModule } from './auth/auth.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -8,6 +11,10 @@ import { LoggerModule } from 'nestjs-pino';
     ConfigModule.forRoot({ isGlobal: true }),
 
     // Pino 구조화 로깅
+    PrismaModule,
+    AuthModule,
+    UsersModule,
+
     LoggerModule.forRoot({
       pinoHttp: {
         transport:
