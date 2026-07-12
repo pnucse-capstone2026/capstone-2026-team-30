@@ -27,3 +27,6 @@
 
 ### [Docker in Docker (DinD) & DooD - DockerCon 2023](https://www.docker.com/resources/docker-in-docker-containerized-ci-workflows-dockercon-2023/)
 * **설명:** 컨테이너화된 CI/CD 워크플로우에서 Docker를 사용하는 방식(DinD, DooD)을 다룬 DockerCon 발표 자료
+  
+### [Javascript Kubernetes Client](https://github.com/kubernetes-client/javascript)
+* **설명:** Kubernetes(쿠버네티스) API를 Node.js 환경에서 호출하고 제어
