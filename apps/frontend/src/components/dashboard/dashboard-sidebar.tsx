@@ -66,8 +66,10 @@ export function DashboardSidebar({
   variant = "user",
   activeHref,
 }: DashboardSidebarProps) {
-  const items = navigation[variant];
   const user = useAuthStore((state) => state.user);
+  const items = navigation[variant].filter(
+    (item) => user?.role === "ADMIN" || item.href !== "/admin/users",
+  );
   const currentHref =
     activeHref ?? (variant === "admin" ? "/admin/dashboard" : "/dashboard");
   const profile = user

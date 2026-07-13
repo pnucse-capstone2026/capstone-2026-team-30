@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { type UserRole } from "@/lib/auth-api";
@@ -9,12 +9,25 @@ import { useAuthStore } from "@/lib/auth-store";
 type ProtectedRouteProps = {
   children: React.ReactNode;
   requiredRole?: UserRole;
+  requiredRoles?: UserRole[];
 };
 
-export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
+export function ProtectedRoute({
+  children,
+  requiredRole,
+  requiredRoles,
+}: ProtectedRouteProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { initialize, status, user } = useAuthStore();
+  const allowedRoles = useMemo(
+    () => requiredRoles ?? (requiredRole ? [requiredRole] : undefined),
+    [requiredRole, requiredRoles],
+  );
+  const fallbackPath =
+    pathname.startsWith("/admin") && user?.role === "APPROVER"
+      ? "/admin/exceptions"
+      : "/dashboard";
 
   useEffect(() => {
     void initialize();
@@ -28,12 +41,12 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
 
     if (
       status === "authenticated" &&
-      requiredRole &&
-      user?.role !== requiredRole
+      allowedRoles &&
+      (!user || !allowedRoles.includes(user.role))
     ) {
-      router.replace("/dashboard");
+      router.replace(fallbackPath);
     }
-  }, [pathname, requiredRole, router, status, user]);
+  }, [allowedRoles, fallbackPath, pathname, router, status, user]);
 
   if (status === "idle" || status === "loading") {
     return (
@@ -47,7 +60,7 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
     return null;
   }
 
-  if (requiredRole && user?.role !== requiredRole) {
+  if (allowedRoles && (!user || !allowedRoles.includes(user.role))) {
     return null;
   }
 

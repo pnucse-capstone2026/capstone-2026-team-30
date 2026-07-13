@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,6 @@ export function LoginForm() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitIntent, setSubmitIntent] = useState<"user" | "admin">("user");
   const { error, login, clearError } = useAuthStore();
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -34,8 +33,14 @@ export function LoginForm() {
         return;
       }
 
-      if (submitIntent === "admin" || user.role === "ADMIN") {
-        router.replace(user.role === "ADMIN" ? "/admin/dashboard" : "/dashboard");
+      if (user.role === "ADMIN" || user.role === "APPROVER") {
+        router.replace(
+          user.role === "ADMIN"
+            ? "/admin/dashboard"
+            : user.role === "APPROVER"
+              ? "/admin/exceptions"
+              : "/dashboard",
+        );
         return;
       }
 
@@ -132,23 +137,10 @@ export function LoginForm() {
         type="submit"
         size="lg"
         disabled={isSubmitting}
-        onClick={() => setSubmitIntent("user")}
         className="h-12 w-full rounded-xl bg-[#0b2342] text-sm font-semibold text-white shadow-sm transition-all hover:bg-[#12325b] hover:shadow-md"
       >
-        {isSubmitting ? "\ub85c\uadf8\uc778 \uc911" : "\uc0ac\uc6a9\uc790 \ub85c\uadf8\uc778"}
+        {isSubmitting ? "\ub85c\uadf8\uc778 \uc911" : "\ub85c\uadf8\uc778"}
         <ArrowRight className="ml-1 size-4" />
-      </Button>
-
-      <Button
-        type="submit"
-        size="lg"
-        variant="outline"
-        disabled={isSubmitting}
-        onClick={() => setSubmitIntent("admin")}
-        className="h-12 w-full rounded-xl border-slate-300 bg-white text-sm font-semibold text-slate-800 shadow-sm transition-all hover:bg-slate-50 hover:text-slate-950"
-      >
-        <ShieldCheck className="mr-1 size-4" />
-        {isSubmitting ? "\ub85c\uadf8\uc778 \uc911" : "\uad00\ub9ac\uc790 \ub85c\uadf8\uc778"}
       </Button>
 
       {error ? (
