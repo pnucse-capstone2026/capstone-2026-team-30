@@ -1,10 +1,18 @@
-name: Project CI
+name: Backend CI
 
 on:
   pull_request:
     branches: ["main"]
+    paths:
+      - "apps/backend/**"
+      - "packages/shared/**"
+      - "pnpm-lock.yaml"
   push:
     branches: ["main"]
+    paths:
+      - "apps/backend/**"
+      - "packages/shared/**"
+      - "pnpm-lock.yaml"
 
 jobs:
   build-and-test:
@@ -29,23 +37,6 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # PR에서 실제 변경된 경로를 감지해 불필요한 빌드 건너뜀
-      - name: Detect Changed Paths
-        uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            backend:
-              - 'apps/backend/**'
-              - 'packages/shared/**'
-              - 'pnpm-lock.yaml'
-            frontend:
-              - 'apps/frontend/**'
-              - 'packages/shared/**'
-              - 'pnpm-lock.yaml'
-            policies:
-              - 'k8s-manifests/policies/**'
-
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -61,15 +52,10 @@ jobs:
         run: pnpm install
 
       - name: Lint (Backend)
-        if: steps.filter.outputs.backend == 'true'
         run: pnpm --filter @kyverno-platform/backend lint
 
-      - name: Lint (Frontend)
-        if: steps.filter.outputs.frontend == 'true'
-        run: pnpm --filter @kyverno-platform/frontend lint
-
+      # Prisma 모델 스키마와 데이터베이스 테이블 간 싱크 및 동적 타입 클라이언트 검증
       - name: Prisma Generate & DB Push
-        if: steps.filter.outputs.backend == 'true'
         env:
           DATABASE_URL: postgresql://devuser:devpassword@localhost:5432/kyverno_dashboard?schema=public
         run: |
@@ -77,26 +63,10 @@ jobs:
           pnpm --filter @kyverno-platform/backend exec prisma db push
 
       - name: Test (Backend)
-        if: steps.filter.outputs.backend == 'true'
         env:
           DATABASE_URL: postgresql://devuser:devpassword@localhost:5432/kyverno_dashboard?schema=public
         run: pnpm --filter @kyverno-platform/backend test
 
+      # 런타임 호스트 부하 경감을 위한 프로덕션용 컴파일 검증
       - name: Build Backend (NestJS)
-        if: steps.filter.outputs.backend == 'true'
         run: pnpm --filter @kyverno-platform/backend build
-
-      - name: Build Frontend (Next.js)
-        if: steps.filter.outputs.frontend == 'true'
-        run: pnpm --filter @kyverno-platform/frontend build
-
-      # 정책 파일 문법 오류를 병합 전에 차단
-      - name: Validate Kyverno Policies
-        if: steps.filter.outputs.policies == 'true'
-        uses: kyverno/action-install-cli@v0.2.0
-        with:
-          release: 'v1.12.0'
-      
-      - name: Run kyverno validate
-        if: steps.filter.outputs.policies == 'true'
-        run: kyverno validate k8s-manifests/policies/
