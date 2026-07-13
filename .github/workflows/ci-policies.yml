@@ -18,12 +18,10 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 정책 파일 검증을 위한 Kyverno 공식 CLI 도구 설치
       - name: Validate Kyverno Policies
         uses: kyverno/action-install-cli@v0.2.0
         with:
           release: "v1.12.0"
 
-      # 클러스터 반영 전 정책 구문의 무결성 유효성 평가
-      - name: Run kyverno validate
-        run: kyverno validate k8s-manifests/policies/
+      - name: Run kyverno test
+        run: kyverno test k8s-manifests/policies/

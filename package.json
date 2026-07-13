@@ -23,7 +23,7 @@
       "pnpm --filter @kyverno-platform/frontend format"
     ],
     "k8s-manifests/policies/**/*.yaml": [
-      "kyverno validate"
+      "bash -c 'kyverno test k8s-manifests/policies/'"
     ]
   },
   "engines": {
