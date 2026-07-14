@@ -1,0 +1,44 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-latest-tag
+  annotations:
+    policies.kyverno.io/title: Disallow Latest Tag
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/minversion: "1.6.0"
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      컨테이너 이미지에 :latest 태그를 사용하면 이미지가 예고 없이 교체될 수 있어
+      재현 불가능한 배포 환경이 만들어집니다. 모든 Pod는 커밋 해시나 버전 번호와 같은
+      고정된 이미지 태그를 사용해야 합니다.
+      출처: https://kyverno.io/policies/best-practices/disallow-latest-tag/
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: require-image-tag
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: "이미지 태그를 반드시 명시해야 합니다. ':latest' 태그 또는 태그 없는 이미지는 허용되지 않습니다."
+        pattern:
+          spec:
+            containers:
+              - image: "*:*"
+
+    - name: disallow-latest-tag
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: "':latest' 태그는 이미지 재현성을 보장하지 않으므로 사용할 수 없습니다. 커밋 해시 또는 버전 태그를 사용하세요."
+        pattern:
+          spec:
+            containers:
+              - image: "!*:latest"
