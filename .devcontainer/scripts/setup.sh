@@ -40,7 +40,7 @@ else
 fi
 
 echo ">>> Installing Monorepo Dependencies..."
-pnpm install
+pnpm install --config.confirmModulesPurge=false
 
 echo ">>> [6/6] Setting up environment files safely..."
 # Frontend env
