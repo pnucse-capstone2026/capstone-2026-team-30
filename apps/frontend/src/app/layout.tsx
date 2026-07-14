@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
+
+import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Kyverno Governance Platform",
-  description: "Kubernetes PaC 정책 위반 대응 및 예외 관리 시스템",
+  description:
+    "Kubernetes Policy as Code \uc815\ucc45 \uc704\ubc18 \ud0d0\uc9c0 \ubc0f \uc608\uc678 \uad00\ub9ac \uc2dc\uc2a4\ud15c",
 };
 
 export default function RootLayout({
@@ -12,8 +17,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko">
-      <body>{children}</body>
+    <html lang="ko" className="font-sans">
+      <body>
+        <TooltipProvider>
+          {children}
+          <Toaster />
+        </TooltipProvider>
+      </body>
     </html>
   );
 }
