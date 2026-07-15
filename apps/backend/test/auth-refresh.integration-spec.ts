@@ -134,12 +134,74 @@ describe('AuthService refresh token transactions', () => {
     ).resolves.toEqual({ revokedAt: null });
   });
 
+  it('revokes every refresh token for the user on logout', async () => {
+    const user = await createUser('logout-all-sessions@example.com');
+    const firstLogin = await authService.login({
+      email: user.email,
+      password: TEST_PASSWORD,
+    });
+    await authService.login({
+      email: user.email,
+      password: TEST_PASSWORD,
+    });
+
+    await expect(authService.logout(firstLogin.refreshToken)).resolves.toEqual({
+      success: true,
+    });
+    await expect(activeTokenCount(user.id)).resolves.toBe(0);
+  });
+
+  it('revokes a replacement token when logout uses the rotated token', async () => {
+    const user = await createUser('logout-rotated-token@example.com');
+    const loginResult = await authService.login({
+      email: user.email,
+      password: TEST_PASSWORD,
+    });
+
+    await authService.refresh(loginResult.refreshToken);
+    await expect(authService.logout(loginResult.refreshToken)).resolves.toEqual(
+      {
+        success: true,
+      },
+    );
+    await expect(activeTokenCount(user.id)).resolves.toBe(0);
+  });
+
+  it('does not allow concurrent refresh to survive logout', async () => {
+    const user = await createUser('concurrent-refresh-logout@example.com');
+    const loginResult = await authService.login({
+      email: user.email,
+      password: TEST_PASSWORD,
+    });
+
+    const [, logoutResult] = await Promise.allSettled([
+      authService.refresh(loginResult.refreshToken),
+      authService.logout(loginResult.refreshToken),
+    ]);
+
+    expect(logoutResult).toEqual({
+      status: 'fulfilled',
+      value: { success: true },
+    });
+    await expect(activeTokenCount(user.id)).resolves.toBe(0);
+  });
+
   async function createUser(email: string) {
     return prisma.user.create({
       data: {
         email,
         pwdHash: await argon2.hash(TEST_PASSWORD),
         role: Role.REQUESTER,
+      },
+    });
+  }
+
+  function activeTokenCount(userId: string) {
+    return prisma.refreshToken.count({
+      where: {
+        userId,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
       },
     });
   }

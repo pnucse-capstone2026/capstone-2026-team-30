@@ -6,6 +6,7 @@ import * as argon2 from 'argon2';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthenticatedUser, JwtPayload } from './auth.types';
 import { LoginDto } from './dto/login.dto';
+import { revokeAllRefreshTokensForUser } from './refresh-token-revocation';
 import {
   DEFAULT_ACCESS_TOKEN_EXPIRES_IN,
   DEFAULT_REFRESH_TOKEN_EXPIRES_IN,
@@ -145,12 +146,9 @@ export class AuthService {
       }
 
       const payload = await this.verifyRefreshToken(refreshToken);
-      const tokenRecords = await this.findMatchingRefreshTokens(
-        payload.sub,
-        refreshToken,
+      await this.prisma.runSerializableTransaction((transaction) =>
+        revokeAllRefreshTokensForUser(transaction, payload.sub),
       );
-
-      await this.revokeRefreshTokens(tokenRecords);
     } catch (error) {
       if (!(error instanceof UnauthorizedException)) {
         throw error;
@@ -263,12 +261,4 @@ export class AuthService {
 
     return matches;
   }
-
-  private async revokeRefreshTokens(tokens: RefreshTokenRecord[]) {
-    await this.prisma.refreshToken.updateMany({
-      where: { id: { in: tokens.map((token) => token.id) } },
-      data: { revokedAt: new Date() },
-    });
-  }
-
 }

@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
 import * as argon2 from 'argon2';
+import { revokeAllRefreshTokensForUser } from '../auth/refresh-token-revocation';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ResetUserPasswordDto } from './dto/reset-user-password.dto';
@@ -123,10 +124,7 @@ export class UsersService {
       this.prisma.runSerializableTransaction(async (transaction) => {
         const updatedUser = await operation(transaction);
 
-        await transaction.refreshToken.updateMany({
-          where: { userId, revokedAt: null },
-          data: { revokedAt: new Date() },
-        });
+        await revokeAllRefreshTokensForUser(transaction, userId);
 
         return updatedUser;
       }),

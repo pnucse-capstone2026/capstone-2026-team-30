@@ -308,29 +308,27 @@ describe('AuthService', () => {
     expect(prisma.refreshToken.create).not.toHaveBeenCalled();
   });
 
-  it('logs out by revoking the matching refresh token', async () => {
+  it('logs out by revoking all refresh tokens for the user', async () => {
     const { service, prisma } = createService();
-    prisma.refreshToken.findMany.mockResolvedValue([
-      { id: 'refresh-token-1', tokenHash: 'stored-refresh-token-hash' },
-    ]);
-    jest.spyOn(argon2, 'verify').mockResolvedValue(true);
 
-    await expect(
-      service.logout('old-refresh-token'),
-    ).resolves.toEqual({ success: true });
+    await expect(service.logout('old-refresh-token')).resolves.toEqual({
+      success: true,
+    });
     expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: ['refresh-token-1'] } },
+      where: { userId: activeUser.id, revokedAt: null },
       data: { revokedAt: expect.any(Date) },
     });
+    expect(prisma.runSerializableTransaction).toHaveBeenCalledWith(
+      expect.any(Function),
+    );
+    expect(prisma.refreshToken.findMany).not.toHaveBeenCalled();
   });
 
-  it('treats unknown refresh tokens as successful logout', async () => {
+  it('treats a missing refresh token as successful logout', async () => {
     const { service, prisma } = createService();
-    prisma.refreshToken.findMany.mockResolvedValue([]);
 
-    await expect(
-      service.logout('unknown-refresh-token'),
-    ).resolves.toEqual({ success: true });
+    await expect(service.logout()).resolves.toEqual({ success: true });
+    expect(prisma.runSerializableTransaction).not.toHaveBeenCalled();
     expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
   });
 
@@ -341,13 +339,14 @@ describe('AuthService', () => {
     await expect(service.logout('invalid-refresh-token')).resolves.toEqual({
       success: true,
     });
-    expect(prisma.refreshToken.findMany).not.toHaveBeenCalled();
+    expect(prisma.runSerializableTransaction).not.toHaveBeenCalled();
+    expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
   });
 
   it('does not hide persistence failures during logout', async () => {
     const { service, prisma } = createService();
     const databaseError = new Error('database unavailable');
-    prisma.refreshToken.findMany.mockRejectedValue(databaseError);
+    prisma.refreshToken.updateMany.mockRejectedValue(databaseError);
 
     await expect(service.logout('old-refresh-token')).rejects.toBe(
       databaseError,
