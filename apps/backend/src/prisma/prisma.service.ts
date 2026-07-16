@@ -1,5 +1,5 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Injectable, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import { Prisma, PrismaClient } from "@prisma/client";
 
 const SERIALIZABLE_TRANSACTION_MAX_ATTEMPTS = 3;
 
@@ -31,7 +31,7 @@ export class PrismaService
       } catch (error) {
         const shouldRetry =
           error instanceof Prisma.PrismaClientKnownRequestError &&
-          error.code === 'P2034' &&
+          error.code === "P2034" &&
           attempt < SERIALIZABLE_TRANSACTION_MAX_ATTEMPTS;
 
         if (!shouldRetry) {
@@ -40,6 +40,6 @@ export class PrismaService
       }
     }
 
-    throw new Error('Serializable transaction retry limit exceeded.');
+    throw new Error("Serializable transaction retry limit exceeded.");
   }
 }

@@ -1,17 +1,17 @@
-import { randomUUID } from 'crypto';
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
-import * as argon2 from 'argon2';
-import { PrismaService } from '../prisma/prisma.service';
-import { AuthenticatedUser, JwtPayload } from './auth.types';
-import { LoginDto } from './dto/login.dto';
-import { revokeAllRefreshTokensForUser } from './refresh-token-revocation';
+import { randomUUID } from "crypto";
+import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { JwtService } from "@nestjs/jwt";
+import * as argon2 from "argon2";
+import { PrismaService } from "../prisma/prisma.service";
+import { AuthenticatedUser, JwtPayload } from "./auth.types";
+import { LoginDto } from "./dto/login.dto";
+import { revokeAllRefreshTokensForUser } from "./refresh-token-revocation";
 import {
   DEFAULT_ACCESS_TOKEN_EXPIRES_IN,
   DEFAULT_REFRESH_TOKEN_EXPIRES_IN,
   getExpiresAt,
-} from './token-expiration';
+} from "./token-expiration";
 
 type LoginResult = {
   accessToken: string;
@@ -53,13 +53,13 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { email } });
 
     if (!user || user.disabledAt) {
-      throw new UnauthorizedException('Invalid credentials.');
+      throw new UnauthorizedException("Invalid credentials.");
     }
 
     const passwordMatches = await argon2.verify(user.pwdHash, dto.password);
 
     if (!passwordMatches) {
-      throw new UnauthorizedException('Invalid credentials.');
+      throw new UnauthorizedException("Invalid credentials.");
     }
 
     const authenticatedUser = {
@@ -80,7 +80,7 @@ export class AuthService {
         currentUser.disabledAt ||
         currentUser.pwdHash !== user.pwdHash
       ) {
-        throw new UnauthorizedException('Invalid credentials.');
+        throw new UnauthorizedException("Invalid credentials.");
       }
 
       await transaction.refreshToken.create({
@@ -110,7 +110,7 @@ export class AuthService {
       });
 
       if (!currentUser || currentUser.disabledAt) {
-        throw new UnauthorizedException('Invalid refresh token.');
+        throw new UnauthorizedException("Invalid refresh token.");
       }
 
       const revokedAt = new Date();
@@ -125,7 +125,7 @@ export class AuthService {
       });
 
       if (revokedTokens.count !== tokenRecords.length) {
-        throw new UnauthorizedException('Invalid refresh token.');
+        throw new UnauthorizedException("Invalid refresh token.");
       }
 
       await transaction.refreshToken.create({
@@ -171,17 +171,17 @@ export class AuthService {
     };
 
     const accessTokenExpiresIn =
-      this.configService.get<string>('JWT_ACCESS_EXPIRES_IN') ??
+      this.configService.get<string>("JWT_ACCESS_EXPIRES_IN") ??
       DEFAULT_ACCESS_TOKEN_EXPIRES_IN;
     const accessToken = await this.jwtService.signAsync(payload, {
-      secret: this.configService.getOrThrow<string>('JWT_ACCESS_SECRET'),
+      secret: this.configService.getOrThrow<string>("JWT_ACCESS_SECRET"),
       expiresIn: accessTokenExpiresIn as never,
     });
     const refreshTokenExpiresIn =
-      this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') ??
+      this.configService.get<string>("JWT_REFRESH_EXPIRES_IN") ??
       DEFAULT_REFRESH_TOKEN_EXPIRES_IN;
     const refreshToken = await this.jwtService.signAsync(payload, {
-      secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
+      secret: this.configService.getOrThrow<string>("JWT_REFRESH_SECRET"),
       expiresIn: refreshTokenExpiresIn as never,
     });
     const tokenHash = await argon2.hash(refreshToken);
@@ -202,10 +202,10 @@ export class AuthService {
   private async verifyRefreshToken(refreshToken: string): Promise<JwtPayload> {
     try {
       return await this.jwtService.verifyAsync<JwtPayload>(refreshToken, {
-        secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
+        secret: this.configService.getOrThrow<string>("JWT_REFRESH_SECRET"),
       });
     } catch {
-      throw new UnauthorizedException('Invalid refresh token.');
+      throw new UnauthorizedException("Invalid refresh token.");
     }
   }
 
@@ -221,7 +221,7 @@ export class AuthService {
     });
 
     if (!user || user.disabledAt) {
-      throw new UnauthorizedException('Invalid refresh token.');
+      throw new UnauthorizedException("Invalid refresh token.");
     }
 
     return {
@@ -245,7 +245,7 @@ export class AuthService {
         id: true,
         tokenHash: true,
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
     const matches: RefreshTokenRecord[] = [];
 
@@ -256,7 +256,7 @@ export class AuthService {
     }
 
     if (matches.length === 0) {
-      throw new UnauthorizedException('Invalid refresh token.');
+      throw new UnauthorizedException("Invalid refresh token.");
     }
 
     return matches;

@@ -2,15 +2,15 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { Prisma, Role } from '@prisma/client';
-import * as argon2 from 'argon2';
-import { revokeAllRefreshTokensForUser } from '../auth/refresh-token-revocation';
-import { PrismaService } from '../prisma/prisma.service';
-import { CreateUserDto } from './dto/create-user.dto';
-import { ResetUserPasswordDto } from './dto/reset-user-password.dto';
-import { SetUserDisabledDto } from './dto/set-user-disabled.dto';
-import { UpdateUserRoleDto } from './dto/update-user-role.dto';
+} from "@nestjs/common";
+import { Prisma, Role } from "@prisma/client";
+import * as argon2 from "argon2";
+import { revokeAllRefreshTokensForUser } from "../auth/refresh-token-revocation";
+import { PrismaService } from "../prisma/prisma.service";
+import { CreateUserDto } from "./dto/create-user.dto";
+import { ResetUserPasswordDto } from "./dto/reset-user-password.dto";
+import { SetUserDisabledDto } from "./dto/set-user-disabled.dto";
+import { UpdateUserRoleDto } from "./dto/update-user-role.dto";
 
 type UserResponse = {
   id: string;
@@ -37,7 +37,7 @@ export class UsersService {
   async list(): Promise<UserResponse[]> {
     return this.prisma.user.findMany({
       select: USER_SELECT,
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
   }
 
@@ -55,8 +55,8 @@ export class UsersService {
         select: USER_SELECT,
       });
     } catch (error) {
-      if (this.isPrismaError(error, 'P2002')) {
-        throw new ConflictException('User email already exists.');
+      if (this.isPrismaError(error, "P2002")) {
+        throw new ConflictException("User email already exists.");
       }
 
       throw error;
@@ -116,9 +116,7 @@ export class UsersService {
 
   private async updateUserAndRevokeSessions(
     userId: string,
-    operation: (
-      transaction: Prisma.TransactionClient,
-    ) => Promise<UserResponse>,
+    operation: (transaction: Prisma.TransactionClient) => Promise<UserResponse>,
   ): Promise<UserResponse> {
     return this.updateExistingUser(() =>
       this.prisma.runSerializableTransaction(async (transaction) => {
@@ -137,8 +135,8 @@ export class UsersService {
     try {
       return await operation();
     } catch (error) {
-      if (this.isPrismaError(error, 'P2025')) {
-        throw new NotFoundException('User not found.');
+      if (this.isPrismaError(error, "P2025")) {
+        throw new NotFoundException("User not found.");
       }
 
       throw error;

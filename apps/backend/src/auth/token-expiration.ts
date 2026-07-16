@@ -1,5 +1,5 @@
-export const DEFAULT_ACCESS_TOKEN_EXPIRES_IN = '15m';
-export const DEFAULT_REFRESH_TOKEN_EXPIRES_IN = '7d';
+export const DEFAULT_ACCESS_TOKEN_EXPIRES_IN = "15m";
+export const DEFAULT_REFRESH_TOKEN_EXPIRES_IN = "7d";
 
 const EXPIRATION_PATTERN = /^(\d+)([smhd])$/;
 const EXPIRATION_MULTIPLIERS = {
