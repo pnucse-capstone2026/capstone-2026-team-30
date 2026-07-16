@@ -71,6 +71,6 @@
     "testEnvironment": "node"
   },
   "prisma": {
-    "seed": "ts-node --project tsconfig.seed.json prisma/seed.ts"
+    "seed": "node ./node_modules/ts-node/dist/bin.js --project tsconfig.seed.json prisma/seed.ts"
   }
 }

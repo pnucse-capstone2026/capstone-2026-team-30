@@ -1,0 +1,27 @@
+name: Policies CI
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "k8s-manifests/policies/**"
+  push:
+    branches: ["main"]
+    paths:
+      - "k8s-manifests/policies/**"
+
+jobs:
+  validate-policies:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Validate Kyverno Policies
+        uses: kyverno/action-install-cli@v0.2.0
+        with:
+          release: "v1.12.0"
+
+      - name: Run kyverno test
+        run: kyverno test k8s-manifests/policies/
