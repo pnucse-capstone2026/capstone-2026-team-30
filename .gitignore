@@ -36,3 +36,5 @@ anthropic-*.log
 gemini-*.log
 *.prompt
 
+# Local Cluster Scripts Binaries
+scripts/bin/
