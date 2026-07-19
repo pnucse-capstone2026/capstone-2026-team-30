@@ -1,5 +1,5 @@
-import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import { AuthenticatedUser } from '../auth.types';
+import { createParamDecorator, ExecutionContext } from "@nestjs/common";
+import { AuthenticatedUser } from "../auth.types";
 
 export function getCurrentUserFromRequest(
   _data: unknown,

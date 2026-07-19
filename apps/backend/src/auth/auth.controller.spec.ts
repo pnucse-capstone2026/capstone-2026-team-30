@@ -1,6 +1,6 @@
-import { UnauthorizedException } from '@nestjs/common';
-import { Request, Response } from 'express';
-import { AuthController } from './auth.controller';
+import { UnauthorizedException } from "@nestjs/common";
+import { Request, Response } from "express";
+import { AuthController } from "./auth.controller";
 
 function createResponse(): Response {
   return {} as Response;
@@ -29,13 +29,13 @@ function createRefreshTokenCookieService(overrides = {}) {
   };
 }
 
-describe('AuthController', () => {
-  it('delegates login requests and stores refresh tokens in a cookie', async () => {
+describe("AuthController", () => {
+  it("delegates login requests and stores refresh tokens in a cookie", async () => {
     const response = createResponse();
     const serviceResponse = {
-      accessToken: 'access-token',
-      refreshToken: 'refresh-token',
-      user: { id: 'user-1', email: 'admin@example.com', role: 'ADMIN' },
+      accessToken: "access-token",
+      refreshToken: "refresh-token",
+      user: { id: "user-1", email: "admin@example.com", role: "ADMIN" },
     };
     const authService = createAuthService({
       login: jest.fn().mockResolvedValue(serviceResponse),
@@ -45,32 +45,32 @@ describe('AuthController', () => {
       authService as never,
       refreshTokenCookieService as never,
     );
-    const dto = { email: 'admin@example.com', password: 'password' };
+    const dto = { email: "admin@example.com", password: "password" };
 
     await expect(controller.login(dto, response)).resolves.toEqual({
-      accessToken: 'access-token',
+      accessToken: "access-token",
       user: serviceResponse.user,
     });
     expect(authService.login).toHaveBeenCalledWith(dto);
     expect(refreshTokenCookieService.set).toHaveBeenCalledWith(
       response,
-      'refresh-token',
+      "refresh-token",
     );
   });
 
-  it('refreshes tokens from the refresh token cookie', async () => {
+  it("refreshes tokens from the refresh token cookie", async () => {
     const request = createRequest();
     const response = createResponse();
     const serviceResponse = {
-      accessToken: 'new-access-token',
-      refreshToken: 'new-refresh-token',
-      user: { id: 'user-1', email: 'admin@example.com', role: 'ADMIN' },
+      accessToken: "new-access-token",
+      refreshToken: "new-refresh-token",
+      user: { id: "user-1", email: "admin@example.com", role: "ADMIN" },
     };
     const authService = createAuthService({
       refresh: jest.fn().mockResolvedValue(serviceResponse),
     });
     const refreshTokenCookieService = createRefreshTokenCookieService({
-      get: jest.fn().mockReturnValue('old-refresh-token'),
+      get: jest.fn().mockReturnValue("old-refresh-token"),
     });
     const controller = new AuthController(
       authService as never,
@@ -78,18 +78,18 @@ describe('AuthController', () => {
     );
 
     await expect(controller.refresh(request, response)).resolves.toEqual({
-      accessToken: 'new-access-token',
+      accessToken: "new-access-token",
       user: serviceResponse.user,
     });
     expect(refreshTokenCookieService.get).toHaveBeenCalledWith(request);
-    expect(authService.refresh).toHaveBeenCalledWith('old-refresh-token');
+    expect(authService.refresh).toHaveBeenCalledWith("old-refresh-token");
     expect(refreshTokenCookieService.set).toHaveBeenCalledWith(
       response,
-      'new-refresh-token',
+      "new-refresh-token",
     );
   });
 
-  it('rejects refresh requests without a refresh token cookie', async () => {
+  it("rejects refresh requests without a refresh token cookie", async () => {
     const authService = createAuthService();
     const refreshTokenCookieService = createRefreshTokenCookieService({
       get: jest.fn().mockReturnValue(undefined),
@@ -105,7 +105,7 @@ describe('AuthController', () => {
     expect(authService.refresh).not.toHaveBeenCalled();
   });
 
-  it('logs out by revoking the refresh token cookie value and clearing the cookie', async () => {
+  it("logs out by revoking the refresh token cookie value and clearing the cookie", async () => {
     const request = createRequest();
     const response = createResponse();
     const serviceResponse = { success: true };
@@ -113,7 +113,7 @@ describe('AuthController', () => {
       logout: jest.fn().mockResolvedValue(serviceResponse),
     });
     const refreshTokenCookieService = createRefreshTokenCookieService({
-      get: jest.fn().mockReturnValue('old-refresh-token'),
+      get: jest.fn().mockReturnValue("old-refresh-token"),
     });
     const controller = new AuthController(
       authService as never,
@@ -123,12 +123,12 @@ describe('AuthController', () => {
     await expect(controller.logout(request, response)).resolves.toBe(
       serviceResponse,
     );
-    expect(authService.logout).toHaveBeenCalledWith('old-refresh-token');
+    expect(authService.logout).toHaveBeenCalledWith("old-refresh-token");
     expect(refreshTokenCookieService.clear).toHaveBeenCalledWith(response);
   });
 
-  it('delegates me requests to AuthService', () => {
-    const user = { id: 'user-1', email: 'admin@example.com', role: 'ADMIN' };
+  it("delegates me requests to AuthService", () => {
+    const user = { id: "user-1", email: "admin@example.com", role: "ADMIN" };
     const authService = createAuthService({
       me: jest.fn().mockReturnValue(user),
     });

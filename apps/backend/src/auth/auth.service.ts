@@ -1,11 +1,17 @@
-import { randomUUID } from 'crypto';
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
-import * as argon2 from 'argon2';
-import { PrismaService } from '../prisma/prisma.service';
-import { AuthenticatedUser, JwtPayload } from './auth.types';
-import { LoginDto } from './dto/login.dto';
+import { randomUUID } from "crypto";
+import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { JwtService } from "@nestjs/jwt";
+import * as argon2 from "argon2";
+import { PrismaService } from "../prisma/prisma.service";
+import { AuthenticatedUser, JwtPayload } from "./auth.types";
+import { LoginDto } from "./dto/login.dto";
+import { revokeAllRefreshTokensForUser } from "./refresh-token-revocation";
+import {
+  DEFAULT_ACCESS_TOKEN_EXPIRES_IN,
+  DEFAULT_REFRESH_TOKEN_EXPIRES_IN,
+  getExpiresAt,
+} from "./token-expiration";
 
 type LoginResult = {
   accessToken: string;
@@ -20,6 +26,14 @@ type LogoutResult = {
 type RefreshTokenRecord = {
   id: string;
   tokenHash: string;
+};
+
+type PreparedTokenPair = {
+  result: LoginResult;
+  refreshTokenData: {
+    tokenHash: string;
+    expiresAt: Date;
+  };
 };
 
 @Injectable()
@@ -39,20 +53,45 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { email } });
 
     if (!user || user.disabledAt) {
-      throw new UnauthorizedException('Invalid credentials.');
+      throw new UnauthorizedException("Invalid credentials.");
     }
 
     const passwordMatches = await argon2.verify(user.pwdHash, dto.password);
 
     if (!passwordMatches) {
-      throw new UnauthorizedException('Invalid credentials.');
+      throw new UnauthorizedException("Invalid credentials.");
     }
 
-    return this.issueTokens({
+    const authenticatedUser = {
       id: user.id,
       email: user.email,
       role: user.role,
+    };
+    const preparedTokens = await this.prepareTokenPair(authenticatedUser);
+
+    await this.prisma.runSerializableTransaction(async (transaction) => {
+      const currentUser = await transaction.user.findUnique({
+        where: { id: user.id },
+        select: { pwdHash: true, disabledAt: true },
+      });
+
+      if (
+        !currentUser ||
+        currentUser.disabledAt ||
+        currentUser.pwdHash !== user.pwdHash
+      ) {
+        throw new UnauthorizedException("Invalid credentials.");
+      }
+
+      await transaction.refreshToken.create({
+        data: {
+          ...preparedTokens.refreshTokenData,
+          userId: authenticatedUser.id,
+        },
+      });
     });
+
+    return preparedTokens.result;
   }
 
   async refresh(refreshToken: string): Promise<LoginResult> {
@@ -62,10 +101,42 @@ export class AuthService {
       user.id,
       refreshToken,
     );
+    const preparedTokens = await this.prepareTokenPair(user);
 
-    await this.revokeRefreshTokens(tokenRecords);
+    await this.prisma.runSerializableTransaction(async (transaction) => {
+      const currentUser = await transaction.user.findUnique({
+        where: { id: user.id },
+        select: { disabledAt: true },
+      });
 
-    return this.issueTokens(user);
+      if (!currentUser || currentUser.disabledAt) {
+        throw new UnauthorizedException("Invalid refresh token.");
+      }
+
+      const revokedAt = new Date();
+      const revokedTokens = await transaction.refreshToken.updateMany({
+        where: {
+          id: { in: tokenRecords.map((token) => token.id) },
+          userId: user.id,
+          revokedAt: null,
+          expiresAt: { gt: revokedAt },
+        },
+        data: { revokedAt },
+      });
+
+      if (revokedTokens.count !== tokenRecords.length) {
+        throw new UnauthorizedException("Invalid refresh token.");
+      }
+
+      await transaction.refreshToken.create({
+        data: {
+          ...preparedTokens.refreshTokenData,
+          userId: user.id,
+        },
+      });
+    });
+
+    return preparedTokens.result;
   }
 
   async logout(refreshToken?: string): Promise<LogoutResult> {
@@ -75,20 +146,23 @@ export class AuthService {
       }
 
       const payload = await this.verifyRefreshToken(refreshToken);
-      const tokenRecords = await this.findMatchingRefreshTokens(
-        payload.sub,
-        refreshToken,
+      await this.prisma.runSerializableTransaction((transaction) =>
+        revokeAllRefreshTokensForUser(transaction, payload.sub),
       );
+    } catch (error) {
+      if (!(error instanceof UnauthorizedException)) {
+        throw error;
+      }
 
-      await this.revokeRefreshTokens(tokenRecords);
-    } catch {
-      // Logout is intentionally idempotent and does not reveal token validity.
+      // Invalid tokens are intentionally treated as successful logout.
     }
 
     return { success: true };
   }
 
-  private async issueTokens(user: AuthenticatedUser): Promise<LoginResult> {
+  private async prepareTokenPair(
+    user: AuthenticatedUser,
+  ): Promise<PreparedTokenPair> {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
@@ -97,41 +171,41 @@ export class AuthService {
     };
 
     const accessTokenExpiresIn =
-      this.configService.get<string>('JWT_ACCESS_EXPIRES_IN') ?? '15m';
+      this.configService.get<string>("JWT_ACCESS_EXPIRES_IN") ??
+      DEFAULT_ACCESS_TOKEN_EXPIRES_IN;
     const accessToken = await this.jwtService.signAsync(payload, {
-      secret: this.configService.getOrThrow<string>('JWT_ACCESS_SECRET'),
+      secret: this.configService.getOrThrow<string>("JWT_ACCESS_SECRET"),
       expiresIn: accessTokenExpiresIn as never,
     });
     const refreshTokenExpiresIn =
-      this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') ?? '7d';
+      this.configService.get<string>("JWT_REFRESH_EXPIRES_IN") ??
+      DEFAULT_REFRESH_TOKEN_EXPIRES_IN;
     const refreshToken = await this.jwtService.signAsync(payload, {
-      secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
+      secret: this.configService.getOrThrow<string>("JWT_REFRESH_SECRET"),
       expiresIn: refreshTokenExpiresIn as never,
     });
     const tokenHash = await argon2.hash(refreshToken);
 
-    await this.prisma.refreshToken.create({
-      data: {
-        tokenHash,
-        userId: user.id,
-        expiresAt: this.getExpiresAt(refreshTokenExpiresIn),
-      },
-    });
-
     return {
-      accessToken,
-      refreshToken,
-      user,
+      result: {
+        accessToken,
+        refreshToken,
+        user,
+      },
+      refreshTokenData: {
+        tokenHash,
+        expiresAt: getExpiresAt(refreshTokenExpiresIn),
+      },
     };
   }
 
   private async verifyRefreshToken(refreshToken: string): Promise<JwtPayload> {
     try {
       return await this.jwtService.verifyAsync<JwtPayload>(refreshToken, {
-        secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
+        secret: this.configService.getOrThrow<string>("JWT_REFRESH_SECRET"),
       });
     } catch {
-      throw new UnauthorizedException('Invalid refresh token.');
+      throw new UnauthorizedException("Invalid refresh token.");
     }
   }
 
@@ -147,7 +221,7 @@ export class AuthService {
     });
 
     if (!user || user.disabledAt) {
-      throw new UnauthorizedException('Invalid refresh token.');
+      throw new UnauthorizedException("Invalid refresh token.");
     }
 
     return {
@@ -171,7 +245,7 @@ export class AuthService {
         id: true,
         tokenHash: true,
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
     const matches: RefreshTokenRecord[] = [];
 
@@ -182,39 +256,9 @@ export class AuthService {
     }
 
     if (matches.length === 0) {
-      throw new UnauthorizedException('Invalid refresh token.');
+      throw new UnauthorizedException("Invalid refresh token.");
     }
 
     return matches;
-  }
-
-  private async revokeRefreshTokens(tokens: RefreshTokenRecord[]) {
-    await this.prisma.refreshToken.updateMany({
-      where: { id: { in: tokens.map((token) => token.id) } },
-      data: { revokedAt: new Date() },
-    });
-  }
-
-  private getExpiresAt(expiresIn: string): Date {
-    return new Date(Date.now() + this.parseExpiresIn(expiresIn));
-  }
-
-  private parseExpiresIn(expiresIn: string): number {
-    const match = /^(\d+)([smhd])$/.exec(expiresIn.trim());
-
-    if (!match) {
-      return 7 * 24 * 60 * 60 * 1000;
-    }
-
-    const value = Number(match[1]);
-    const unit = match[2];
-    const multipliers: Record<string, number> = {
-      s: 1000,
-      m: 60 * 1000,
-      h: 60 * 60 * 1000,
-      d: 24 * 60 * 60 * 1000,
-    };
-
-    return value * multipliers[unit];
   }
 }

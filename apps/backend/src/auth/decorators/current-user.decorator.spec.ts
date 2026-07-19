@@ -1,12 +1,12 @@
-import { AuthenticatedUser } from '../auth.types';
-import { getCurrentUserFromRequest } from './current-user.decorator';
+import { AuthenticatedUser } from "../auth.types";
+import { getCurrentUserFromRequest } from "./current-user.decorator";
 
-describe('getCurrentUserFromRequest', () => {
-  it('returns request user', () => {
+describe("getCurrentUserFromRequest", () => {
+  it("returns request user", () => {
     const user: AuthenticatedUser = {
-      id: 'user-1',
-      email: 'admin@example.com',
-      role: 'ADMIN',
+      id: "user-1",
+      email: "admin@example.com",
+      role: "ADMIN",
     };
     const ctx = {
       switchToHttp: () => ({

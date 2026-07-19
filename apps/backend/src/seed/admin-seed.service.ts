@@ -1,5 +1,5 @@
-import { Role } from '@prisma/client';
-import * as argon2 from 'argon2';
+import { Role } from "@prisma/client";
+import * as argon2 from "argon2";
 
 type ExistingUser = {
   id: string;
@@ -9,7 +9,9 @@ type ExistingUser = {
 
 type AdminSeedPrisma = {
   user: {
-    findUnique(args: { where: { email: string } }): Promise<ExistingUser | null>;
+    findUnique(args: {
+      where: { email: string };
+    }): Promise<ExistingUser | null>;
     create(args: {
       data: { email: string; pwdHash: string; role: Role };
     }): Promise<ExistingUser>;
@@ -35,11 +37,11 @@ export async function seedAdminUser(
   const password = config.password;
 
   if (!email) {
-    throw new Error('SEED_ADMIN_EMAIL is required.');
+    throw new Error("SEED_ADMIN_EMAIL is required.");
   }
 
   if (!password) {
-    throw new Error('SEED_ADMIN_PASSWORD is required.');
+    throw new Error("SEED_ADMIN_PASSWORD is required.");
   }
 
   const existingUser = await prisma.user.findUnique({ where: { email } });
