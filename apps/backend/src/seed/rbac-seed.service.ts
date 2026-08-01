@@ -1,58 +1,58 @@
-import { Role } from '@prisma/client';
+import { Role } from "@prisma/client";
 
 export const PERMISSIONS = [
-  { key: 'users.read', description: 'Read users.' },
-  { key: 'users.create', description: 'Create users.' },
-  { key: 'users.update_role', description: 'Update user roles.' },
-  { key: 'users.disable', description: 'Enable or disable users.' },
-  { key: 'users.reset_password', description: 'Reset user passwords.' },
-  { key: 'permissions.read', description: 'Read permissions.' },
-  { key: 'violations.read', description: 'Read policy violations.' },
+  { key: "users.read", description: "Read users." },
+  { key: "users.create", description: "Create users." },
+  { key: "users.update_role", description: "Update user roles." },
+  { key: "users.disable", description: "Enable or disable users." },
+  { key: "users.reset_password", description: "Reset user passwords." },
+  { key: "permissions.read", description: "Read permissions." },
+  { key: "violations.read", description: "Read policy violations." },
   {
-    key: 'exception_requests.read',
-    description: 'Read policy exception requests.',
+    key: "exception_requests.read",
+    description: "Read policy exception requests.",
   },
   {
-    key: 'exception_requests.create',
-    description: 'Create policy exception requests.',
+    key: "exception_requests.create",
+    description: "Create policy exception requests.",
   },
   {
-    key: 'exception_requests.approve',
-    description: 'Approve policy exception requests.',
+    key: "exception_requests.approve",
+    description: "Approve policy exception requests.",
   },
   {
-    key: 'exception_requests.reject',
-    description: 'Reject policy exception requests.',
+    key: "exception_requests.reject",
+    description: "Reject policy exception requests.",
   },
   {
-    key: 'exception_requests.cancel',
-    description: 'Cancel policy exception requests.',
+    key: "exception_requests.cancel",
+    description: "Cancel policy exception requests.",
   },
   {
-    key: 'exception_requests.expire',
-    description: 'Expire policy exception requests.',
+    key: "exception_requests.expire",
+    description: "Expire policy exception requests.",
   },
-  { key: 'audit_logs.read', description: 'Read audit logs.' },
+  { key: "audit_logs.read", description: "Read audit logs." },
 ] as const;
 
-export type PermissionKey = (typeof PERMISSIONS)[number]['key'];
+export type PermissionKey = (typeof PERMISSIONS)[number]["key"];
 
 export const ROLE_PERMISSIONS: Record<Role, PermissionKey[]> = {
   [Role.ADMIN]: PERMISSIONS.map((permission) => permission.key),
   [Role.APPROVER]: [
-    'violations.read',
-    'exception_requests.read',
-    'exception_requests.approve',
-    'exception_requests.reject',
-    'audit_logs.read',
+    "violations.read",
+    "exception_requests.read",
+    "exception_requests.approve",
+    "exception_requests.reject",
+    "audit_logs.read",
   ],
   [Role.REQUESTER]: [
-    'violations.read',
-    'exception_requests.read',
-    'exception_requests.create',
-    'exception_requests.cancel',
+    "violations.read",
+    "exception_requests.read",
+    "exception_requests.create",
+    "exception_requests.cancel",
   ],
-  [Role.VIEWER]: ['violations.read', 'exception_requests.read'],
+  [Role.VIEWER]: ["violations.read", "exception_requests.read"],
 };
 
 type PermissionRecord = {
@@ -110,7 +110,7 @@ export async function seedRbacPermissions(
       const permission = permissionsByKey.get(permissionKey);
 
       if (!permission) {
-        throw new Error('Unknown permission key: ' + permissionKey);
+        throw new Error("Unknown permission key: " + permissionKey);
       }
 
       await prisma.rolePermission.upsert({

@@ -1,14 +1,14 @@
-import { Role } from '@prisma/client';
+import { Role } from "@prisma/client";
 import {
   PERMISSIONS,
   ROLE_PERMISSIONS,
   seedRbacPermissions,
-} from './rbac-seed.service';
+} from "./rbac-seed.service";
 
-describe('seedRbacPermissions', () => {
-  it('upserts permissions and role-permission mappings idempotently', async () => {
+describe("seedRbacPermissions", () => {
+  it("upserts permissions and role-permission mappings idempotently", async () => {
     const permissionRecords = PERMISSIONS.map((permission, index) => ({
-      id: 'permission-' + index,
+      id: "permission-" + index,
       key: permission.key,
     }));
     const prisma = {
@@ -34,9 +34,9 @@ describe('seedRbacPermissions', () => {
     });
     expect(prisma.permission.upsert).toHaveBeenCalledTimes(PERMISSIONS.length);
     expect(prisma.permission.upsert).toHaveBeenCalledWith({
-      where: { key: 'users.read' },
-      update: { description: 'Read users.' },
-      create: { key: 'users.read', description: 'Read users.' },
+      where: { key: "users.read" },
+      update: { description: "Read users." },
+      create: { key: "users.read", description: "Read users." },
     });
     expect(prisma.rolePermission.upsert).toHaveBeenCalledTimes(
       Object.values(ROLE_PERMISSIONS).flat().length,
@@ -45,40 +45,40 @@ describe('seedRbacPermissions', () => {
       where: {
         role_permissionId: {
           role: Role.ADMIN,
-          permissionId: 'permission-0',
+          permissionId: "permission-0",
         },
       },
       update: {},
       create: {
         role: Role.ADMIN,
-        permissionId: 'permission-0',
+        permissionId: "permission-0",
       },
     });
   });
 
-  it('grants ADMIN every seeded permission', () => {
+  it("grants ADMIN every seeded permission", () => {
     expect(ROLE_PERMISSIONS[Role.ADMIN]).toEqual(
       PERMISSIONS.map((permission) => permission.key),
     );
   });
 
-  it('keeps non-admin roles limited to their expected governance permissions', () => {
+  it("keeps non-admin roles limited to their expected governance permissions", () => {
     expect(ROLE_PERMISSIONS[Role.APPROVER]).toEqual([
-      'violations.read',
-      'exception_requests.read',
-      'exception_requests.approve',
-      'exception_requests.reject',
-      'audit_logs.read',
+      "violations.read",
+      "exception_requests.read",
+      "exception_requests.approve",
+      "exception_requests.reject",
+      "audit_logs.read",
     ]);
     expect(ROLE_PERMISSIONS[Role.REQUESTER]).toEqual([
-      'violations.read',
-      'exception_requests.read',
-      'exception_requests.create',
-      'exception_requests.cancel',
+      "violations.read",
+      "exception_requests.read",
+      "exception_requests.create",
+      "exception_requests.cancel",
     ]);
     expect(ROLE_PERMISSIONS[Role.VIEWER]).toEqual([
-      'violations.read',
-      'exception_requests.read',
+      "violations.read",
+      "exception_requests.read",
     ]);
   });
 });

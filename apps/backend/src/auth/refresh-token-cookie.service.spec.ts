@@ -1,11 +1,11 @@
-import { ConfigService } from '@nestjs/config';
-import { Request, Response } from 'express';
-import { RefreshTokenCookieService } from './refresh-token-cookie.service';
+import { ConfigService } from "@nestjs/config";
+import { Request, Response } from "express";
+import { RefreshTokenCookieService } from "./refresh-token-cookie.service";
 
-function createService(expiresIn = '7d') {
+function createService(expiresIn = "7d") {
   const configService = {
     get: jest.fn((key: string) => {
-      if (key === 'JWT_REFRESH_EXPIRES_IN') {
+      if (key === "JWT_REFRESH_EXPIRES_IN") {
         return expiresIn;
       }
 
@@ -34,53 +34,69 @@ function createResponse(): Response {
   } as unknown as Response;
 }
 
-describe('RefreshTokenCookieService', () => {
-  it('reads the refresh token cookie', () => {
+describe("RefreshTokenCookieService", () => {
+  it("reads the refresh token cookie", () => {
     const { service } = createService();
 
     expect(
-      service.get(createRequest('other=value; refresh_token=refresh%20token')),
-    ).toBe('refresh token');
+      service.get(createRequest("other=value; refresh_token=refresh%20token")),
+    ).toBe("refresh token");
   });
 
-  it('returns undefined when the refresh token cookie is missing', () => {
+  it("returns undefined when the refresh token cookie is missing", () => {
     const { service } = createService();
 
-    expect(service.get(createRequest('other=value'))).toBeUndefined();
+    expect(service.get(createRequest("other=value"))).toBeUndefined();
   });
 
-  it('returns undefined when the refresh token cookie is malformed', () => {
+  it("returns undefined when the refresh token cookie is malformed", () => {
     const { service } = createService();
 
-    expect(service.get(createRequest('refresh_token=%E0%A4%A'))).toBeUndefined();
+    expect(
+      service.get(createRequest("refresh_token=%E0%A4%A")),
+    ).toBeUndefined();
   });
 
-  it('sets an HttpOnly refresh token cookie', () => {
-    const { service } = createService('15m');
+  it("sets an HttpOnly refresh token cookie", () => {
+    const { service } = createService("15m");
     const response = createResponse();
 
-    service.set(response, 'refresh-token');
+    service.set(response, "refresh-token");
 
-    expect(response.cookie).toHaveBeenCalledWith('refresh_token', 'refresh-token', {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: false,
-      path: '/auth',
-      maxAge: 15 * 60 * 1000,
-    });
+    expect(response.cookie).toHaveBeenCalledWith(
+      "refresh_token",
+      "refresh-token",
+      {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: false,
+        path: "/auth",
+        maxAge: 15 * 60 * 1000,
+      },
+    );
   });
 
-  it('clears the refresh token cookie with matching options', () => {
+  it("rejects invalid refresh token expiration configuration", () => {
+    const { service } = createService("7 weeks");
+    const response = createResponse();
+
+    expect(() => service.set(response, "refresh-token")).toThrow(
+      "Invalid expiration duration",
+    );
+    expect(response.cookie).not.toHaveBeenCalled();
+  });
+
+  it("clears the refresh token cookie with matching options", () => {
     const { service } = createService();
     const response = createResponse();
 
     service.clear(response);
 
-    expect(response.clearCookie).toHaveBeenCalledWith('refresh_token', {
+    expect(response.clearCookie).toHaveBeenCalledWith("refresh_token", {
       httpOnly: true,
-      sameSite: 'lax',
+      sameSite: "lax",
       secure: false,
-      path: '/auth',
+      path: "/auth",
     });
   });
 });

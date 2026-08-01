@@ -1,23 +1,25 @@
-import { SetMetadata } from '@nestjs/common';
+import { SetMetadata } from "@nestjs/common";
 import {
   REQUIRED_PERMISSIONS_KEY,
   RequirePermissions,
-} from './require-permissions.decorator';
+} from "./require-permissions.decorator";
 
-jest.mock('@nestjs/common', () => ({
+jest.mock("@nestjs/common", () => ({
   SetMetadata: jest.fn(),
 }));
 
-describe('RequirePermissions', () => {
-  it('stores required permission keys as route metadata', () => {
-    const metadataDecorator = jest.fn();
+describe("RequirePermissions", () => {
+  it("stores required permission keys as route metadata", () => {
+    const metadataDecorator = Object.assign(jest.fn(), {
+      KEY: REQUIRED_PERMISSIONS_KEY,
+    });
     jest.mocked(SetMetadata).mockReturnValue(metadataDecorator);
 
-    const result = RequirePermissions('users.read', 'users.create');
+    const result = RequirePermissions("users.read", "users.create");
 
     expect(SetMetadata).toHaveBeenCalledWith(REQUIRED_PERMISSIONS_KEY, [
-      'users.read',
-      'users.create',
+      "users.read",
+      "users.create",
     ]);
     expect(result).toBe(metadataDecorator);
   });

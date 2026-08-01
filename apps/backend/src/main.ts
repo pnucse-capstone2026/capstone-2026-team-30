@@ -1,8 +1,8 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { Logger } from 'nestjs-pino';
+import { NestFactory } from "@nestjs/core";
+import { AppModule } from "./app.module";
+import { ValidationPipe } from "@nestjs/common";
+import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import { Logger } from "nestjs-pino";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
@@ -21,17 +21,17 @@ async function bootstrap() {
 
   // Swagger API 문서
   const config = new DocumentBuilder()
-    .setTitle('Kyverno Governance API')
-    .setDescription('PaC 정책 위반 및 예외 관리 API')
-    .setVersion('1.0')
+    .setTitle("Kyverno Governance API")
+    .setDescription("PaC 정책 위반 및 예외 관리 API")
+    .setVersion("1.0")
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
+  SwaggerModule.setup("api", app, document);
 
   // CORS (개발 환경)
   app.enableCors({
-    origin: process.env.FRONTEND_ORIGIN ?? 'http://localhost:3000',
+    origin: process.env.FRONTEND_ORIGIN ?? "http://localhost:3000",
     credentials: true,
   });
 

@@ -4,12 +4,12 @@ import {
   ForbiddenException,
   Injectable,
   UnauthorizedException,
-} from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { PrismaService } from '../../prisma/prisma.service';
-import { PermissionKey } from '../../seed/rbac-seed.service';
-import { AuthenticatedUser } from '../auth.types';
-import { REQUIRED_PERMISSIONS_KEY } from '../decorators/require-permissions.decorator';
+} from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+import { PrismaService } from "../../prisma/prisma.service";
+import { PermissionKey } from "../../seed/rbac-seed.service";
+import { AuthenticatedUser } from "../auth.types";
+import { REQUIRED_PERMISSIONS_KEY } from "../decorators/require-permissions.decorator";
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {
@@ -46,7 +46,7 @@ export class PermissionsGuard implements CanActivate {
     });
 
     if (matchingPermissionCount !== uniquePermissions.length) {
-      throw new ForbiddenException('Insufficient permissions.');
+      throw new ForbiddenException("Insufficient permissions.");
     }
 
     return true;

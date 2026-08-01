@@ -1,9 +1,9 @@
-import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { LoggerModule } from 'nestjs-pino';
-import { PrismaModule } from './prisma/prisma.module';
-import { AuthModule } from './auth/auth.module';
-import { UsersModule } from './users/users.module';
+import { Module } from "@nestjs/common";
+import { ConfigModule } from "@nestjs/config";
+import { LoggerModule } from "nestjs-pino";
+import { PrismaModule } from "./prisma/prisma.module";
+import { AuthModule } from "./auth/auth.module";
+import { UsersModule } from "./users/users.module";
 
 @Module({
   imports: [
@@ -18,10 +18,10 @@ import { UsersModule } from './users/users.module';
     LoggerModule.forRoot({
       pinoHttp: {
         transport:
-          process.env.NODE_ENV !== 'production'
-            ? { target: 'pino-pretty' }
+          process.env.NODE_ENV !== "production"
+            ? { target: "pino-pretty" }
             : undefined,
-        level: process.env.NODE_ENV !== 'production' ? 'debug' : 'info',
+        level: process.env.NODE_ENV !== "production" ? "debug" : "info",
       },
     }),
   ],

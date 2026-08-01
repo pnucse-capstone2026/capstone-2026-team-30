@@ -6,8 +6,11 @@ allowBuilds:
   '@prisma/engines': true
   '@scarf/scarf': true
   argon2: true
+  cpu-features: false
   prisma: true
+  protobufjs: false
   sharp: true
+  ssh2: false
   unrs-resolver: true
 # 메모리 누수 및 보안 취약점이 존재하는 구버전 glob/inflight 패키지 사용을 방지하기 위한 버전 재정의
 overrides:
