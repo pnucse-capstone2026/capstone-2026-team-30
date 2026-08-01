@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Validate Kyverno Policies
         uses: kyverno/action-install-cli@v0.2.0
