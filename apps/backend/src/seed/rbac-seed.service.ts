@@ -40,6 +40,7 @@ export const PERMISSIONS = [
     key: "users.assign_clusters",
     description: "Assign clusters to users.",
   },
+  { key: "policies.read", description: "Read Kyverno policies." },
   { key: "audit_logs.read", description: "Read audit logs." },
 ] as const;
 
@@ -48,6 +49,7 @@ export type PermissionKey = (typeof PERMISSIONS)[number]["key"];
 export const ROLE_PERMISSIONS: Record<Role, PermissionKey[]> = {
   [Role.ADMIN]: PERMISSIONS.map((permission) => permission.key),
   [Role.APPROVER]: [
+    "policies.read",
     "violations.read",
     "exception_requests.read",
     "exception_requests.approve",
@@ -56,12 +58,17 @@ export const ROLE_PERMISSIONS: Record<Role, PermissionKey[]> = {
     "audit_logs.read",
   ],
   [Role.REQUESTER]: [
+    "policies.read",
     "violations.read",
     "exception_requests.read",
     "exception_requests.create",
     "exception_requests.cancel",
   ],
-  [Role.VIEWER]: ["violations.read", "exception_requests.read"],
+  [Role.VIEWER]: [
+    "policies.read",
+    "violations.read",
+    "exception_requests.read",
+  ],
 };
 
 type PermissionRecord = {

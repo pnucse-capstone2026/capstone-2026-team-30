@@ -64,6 +64,7 @@ describe("seedRbacPermissions", () => {
 
   it("keeps non-admin roles limited to their expected governance permissions", () => {
     expect(ROLE_PERMISSIONS[Role.APPROVER]).toEqual([
+      "policies.read",
       "violations.read",
       "exception_requests.read",
       "exception_requests.approve",
@@ -72,12 +73,14 @@ describe("seedRbacPermissions", () => {
       "audit_logs.read",
     ]);
     expect(ROLE_PERMISSIONS[Role.REQUESTER]).toEqual([
+      "policies.read",
       "violations.read",
       "exception_requests.read",
       "exception_requests.create",
       "exception_requests.cancel",
     ]);
     expect(ROLE_PERMISSIONS[Role.VIEWER]).toEqual([
+      "policies.read",
       "violations.read",
       "exception_requests.read",
     ]);

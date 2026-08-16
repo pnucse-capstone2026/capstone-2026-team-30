@@ -7,6 +7,7 @@ import { PrismaModule } from "./prisma/prisma.module";
 import { AuthModule } from "./auth/auth.module";
 import { UsersModule } from "./users/users.module";
 import { ExceptionRequestsModule } from "./exception-requests/exception-requests.module";
+import { PoliciesModule } from "./policies/policies.module";
 import { AiAgentModule } from "./ai-agent/ai-agent.module";
 import { HealthModule } from "./health/health.module";
 import { createPinoHttpConfig } from "./logging/pino-http.config";
@@ -24,6 +25,7 @@ import { createPinoHttpConfig } from "./logging/pino-http.config";
     AuthModule,
     UsersModule,
     ExceptionRequestsModule,
+    PoliciesModule,
     AiAgentModule,
     HealthModule,
 
