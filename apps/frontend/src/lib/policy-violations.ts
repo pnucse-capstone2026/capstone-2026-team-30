@@ -44,7 +44,8 @@ export const policyViolations: PolicyViolation[] = [
     exceptionStatus: "none",
     detectedAt: "2026-07-08 10:30",
     assignee: "플랫폼팀",
-    message: "컨테이너 payment-api에 CPU와 memory limits가 설정되어 있지 않습니다.",
+    message:
+      "컨테이너 payment-api에 CPU와 memory limits가 설정되어 있지 않습니다.",
     ruleName: "validate-resource-limits",
     engineResponse: "fail",
     admissionReviewId: "ar-5b71e0d8",
@@ -70,7 +71,8 @@ spec:
       {
         label: "정책 위반 감지",
         at: "2026-07-08 10:30",
-        description: "AdmissionReview에서 validate-resource-limits 규칙이 실패했습니다.",
+        description:
+          "AdmissionReview에서 validate-resource-limits 규칙이 실패했습니다.",
       },
       {
         label: "담당자 배정",

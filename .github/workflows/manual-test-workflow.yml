@@ -1,0 +1,61 @@
+# GitHub Actions 탭에서 개발자가 필요할 때 온디맨드로 수동 실행(workflow_dispatch) 가능한 수동 테스트 워크플로우
+# PR 이전이나 특정 기능 검증 시 백엔드 유닛 테스트 및 AI 에이전트 서비스 로직을 수동 검증하는 목적
+name: Manual Integration & AI Agent Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_ai_agent_tests:
+        description: 'Run AWS Bedrock & AI Agent unit test suite'
+        required: true
+        type: boolean
+        default: true
+      run_policy_tests:
+        description: 'Run Kyverno baseline policy validation'
+        required: true
+        type: boolean
+        default: true
+
+jobs:
+  manual-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Cache pnpm dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Backend & AI Agent Unit Tests
+        if: ${{ inputs.run_ai_agent_tests }}
+        run: |
+          pnpm --filter @kyverno-platform/backend test -- src/ai-agent/ai-agent.service.spec.ts
+
+      - name: Run Full Backend Unit Test Suite
+        run: |
+          pnpm --filter @kyverno-platform/backend test

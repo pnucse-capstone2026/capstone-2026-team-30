@@ -1,0 +1,22 @@
+# 정책 위반 테스트용 워크로드 매니페스트
+# Enforce 정책에 의해 차단되거나 PolicyException 승인 후 허용되는지 검증하기 위한 목적
+apiVersion: v1
+kind: Pod
+metadata:
+  name: e2e-violating-pod
+  labels:
+    app.kubernetes.io/name: e2e-violating-pod
+    test-purpose: kyverno-governance-e2e
+spec:
+  containers:
+    - name: web
+      image: nginx:latest
+      ports:
+        - containerPort: 80
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi

@@ -118,7 +118,9 @@ export default async function AdminViolationDetailPage({
                   <StatusIcon className="size-3" />
                   {statusLabel[violation.status]}
                 </Badge>
-                <Badge className={exceptionClassName[violation.exceptionStatus]}>
+                <Badge
+                  className={exceptionClassName[violation.exceptionStatus]}
+                >
                   예외 {exceptionLabel[violation.exceptionStatus]}
                 </Badge>
               </div>
@@ -138,11 +140,21 @@ export default async function AdminViolationDetailPage({
                 리포트
               </Button>
               {violation.relatedExceptionId ? (
-                <Button asChild className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]">
-                  <Link href={`/admin/exceptions/${violation.relatedExceptionId}`}>관련 예외 보기</Link>
+                <Button
+                  asChild
+                  className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]"
+                >
+                  <Link
+                    href={`/admin/exceptions/${violation.relatedExceptionId}`}
+                  >
+                    관련 예외 보기
+                  </Link>
                 </Button>
               ) : (
-                <Button asChild className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]">
+                <Button
+                  asChild
+                  className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]"
+                >
                   <Link href="/admin/exceptions">예외 신청 확인</Link>
                 </Button>
               )}
@@ -175,9 +187,16 @@ export default async function AdminViolationDetailPage({
                     ["AdmissionReview", violation.admissionReviewId],
                     ["엔진 응답", violation.engineResponse],
                   ].map(([label, value]) => (
-                    <div key={label} className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
-                      <dt className="text-[11px] font-medium text-slate-400">{label}</dt>
-                      <dd className="mt-1 break-words text-sm font-medium text-slate-800">{value}</dd>
+                    <div
+                      key={label}
+                      className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3"
+                    >
+                      <dt className="text-[11px] font-medium text-slate-400">
+                        {label}
+                      </dt>
+                      <dd className="mt-1 break-words text-sm font-medium text-slate-800">
+                        {value}
+                      </dd>
                     </div>
                   ))}
                 </dl>
@@ -191,7 +210,9 @@ export default async function AdminViolationDetailPage({
                       실패한 필드와 복구 방향을 확인하세요.
                     </p>
                   </div>
-                  <Badge className="bg-slate-100 text-slate-600">{violation.resourcePath}</Badge>
+                  <Badge className="bg-slate-100 text-slate-600">
+                    {violation.resourcePath}
+                  </Badge>
                 </div>
                 <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900">
                   {violation.recommendation}
@@ -205,11 +226,19 @@ export default async function AdminViolationDetailPage({
                       <Code2 className="size-4.5" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-semibold">리소스 매니페스트</h3>
-                      <p className="mt-1 text-xs text-slate-400">검사 시점의 YAML 일부</p>
+                      <h3 className="text-sm font-semibold">
+                        리소스 매니페스트
+                      </h3>
+                      <p className="mt-1 text-xs text-slate-400">
+                        검사 시점의 YAML 일부
+                      </p>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" className="rounded-lg border-slate-200">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-lg border-slate-200"
+                  >
                     <Copy className="size-3.5" />
                     복사
                   </Button>
@@ -228,7 +257,9 @@ export default async function AdminViolationDetailPage({
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold">조치 요약</h3>
-                    <p className="mt-1 text-xs text-slate-400">현재 처리 상태</p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      현재 처리 상태
+                    </p>
                   </div>
                 </div>
                 <div className="mt-5 space-y-3">
@@ -247,13 +278,24 @@ export default async function AdminViolationDetailPage({
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-slate-500">예외</span>
                     {violation.relatedExceptionId ? (
-                      <Badge asChild className={exceptionClassName[violation.exceptionStatus]}>
-                        <Link href={`/admin/exceptions/${violation.relatedExceptionId}`}>
+                      <Badge
+                        asChild
+                        className={
+                          exceptionClassName[violation.exceptionStatus]
+                        }
+                      >
+                        <Link
+                          href={`/admin/exceptions/${violation.relatedExceptionId}`}
+                        >
                           {exceptionLabel[violation.exceptionStatus]}
                         </Link>
                       </Badge>
                     ) : (
-                      <Badge className={exceptionClassName[violation.exceptionStatus]}>
+                      <Badge
+                        className={
+                          exceptionClassName[violation.exceptionStatus]
+                        }
+                      >
                         {exceptionLabel[violation.exceptionStatus]}
                       </Badge>
                     )}

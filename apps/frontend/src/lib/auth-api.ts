@@ -4,12 +4,34 @@ export type AuthUser = {
   id: string;
   email: string;
   role: UserRole;
+  clusterIds: string[];
 };
 
 export type AuthResponse = {
   accessToken: string;
   user: AuthUser;
 };
+
+export type ApiErrorBody = {
+  statusCode?: number;
+  error?: string;
+  code?: string;
+  message?: string | string[];
+};
+
+export class ApiError extends Error {
+  statusCode?: number;
+  error?: string;
+  code?: string;
+
+  constructor(message: string, body: ApiErrorBody = {}) {
+    super(message);
+    this.name = "ApiError";
+    this.statusCode = body.statusCode;
+    this.error = body.error;
+    this.code = body.code;
+  }
+}
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
@@ -20,9 +42,12 @@ export async function parseResponse<T>(response: Response): Promise<T> {
   }
 
   let message = "요청을 처리하지 못했습니다.";
+  let errorBody: ApiErrorBody = { statusCode: response.status };
 
   try {
-    const body = (await response.json()) as { message?: string | string[] };
+    const body = (await response.json()) as ApiErrorBody;
+    errorBody = { ...body, statusCode: body.statusCode ?? response.status };
+
     if (Array.isArray(body.message)) {
       message = body.message.join("\n");
     } else if (body.message) {
@@ -34,7 +59,7 @@ export async function parseResponse<T>(response: Response): Promise<T> {
     }
   }
 
-  throw new Error(message);
+  throw new ApiError(message, errorBody);
 }
 
 export async function login(email: string, password: string) {

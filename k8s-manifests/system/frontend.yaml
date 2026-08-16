@@ -1,0 +1,79 @@
+# Kyverno Governance Platform Next.js 프론트엔드 대시보드 UI 배포 매니페스트
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kyverno-frontend
+  namespace: kyverno-platform
+  labels:
+    app.kubernetes.io/name: kyverno-frontend
+    app.kubernetes.io/part-of: kyverno-governance-platform
+spec:
+  replicas: 1
+  # 무중단 롤링 배포를 위해 이전 파드 종료 전 신규 파드 선기동 전략 적용
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: kyverno-frontend
+  template:
+    metadata:
+      labels:
+        app: kyverno-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: kyverno-frontend:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: PORT
+              value: "3000"
+            - name: HOSTNAME
+              value: "0.0.0.0"
+            - name: NEXT_PUBLIC_API_URL
+              value: "http://kyverno-backend.kyverno-platform.svc.cluster.local:3001"
+          ports:
+            - containerPort: 3000
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          # Next.js 프론트엔드 웹 서버 초기 렌더링 및 응답 가능 여부 검사
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 5
+          # UI 웹 프로세스 멈춤 현상 발생 시 자동 복구를 위한 라이브니스 프로브
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+---
+# 외부 노출을 위한 프론트엔드 Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: kyverno-frontend
+  namespace: kyverno-platform
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3000
+      targetPort: 3000
+  selector:
+    app: kyverno-frontend

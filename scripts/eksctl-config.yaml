@@ -1,0 +1,23 @@
+# EKS 테스트 클러스터 프로비저닝을 위한 선언적 eksctl 구성 파일
+# 가장 저렴한 비용과 최다 Free Tier 혜택을 지원하는 us-east-1(북버지니아) 리전 적용
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: kyverno-eks-lab
+  region: us-east-1
+  version: "1.35"
+
+iam:
+  withOIDC: true
+
+managedNodeGroups:
+  - name: freetier-multi-nodes
+    # max-pods 제약 방지를 위해 충분한 ENI/Pod 수를 지원하는 인스턴스 규격 적용
+    instanceTypes: ["c7i-flex.large", "m7i-flex.large", "t3.medium"]
+    spot: false
+    desiredCapacity: 2
+    minSize: 2
+    maxSize: 3
+    # 계정별 사용 가능한 AZ를 eksctl이 자동 선택하도록 하드코딩 제거
+    volumeSize: 20

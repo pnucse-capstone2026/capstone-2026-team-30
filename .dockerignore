@@ -1,0 +1,9 @@
+# 도커 빌드 시 호스트의 node_modules 및 캐시 파일 복사 방지로 빌드 충돌 및 속도 저하 방지
+node_modules
+.next
+dist
+.git
+.github
+.devcontainer
+.husky
+*.log

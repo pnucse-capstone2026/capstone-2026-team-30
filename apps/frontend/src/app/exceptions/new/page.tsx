@@ -1,4 +1,9 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   AlertCircle,
   ArrowLeft,
@@ -18,7 +23,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { policyViolations } from "@/lib/policy-violations";
+import { type ClusterMetadata, listClusters } from "@/lib/clusters";
+import { createExceptionRequest } from "@/lib/exception-requests-api";
+import {
+  policyViolations,
+  severityClassName,
+  severityLabel,
+} from "@/lib/policy-violations";
 
 const fieldClassName =
   "h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-3 focus:ring-blue-500/10";
@@ -26,30 +37,172 @@ const fieldClassName =
 const textareaClassName =
   "min-h-32 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-3 focus:ring-blue-500/10";
 
-const selectedViolation = policyViolations[0];
+function dateInputValue(offsetDays: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+  return date.toISOString().slice(0, 10);
+}
 
-const requestChecklist = [
-  {
-    label: "정책 위반 확인",
-    detail: `${selectedViolation.policyName} / ${selectedViolation.resourceName}`,
-    icon: ShieldAlert,
-    className: "bg-rose-50 text-rose-600",
-  },
-  {
-    label: "요청 기간 지정",
-    detail: "최대 30일 이내 권장",
-    icon: CalendarDays,
-    className: "bg-blue-50 text-blue-600",
-  },
-  {
-    label: "관리자 검토",
-    detail: "신청 후 승인 대기 상태로 전환",
-    icon: Clock3,
-    className: "bg-amber-50 text-amber-600",
-  },
-];
+function expirationFromDateInput(value: string) {
+  return new Date(`${value}T23:59:59.000Z`).toISOString();
+}
 
 export default function ExceptionRequestPage() {
+  const router = useRouter();
+  const [selectedViolationId, setSelectedViolationId] = useState(
+    policyViolations[0]?.id ?? "",
+  );
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [clusters, setClusters] = useState<ClusterMetadata[]>([]);
+  const [selectedClusterId, setSelectedClusterId] = useState("");
+  const [isLoadingClusters, setIsLoadingClusters] = useState(true);
+  const [clusterErrorMessage, setClusterErrorMessage] = useState<string | null>(
+    null,
+  );
+
+  const selectedViolation =
+    policyViolations.find((violation) => violation.id === selectedViolationId) ??
+    policyViolations[0];
+  const defaultEndDate = useMemo(() => dateInputValue(7), []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAvailableClusters() {
+      setIsLoadingClusters(true);
+      setClusterErrorMessage(null);
+
+      try {
+        const clusterList = await listClusters();
+
+        if (cancelled) return;
+
+        setClusters(clusterList);
+        setSelectedClusterId((currentClusterId) => {
+          if (
+            currentClusterId &&
+            clusterList.some((cluster) => cluster.id === currentClusterId)
+          ) {
+            return currentClusterId;
+          }
+
+          return clusterList[0]?.id ?? "";
+        });
+      } catch (error) {
+        if (cancelled) return;
+
+        setClusters([]);
+        setSelectedClusterId("");
+        setClusterErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "클러스터 목록을 불러오지 못했습니다.",
+        );
+      } finally {
+        if (!cancelled) {
+          setIsLoadingClusters(false);
+        }
+      }
+    }
+
+    void loadAvailableClusters();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const requestChecklist = [
+    {
+      label: "정책 위반 확인",
+      detail: `${selectedViolation.policyName} / ${selectedViolation.resourceName}`,
+      icon: ShieldAlert,
+      className: "bg-rose-50 text-rose-600",
+    },
+    {
+      label: "요청 기간 지정",
+      detail: "최대 30일 이내 권장",
+      icon: CalendarDays,
+      className: "bg-blue-50 text-blue-600",
+    },
+    {
+      label: "관리자 검토",
+      detail: "신청 후 승인 대기 상태로 전환",
+      icon: Clock3,
+      className: "bg-amber-50 text-amber-600",
+    },
+  ];
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setErrorMessage(null);
+
+    const formData = new FormData(event.currentTarget);
+    const policyName = String(formData.get("policyName") ?? "").trim();
+    const ruleNames = String(formData.get("ruleNames") ?? "")
+      .split(",")
+      .map((rule) => rule.trim())
+      .filter(Boolean);
+    const reason = String(formData.get("reason") ?? "").trim();
+    const attachmentNote = String(formData.get("attachmentNote") ?? "").trim();
+    const resourceKind = String(formData.get("resourceKind") ?? "").trim();
+    const resourceName = String(formData.get("resourceName") ?? "").trim();
+    const resourceNamespace = String(
+      formData.get("resourceNamespace") ?? "",
+    ).trim();
+    const targetClusterId = String(formData.get("targetClusterId") ?? "").trim();
+    const endDate = String(formData.get("endDate") ?? "").trim();
+
+    if (
+      !policyName ||
+      ruleNames.length === 0 ||
+      !reason ||
+      !resourceKind ||
+      !resourceName ||
+      !targetClusterId ||
+      !endDate
+    ) {
+      setErrorMessage("필수 입력값을 모두 입력하세요.");
+      return;
+    }
+
+    const expiresAt = expirationFromDateInput(endDate);
+    if (new Date(expiresAt) <= new Date()) {
+      setErrorMessage("예외 종료일은 오늘 이후여야 합니다.");
+      return;
+    }
+
+    const requestReason = attachmentNote
+      ? `${reason}\n\n첨부 설명: ${attachmentNote}`
+      : reason;
+
+    setIsSubmitting(true);
+    try {
+      await createExceptionRequest({
+        policyName,
+        ruleNames,
+        reason: requestReason,
+        resourceKind,
+        resourceName,
+        resourceNamespace: resourceNamespace || undefined,
+        targetClusterId,
+        expiresAt,
+      });
+      toast.success("예외 신청이 생성되었습니다.");
+      router.push("/exceptions");
+      router.refresh();
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "예외 신청을 생성하지 못했습니다.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <main className="flex min-h-dvh bg-[#f4f7fb] text-slate-950">
       <DashboardSidebar variant="user" activeHref="/exceptions/new" />
@@ -118,7 +271,10 @@ export default function ExceptionRequestPage() {
           </section>
 
           <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-            <form className="rounded-2xl border border-slate-200 bg-white">
+            <form
+              className="rounded-2xl border border-slate-200 bg-white"
+              onSubmit={handleSubmit}
+            >
               <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
                 <h3 className="text-sm font-semibold">신청 정보</h3>
                 <p className="mt-1 text-xs text-slate-400">
@@ -129,41 +285,116 @@ export default function ExceptionRequestPage() {
               <div className="space-y-6 p-5 sm:p-6">
                 <div className="grid gap-4 lg:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="policy">대상 정책</Label>
-                    <select id="policy" name="policy" defaultValue={selectedViolation.policyName} className={fieldClassName}>
+                    <Label htmlFor="violationId">대상 위반</Label>
+                    <select
+                      id="violationId"
+                      value={selectedViolation.id}
+                      onChange={(event) =>
+                        setSelectedViolationId(event.target.value)
+                      }
+                      className={fieldClassName}
+                    >
                       {policyViolations.map((violation) => (
-                        <option key={violation.id} value={violation.policyName}>
-                          {violation.policyName}
+                        <option key={violation.id} value={violation.id}>
+                          {violation.policyName} / {violation.resourceName}
                         </option>
                       ))}
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="cluster">대상 클러스터</Label>
-                    <select id="cluster" name="cluster" defaultValue={selectedViolation.clusterName} className={fieldClassName}>
-                      <option value="production">production</option>
-                      <option value="staging">staging</option>
-                      <option value="development">development</option>
-                      <option value="sandbox">sandbox</option>
-                    </select>
+                    <Label htmlFor="policyName">대상 정책</Label>
+                    <Input
+                      id="policyName"
+                      name="policyName"
+                      key={`${selectedViolation.id}-policy`}
+                      defaultValue={selectedViolation.policyName}
+                      className="h-11 rounded-xl border-slate-200"
+                      required
+                    />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="namespace">Namespace</Label>
+                    <Label htmlFor="ruleNames">정책 규칙</Label>
                     <Input
-                      id="namespace"
-                      name="namespace"
+                      id="ruleNames"
+                      name="ruleNames"
+                      key={`${selectedViolation.id}-rules`}
+                      defaultValue={selectedViolation.ruleName}
+                      placeholder="rule-a, rule-b"
+                      className="h-11 rounded-xl border-slate-200"
+                      required
+                    />
+                    <p className="text-[11px] text-slate-400">
+                      여러 규칙은 쉼표로 구분합니다.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="targetClusterId">대상 클러스터</Label>
+                    <select
+                      id="targetClusterId"
+                      name="targetClusterId"
+                      value={selectedClusterId}
+                      onChange={(event) =>
+                        setSelectedClusterId(event.target.value)
+                      }
+                      className={fieldClassName}
+                      disabled={isLoadingClusters || clusters.length === 0}
+                      required
+                    >
+                      {isLoadingClusters ? (
+                        <option value="">클러스터를 불러오는 중입니다</option>
+                      ) : clusters.length === 0 ? (
+                        <option value="">배정된 클러스터가 없습니다</option>
+                      ) : (
+                        clusters.map((cluster) => (
+                          <option key={cluster.id} value={cluster.id}>
+                            {cluster.displayName} ({cluster.id})
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    {clusterErrorMessage ? (
+                      <p className="text-[11px] leading-5 text-rose-500">
+                        {clusterErrorMessage}
+                      </p>
+                    ) : clusters.length === 0 && !isLoadingClusters ? (
+                      <p className="text-[11px] leading-5 text-slate-400">
+                        관리자에게 클러스터 배정을 요청하세요.
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="resourceNamespace">Namespace</Label>
+                    <Input
+                      id="resourceNamespace"
+                      name="resourceNamespace"
+                      key={`${selectedViolation.id}-namespace`}
                       defaultValue={selectedViolation.namespace}
                       className="h-11 rounded-xl border-slate-200"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="resource">대상 리소스</Label>
-                    <Input
-                      id="resource"
-                      name="resource"
-                      defaultValue={`${selectedViolation.resourceKind} / ${selectedViolation.resourceName}`}
-                      className="h-11 rounded-xl border-slate-200"
-                    />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="resourceKind">리소스 종류</Label>
+                      <Input
+                        id="resourceKind"
+                        name="resourceKind"
+                        key={`${selectedViolation.id}-kind`}
+                        defaultValue={selectedViolation.resourceKind}
+                        className="h-11 rounded-xl border-slate-200"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="resourceName">리소스 이름</Label>
+                      <Input
+                        id="resourceName"
+                        name="resourceName"
+                        key={`${selectedViolation.id}-resource`}
+                        defaultValue={selectedViolation.resourceName}
+                        className="h-11 rounded-xl border-slate-200"
+                        required
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -174,8 +405,9 @@ export default function ExceptionRequestPage() {
                       id="startDate"
                       name="startDate"
                       type="date"
-                      defaultValue="2026-07-09"
+                      defaultValue={dateInputValue(0)}
                       className="h-11 rounded-xl border-slate-200"
+                      disabled
                     />
                   </div>
                   <div className="space-y-2">
@@ -184,8 +416,9 @@ export default function ExceptionRequestPage() {
                       id="endDate"
                       name="endDate"
                       type="date"
-                      defaultValue="2026-07-16"
+                      defaultValue={defaultEndDate}
                       className="h-11 rounded-xl border-slate-200"
+                      required
                     />
                   </div>
                 </div>
@@ -198,6 +431,7 @@ export default function ExceptionRequestPage() {
                     className={textareaClassName}
                     placeholder="예외가 필요한 배경, 영향 범위, 종료일까지의 조치 계획을 입력하세요."
                     defaultValue="긴급 배포 일정으로 인해 리소스 limits 설정을 다음 릴리스에 포함해야 합니다. 예외 기간 동안 사용량을 모니터링하고 종료일 전에 requests/limits를 적용하겠습니다."
+                    required
                   />
                 </div>
 
@@ -211,15 +445,34 @@ export default function ExceptionRequestPage() {
                   />
                 </div>
 
-                <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
+                <div
+                  className={`rounded-xl border px-4 py-3 ${
+                    errorMessage
+                      ? "border-rose-100 bg-rose-50"
+                      : "border-amber-100 bg-amber-50"
+                  }`}
+                >
                   <div className="flex items-start gap-3">
-                    <AlertCircle className="mt-0.5 size-4 shrink-0 text-amber-600" />
+                    <AlertCircle
+                      className={`mt-0.5 size-4 shrink-0 ${
+                        errorMessage ? "text-rose-600" : "text-amber-600"
+                      }`}
+                    />
                     <div>
-                      <p className="text-xs font-semibold text-amber-800">
-                        입력값 오류 메시지 영역
+                      <p
+                        className={`text-xs font-semibold ${
+                          errorMessage ? "text-rose-800" : "text-amber-800"
+                        }`}
+                      >
+                        {errorMessage ? "신청 실패" : "신청 전 확인"}
                       </p>
-                      <p className="mt-1 text-xs leading-5 text-amber-700">
-                        필수 입력값이 누락되거나 종료일이 시작일보다 빠른 경우 이 영역에 오류가 표시됩니다.
+                      <p
+                        className={`mt-1 text-xs leading-5 ${
+                          errorMessage ? "text-rose-700" : "text-amber-700"
+                        }`}
+                      >
+                        {errorMessage ??
+                          "정책명과 규칙명은 승인 시 실제 Kyverno 정책과 대조됩니다."}
                       </p>
                     </div>
                   </div>
@@ -233,9 +486,15 @@ export default function ExceptionRequestPage() {
                   >
                     <Link href="/dashboard">취소</Link>
                   </Button>
-                  <Button type="submit" className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]">
+                  <Button
+                    type="submit"
+                    className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]"
+                    disabled={
+                      isSubmitting || isLoadingClusters || clusters.length === 0
+                    }
+                  >
                     <Send className="size-4" />
-                    제출
+                    {isSubmitting ? "제출 중" : "제출"}
                   </Button>
                 </div>
               </div>
@@ -258,14 +517,18 @@ export default function ExceptionRequestPage() {
                     <dd className="text-right font-medium text-slate-900">{selectedViolation.policyName}</dd>
                   </div>
                   <div className="flex justify-between gap-3">
+                    <dt className="text-slate-500">규칙</dt>
+                    <dd className="text-right font-medium text-slate-900">{selectedViolation.ruleName}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
                     <dt className="text-slate-500">리소스</dt>
                     <dd className="text-right font-medium text-slate-900">{selectedViolation.resourceName}</dd>
                   </div>
                   <div className="flex justify-between gap-3">
                     <dt className="text-slate-500">심각도</dt>
                     <dd>
-                      <Badge className="bg-rose-50 text-rose-700 ring-1 ring-rose-100">
-                        긴급
+                      <Badge className={severityClassName[selectedViolation.severity]}>
+                        {severityLabel[selectedViolation.severity]}
                       </Badge>
                     </dd>
                   </div>

@@ -1,8 +1,8 @@
-import { UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { Role } from "@prisma/client";
-import * as argon2 from "argon2";
+import argon2 from "argon2";
+import { AUTH_ERROR } from "./auth.errors";
 import { AuthService } from "./auth.service";
 
 const activeUser = {
@@ -13,12 +13,14 @@ const activeUser = {
   createdAt: new Date("2026-01-01T00:00:00.000Z"),
   updatedAt: new Date("2026-01-01T00:00:00.000Z"),
   disabledAt: null,
+  userClusters: [],
 };
 
 const publicUser = {
   id: activeUser.id,
   email: activeUser.email,
   role: activeUser.role,
+  clusterIds: [],
 };
 
 function createService() {
@@ -106,6 +108,7 @@ describe("AuthService", () => {
 
     expect(prisma.user.findUnique).toHaveBeenCalledWith({
       where: { email: "admin@example.com" },
+      include: { userClusters: { select: { clusterId: true } } },
     });
     expect(jwtService.signAsync).toHaveBeenCalledTimes(2);
     expect(prisma.refreshToken.create).toHaveBeenCalledWith({
@@ -132,7 +135,9 @@ describe("AuthService", () => {
 
     await expect(
       service.login({ email: "missing@example.com", password: "password" }),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    ).rejects.toMatchObject({
+      code: AUTH_ERROR.INVALID_CREDENTIALS.code,
+    });
   });
 
   it("rejects an invalid password", async () => {
@@ -142,7 +147,9 @@ describe("AuthService", () => {
 
     await expect(
       service.login({ email: activeUser.email, password: "wrong-password" }),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    ).rejects.toMatchObject({
+      code: AUTH_ERROR.INVALID_CREDENTIALS.code,
+    });
   });
 
   it("rejects a disabled user during login", async () => {
@@ -154,7 +161,9 @@ describe("AuthService", () => {
 
     await expect(
       service.login({ email: activeUser.email, password: "plain-password" }),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    ).rejects.toMatchObject({
+      code: AUTH_ERROR.INVALID_CREDENTIALS.code,
+    });
   });
 
   it("rejects login when the password changes before token persistence", async () => {
@@ -173,7 +182,9 @@ describe("AuthService", () => {
         email: activeUser.email,
         password: "plain-password",
       }),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    ).rejects.toMatchObject({
+      code: AUTH_ERROR.INVALID_CREDENTIALS.code,
+    });
     expect(prisma.refreshToken.create).not.toHaveBeenCalled();
   });
 
@@ -188,6 +199,7 @@ describe("AuthService", () => {
       email: activeUser.email,
       role: activeUser.role,
       disabledAt: null,
+      userClusters: [],
     });
     prisma.refreshToken.findMany.mockResolvedValue([
       { id: "refresh-token-1", tokenHash: "stored-refresh-token-hash" },
@@ -233,6 +245,7 @@ describe("AuthService", () => {
       email: activeUser.email,
       role: activeUser.role,
       disabledAt: null,
+      userClusters: [],
     });
     prisma.refreshToken.findMany.mockResolvedValue([
       { id: "refresh-token-1", tokenHash: "stored-refresh-token-hash" },
@@ -241,9 +254,9 @@ describe("AuthService", () => {
     jest.spyOn(argon2, "verify").mockResolvedValue(true);
     jest.spyOn(argon2, "hash").mockResolvedValue("new-refresh-token-hash");
 
-    await expect(service.refresh("old-refresh-token")).rejects.toBeInstanceOf(
-      UnauthorizedException,
-    );
+    await expect(service.refresh("old-refresh-token")).rejects.toMatchObject({
+      code: AUTH_ERROR.INVALID_REFRESH_TOKEN.code,
+    });
     expect(prisma.refreshToken.create).not.toHaveBeenCalled();
   });
 
@@ -254,21 +267,22 @@ describe("AuthService", () => {
       email: activeUser.email,
       role: activeUser.role,
       disabledAt: null,
+      userClusters: [],
     });
     prisma.refreshToken.findMany.mockResolvedValue([]);
 
-    await expect(service.refresh("old-refresh-token")).rejects.toBeInstanceOf(
-      UnauthorizedException,
-    );
+    await expect(service.refresh("old-refresh-token")).rejects.toMatchObject({
+      code: AUTH_ERROR.INVALID_REFRESH_TOKEN.code,
+    });
   });
 
   it("rejects a refresh token for a missing user", async () => {
     const { service, prisma } = createService();
     prisma.user.findUnique.mockResolvedValue(null);
 
-    await expect(service.refresh("old-refresh-token")).rejects.toBeInstanceOf(
-      UnauthorizedException,
-    );
+    await expect(service.refresh("old-refresh-token")).rejects.toMatchObject({
+      code: AUTH_ERROR.INVALID_REFRESH_TOKEN.code,
+    });
   });
 
   it("rejects a refresh token for a disabled user", async () => {
@@ -280,9 +294,9 @@ describe("AuthService", () => {
       disabledAt: new Date("2026-01-02T00:00:00.000Z"),
     });
 
-    await expect(service.refresh("old-refresh-token")).rejects.toBeInstanceOf(
-      UnauthorizedException,
-    );
+    await expect(service.refresh("old-refresh-token")).rejects.toMatchObject({
+      code: AUTH_ERROR.INVALID_REFRESH_TOKEN.code,
+    });
   });
 
   it("rejects refresh when the user becomes disabled before rotation", async () => {
@@ -293,6 +307,7 @@ describe("AuthService", () => {
         email: activeUser.email,
         role: activeUser.role,
         disabledAt: null,
+        userClusters: [],
       })
       .mockResolvedValueOnce({ disabledAt: new Date() });
     prisma.refreshToken.findMany.mockResolvedValue([
@@ -301,9 +316,9 @@ describe("AuthService", () => {
     jest.spyOn(argon2, "verify").mockResolvedValue(true);
     jest.spyOn(argon2, "hash").mockResolvedValue("new-refresh-token-hash");
 
-    await expect(service.refresh("old-refresh-token")).rejects.toBeInstanceOf(
-      UnauthorizedException,
-    );
+    await expect(service.refresh("old-refresh-token")).rejects.toMatchObject({
+      code: AUTH_ERROR.INVALID_REFRESH_TOKEN.code,
+    });
     expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
     expect(prisma.refreshToken.create).not.toHaveBeenCalled();
   });

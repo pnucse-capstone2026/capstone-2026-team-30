@@ -81,7 +81,12 @@ helm upgrade --install kyverno kyverno/kyverno \
   --set backgroundController.replicas=1 \
   --set cleanupController.replicas=1 \
   --set reportsController.replicas=1 \
-  --set features.policyExceptions.enabled=true
+  --set features.policyExceptions.enabled=true \
+  --set "features.policyExceptions.namespace=*" \
+  --set features.validatingAdmissionPolicyReports.enabled=false \
+  --set features.admissionReports.enabled=true \
+  --set features.aggregateReports.enabled=true \
+  --set features.policyReports.enabled=true
 
 # 8. Kyverno 컨트롤러 Ready 상태 확인 및 대기
 echo ">>> Waiting for Kyverno Admission Controller to be Ready..."

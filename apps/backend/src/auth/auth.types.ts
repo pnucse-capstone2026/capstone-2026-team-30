@@ -11,4 +11,6 @@ export type AuthenticatedUser = {
   id: string;
   email: string;
   role: Role;
+  /** 역할과 무관하게 접근이 허용된 클러스터. */
+  clusterIds: string[];
 };

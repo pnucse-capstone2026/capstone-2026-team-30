@@ -1,6 +1,6 @@
 import { ConfigService } from "@nestjs/config";
-import { UnauthorizedException } from "@nestjs/common";
 import { Role } from "@prisma/client";
+import { AUTH_ERROR } from "../auth.errors";
 import { JwtStrategy } from "./jwt.strategy";
 
 const payload = {
@@ -43,12 +43,14 @@ describe("JwtStrategy", () => {
       email: "admin@example.com",
       role: Role.ADMIN,
       disabledAt: null,
+      userClusters: [],
     });
 
     await expect(strategy.validate(payload)).resolves.toEqual({
       id: "user-1",
       email: "admin@example.com",
       role: Role.ADMIN,
+      clusterIds: [],
     });
     expect(prisma.user.findUnique).toHaveBeenCalledWith({
       where: { id: "user-1" },
@@ -57,7 +59,23 @@ describe("JwtStrategy", () => {
         email: true,
         role: true,
         disabledAt: true,
+        userClusters: { select: { clusterId: true } },
       },
+    });
+  });
+
+  it("carries the assigned cluster ids on the authenticated user", async () => {
+    const { strategy, prisma } = createStrategy();
+    prisma.user.findUnique.mockResolvedValue({
+      id: "user-1",
+      email: "admin@example.com",
+      role: Role.APPROVER,
+      disabledAt: null,
+      userClusters: [{ clusterId: "prod" }, { clusterId: "staging" }],
+    });
+
+    await expect(strategy.validate(payload)).resolves.toMatchObject({
+      clusterIds: ["prod", "staging"],
     });
   });
 
@@ -65,9 +83,9 @@ describe("JwtStrategy", () => {
     const { strategy, prisma } = createStrategy();
     prisma.user.findUnique.mockResolvedValue(null);
 
-    await expect(strategy.validate(payload)).rejects.toBeInstanceOf(
-      UnauthorizedException,
-    );
+    await expect(strategy.validate(payload)).rejects.toMatchObject({
+      code: AUTH_ERROR.AUTHENTICATION_REQUIRED.code,
+    });
   });
 
   it("rejects a disabled user", async () => {
@@ -79,8 +97,8 @@ describe("JwtStrategy", () => {
       disabledAt: new Date("2026-01-01T00:00:00.000Z"),
     });
 
-    await expect(strategy.validate(payload)).rejects.toBeInstanceOf(
-      UnauthorizedException,
-    );
+    await expect(strategy.validate(payload)).rejects.toMatchObject({
+      code: AUTH_ERROR.AUTHENTICATION_REQUIRED.code,
+    });
   });
 });

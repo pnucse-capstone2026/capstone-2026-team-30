@@ -1,0 +1,97 @@
+# AWS Bedrock 호출 시 API 키 하드코딩 없이 안전한 IAM Role 바인딩을 위한 IRSA ServiceAccount
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kyverno-backend-sa
+  namespace: kyverno-platform
+  # eksctl create iamserviceaccount(scripts/setup-bedrock-irsa.sh) 실행 시 eks.amazonaws.com/role-arn 어노테이션이 자동 관리됨
+---
+# Kyverno Governance Platform NestJS 백엔드 (AI 에이전트 및 거버넌스 API) 배포 매니페스트
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kyverno-backend
+  namespace: kyverno-platform
+  labels:
+    app.kubernetes.io/name: kyverno-backend
+    app.kubernetes.io/part-of: kyverno-governance-platform
+spec:
+  replicas: 1
+  # 무중단 롤링 배포를 위해 이전 파드 종료 전 신규 파드 선기동 전략 적용
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: kyverno-backend
+  template:
+    metadata:
+      labels:
+        app: kyverno-backend
+    spec:
+      serviceAccountName: kyverno-backend-sa
+      containers:
+        - name: backend
+          image: kyverno-backend:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: PORT
+              value: "3001"
+            - name: DATABASE_URL
+              value: "postgresql://devuser:devpassword@postgres.kyverno-platform.svc.cluster.local:5432/kyverno_dashboard?schema=public"
+            - name: JWT_ACCESS_SECRET
+              value: "in-cluster-jwt-access-secret-key-12345"
+            - name: JWT_REFRESH_SECRET
+              value: "in-cluster-jwt-refresh-secret-key-12345"
+            # AWS 표준 기본 리전 지정
+            - name: AWS_REGION
+              value: "us-east-1"
+            - name: BEDROCK_MODEL_ID
+              value: "anthropic.claude-3-5-sonnet-20240620-v1:0"
+          ports:
+            - containerPort: 3001
+          # 인스턴스 자원 고갈 및 OOMKilled 방지를 위한 리소스 상한선 설정
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          # 백엔드 서버 기동 및 DB 쿼리 연결 상태를 확인하여 비정상 파드로의 트래픽 라우팅 차단
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3001
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 5
+          # 프로세스 데드락 및 장애 발생 시 자동 재기동을 통한 고가용성 유지
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3001
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+---
+# 클러스터 내부 통신 및 로컬 포트포워딩 진입을 위한 백엔드 Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: kyverno-backend
+  namespace: kyverno-platform
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3001
+      targetPort: 3001
+  selector:
+    app: kyverno-backend
+

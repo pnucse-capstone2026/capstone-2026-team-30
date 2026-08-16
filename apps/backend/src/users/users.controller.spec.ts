@@ -1,5 +1,6 @@
 import { GUARDS_METADATA } from "@nestjs/common/constants";
 import { Role } from "@prisma/client";
+import { AuthenticatedUser } from "../auth/auth.types";
 import { REQUIRED_PERMISSIONS_KEY } from "../auth/decorators/require-permissions.decorator";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { PermissionsGuard } from "../auth/guards/permissions.guard";
@@ -12,6 +13,7 @@ function createService() {
     updateRole: jest.fn(),
     resetPassword: jest.fn(),
     setDisabled: jest.fn(),
+    setClusters: jest.fn(),
   };
 }
 
@@ -54,6 +56,12 @@ describe("UsersController", () => {
         UsersController.prototype.setDisabled,
       ),
     ).toEqual(["users.disable"]);
+    expect(
+      Reflect.getMetadata(
+        REQUIRED_PERMISSIONS_KEY,
+        UsersController.prototype.setClusters,
+      ),
+    ).toEqual(["users.assign_clusters"]);
   });
 
   it("delegates list requests to UsersService", async () => {
@@ -132,5 +140,29 @@ describe("UsersController", () => {
       updatedUser,
     );
     expect(service.setDisabled).toHaveBeenCalledWith("user-1", dto);
+  });
+
+  it("passes the authenticated actor when replacing cluster assignments", async () => {
+    const dto = { clusterIds: ["prod"] };
+    const actor: AuthenticatedUser = {
+      id: "admin-1",
+      email: "admin@example.com",
+      role: Role.ADMIN,
+      clusterIds: [],
+    };
+    const updatedUser = {
+      id: "user-1",
+      email: "user@example.com",
+      role: Role.VIEWER,
+      clusterIds: ["prod"],
+    };
+    const service = createService();
+    service.setClusters.mockResolvedValue(updatedUser);
+    const controller = new UsersController(service as never);
+
+    await expect(controller.setClusters("user-1", dto, actor)).resolves.toBe(
+      updatedUser,
+    );
+    expect(service.setClusters).toHaveBeenCalledWith("user-1", dto, actor);
   });
 });

@@ -8,6 +8,7 @@ export type ManagedUser = {
   createdAt: string;
   updatedAt: string;
   disabledAt: string | null;
+  clusterIds: string[];
 };
 
 export function listUsers() {
@@ -43,5 +44,12 @@ export function setUserDisabled(id: string, disabled: boolean) {
   return requestWithAuth<ManagedUser>(`/users/${id}/disabled`, {
     method: "PATCH",
     body: { disabled },
+  });
+}
+
+export function setUserClusters(id: string, clusterIds: string[]) {
+  return requestWithAuth<ManagedUser>(`/users/${id}/clusters`, {
+    method: "PUT",
+    body: { clusterIds },
   });
 }

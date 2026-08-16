@@ -33,7 +33,8 @@ export function ViolationActionPanel({ violation }: ViolationActionPanelProps) {
       ...(checkedAt
         ? [
             {
-              label: status === "resolved" ? "해결 완료 처리" : "검토 상태 변경",
+              label:
+                status === "resolved" ? "해결 완료 처리" : "검토 상태 변경",
               at: checkedAt,
               description:
                 status === "resolved"
@@ -100,14 +101,21 @@ export function ViolationActionPanel({ violation }: ViolationActionPanelProps) {
         <h3 className="text-sm font-semibold">처리 이력</h3>
         <div className="mt-5 space-y-5">
           {events.map((event, index) => (
-            <div key={`${event.label}-${event.at}-${index}`} className="relative pl-6">
+            <div
+              key={`${event.label}-${event.at}-${index}`}
+              className="relative pl-6"
+            >
               <span className="absolute top-1.5 left-0 size-2 rounded-full bg-blue-500" />
               {index < events.length - 1 ? (
                 <div className="absolute top-4 bottom-[-22px] left-[3px] w-px bg-slate-200" />
               ) : null}
-              <p className="text-xs font-semibold text-slate-900">{event.label}</p>
+              <p className="text-xs font-semibold text-slate-900">
+                {event.label}
+              </p>
               <p className="mt-1 text-[11px] text-slate-400">{event.at}</p>
-              <p className="mt-2 text-xs leading-5 text-slate-500">{event.description}</p>
+              <p className="mt-2 text-xs leading-5 text-slate-500">
+                {event.description}
+              </p>
             </div>
           ))}
         </div>

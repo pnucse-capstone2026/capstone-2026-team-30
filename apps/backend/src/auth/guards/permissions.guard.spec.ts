@@ -1,10 +1,7 @@
-import {
-  ExecutionContext,
-  ForbiddenException,
-  UnauthorizedException,
-} from "@nestjs/common";
+import { ExecutionContext } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import { Role } from "@prisma/client";
+import { AUTH_ERROR } from "../auth.errors";
 import { PermissionsGuard } from "./permissions.guard";
 
 const user = {
@@ -92,14 +89,16 @@ describe("PermissionsGuard", () => {
 
     await expect(
       guard.canActivate(createContext(undefined, false)),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    ).rejects.toMatchObject({
+      code: AUTH_ERROR.AUTHENTICATION_REQUIRED.code,
+    });
   });
 
   it("rejects requests when the user role is missing any required permission", async () => {
     const { guard } = createGuard(["users.read", "users.create"], 1);
 
-    await expect(guard.canActivate(createContext())).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
+    await expect(guard.canActivate(createContext())).rejects.toMatchObject({
+      code: AUTH_ERROR.INSUFFICIENT_PERMISSIONS.code,
+    });
   });
 });

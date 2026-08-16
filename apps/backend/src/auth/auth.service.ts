@@ -1,9 +1,14 @@
 import { randomUUID } from "crypto";
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
-import * as argon2 from "argon2";
+import argon2 from "argon2";
+import {
+  BusinessException,
+  isBusinessException,
+} from "../common/errors/business.exception";
 import { PrismaService } from "../prisma/prisma.service";
+import { AUTH_ERROR } from "./auth.errors";
 import { AuthenticatedUser, JwtPayload } from "./auth.types";
 import { LoginDto } from "./dto/login.dto";
 import { revokeAllRefreshTokensForUser } from "./refresh-token-revocation";
@@ -50,22 +55,26 @@ export class AuthService {
 
   async login(dto: LoginDto): Promise<LoginResult> {
     const email = dto.email.trim().toLowerCase();
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      include: { userClusters: { select: { clusterId: true } } },
+    });
 
     if (!user || user.disabledAt) {
-      throw new UnauthorizedException("Invalid credentials.");
+      throw new BusinessException(AUTH_ERROR.INVALID_CREDENTIALS);
     }
 
     const passwordMatches = await argon2.verify(user.pwdHash, dto.password);
 
     if (!passwordMatches) {
-      throw new UnauthorizedException("Invalid credentials.");
+      throw new BusinessException(AUTH_ERROR.INVALID_CREDENTIALS);
     }
 
-    const authenticatedUser = {
+    const authenticatedUser: AuthenticatedUser = {
       id: user.id,
       email: user.email,
       role: user.role,
+      clusterIds: user.userClusters.map((assignment) => assignment.clusterId),
     };
     const preparedTokens = await this.prepareTokenPair(authenticatedUser);
 
@@ -80,7 +89,7 @@ export class AuthService {
         currentUser.disabledAt ||
         currentUser.pwdHash !== user.pwdHash
       ) {
-        throw new UnauthorizedException("Invalid credentials.");
+        throw new BusinessException(AUTH_ERROR.INVALID_CREDENTIALS);
       }
 
       await transaction.refreshToken.create({
@@ -110,7 +119,7 @@ export class AuthService {
       });
 
       if (!currentUser || currentUser.disabledAt) {
-        throw new UnauthorizedException("Invalid refresh token.");
+        throw new BusinessException(AUTH_ERROR.INVALID_REFRESH_TOKEN);
       }
 
       const revokedAt = new Date();
@@ -125,7 +134,7 @@ export class AuthService {
       });
 
       if (revokedTokens.count !== tokenRecords.length) {
-        throw new UnauthorizedException("Invalid refresh token.");
+        throw new BusinessException(AUTH_ERROR.INVALID_REFRESH_TOKEN);
       }
 
       await transaction.refreshToken.create({
@@ -150,7 +159,7 @@ export class AuthService {
         revokeAllRefreshTokensForUser(transaction, payload.sub),
       );
     } catch (error) {
-      if (!(error instanceof UnauthorizedException)) {
+      if (!isBusinessException(error, AUTH_ERROR.INVALID_REFRESH_TOKEN.code)) {
         throw error;
       }
 
@@ -204,8 +213,10 @@ export class AuthService {
       return await this.jwtService.verifyAsync<JwtPayload>(refreshToken, {
         secret: this.configService.getOrThrow<string>("JWT_REFRESH_SECRET"),
       });
-    } catch {
-      throw new UnauthorizedException("Invalid refresh token.");
+    } catch (error) {
+      throw new BusinessException(AUTH_ERROR.INVALID_REFRESH_TOKEN, {
+        cause: error,
+      });
     }
   }
 
@@ -217,17 +228,19 @@ export class AuthService {
         email: true,
         role: true,
         disabledAt: true,
+        userClusters: { select: { clusterId: true } },
       },
     });
 
     if (!user || user.disabledAt) {
-      throw new UnauthorizedException("Invalid refresh token.");
+      throw new BusinessException(AUTH_ERROR.INVALID_REFRESH_TOKEN);
     }
 
     return {
       id: user.id,
       email: user.email,
       role: user.role,
+      clusterIds: user.userClusters.map((assignment) => assignment.clusterId),
     };
   }
 
@@ -256,7 +269,7 @@ export class AuthService {
     }
 
     if (matches.length === 0) {
-      throw new UnauthorizedException("Invalid refresh token.");
+      throw new BusinessException(AUTH_ERROR.INVALID_REFRESH_TOKEN);
     }
 
     return matches;

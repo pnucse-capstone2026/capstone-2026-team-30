@@ -6,6 +6,7 @@ import {
   FileClock,
   FilePlus2,
   Files,
+  History,
   FileWarning,
   LayoutDashboard,
   Server,
@@ -27,25 +28,27 @@ type NavigationItem = {
   label: string;
   href: string;
   icon: LucideIcon;
-  count?: number;
 };
 
 const navigation: Record<"user" | "admin", NavigationItem[]> = {
   user: [
     { label: "대시보드", href: "/dashboard", icon: LayoutDashboard },
-    { label: "클러스터", href: "#", icon: Server },
-    { label: "정책", href: "#", icon: ShieldCheck },
-    { label: "예외 요청 목록", href: "/exceptions", icon: Files, count: 5 },
+    { label: "클러스터", href: "/clusters", icon: Server },
+    { label: "정책", href: "/policies", icon: ShieldCheck },
+    { label: "내 리소스 위반", href: "/violations", icon: FileWarning },
+    { label: "예외 요청 목록", href: "/exceptions", icon: Files },
     { label: "예외 요청", href: "/exceptions/new", icon: FilePlus2 },
-    { label: "알림", href: "#", icon: BellRing, count: 2 },
+    { label: "알림", href: "/notifications", icon: BellRing },
   ],
   admin: [
     { label: "관리자 대시보드", href: "/admin/dashboard", icon: LayoutDashboard },
-    { label: "클러스터 관리", href: "#", icon: Server },
+    { label: "클러스터 관리", href: "/admin/clusters", icon: Server },
+    { label: "정책 관리", href: "/admin/policies", icon: ShieldCheck },
     { label: "사용자 관리", href: "/admin/users", icon: Users },
-    { label: "정책 위반", href: "/admin/violations", icon: FileWarning, count: 12 },
-    { label: "예외 관리", href: "/admin/exceptions", icon: FileClock, count: 4 },
-    { label: "알림", href: "#", icon: BellRing, count: 3 },
+    { label: "정책 위반", href: "/admin/violations", icon: FileWarning },
+    { label: "예외 관리", href: "/admin/exceptions", icon: FileClock },
+    { label: "감사 로그", href: "/admin/audit-logs", icon: History },
+    { label: "알림", href: "/notifications", icon: BellRing },
   ],
 };
 
@@ -72,6 +75,7 @@ export function DashboardSidebar({
   );
   const currentHref =
     activeHref ?? (variant === "admin" ? "/admin/dashboard" : "/dashboard");
+  const profileActive = currentHref === "/me";
   const profile = user
     ? {
         initial: user.email.slice(0, 1).toUpperCase(),
@@ -81,7 +85,7 @@ export function DashboardSidebar({
     : fallbackProfile[variant];
 
   return (
-    <aside className="hidden min-h-dvh w-64 shrink-0 flex-col border-r border-slate-800 bg-[#081b33] text-white lg:flex">
+    <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-slate-800 bg-[#081b33] text-white lg:flex">
       <div className="flex h-20 items-center gap-3 border-b border-white/10 px-6">
         <div className="flex size-10 items-center justify-center rounded-xl border border-white/10 bg-white/10">
           <ShieldCheck className="size-5 text-cyan-300" />
@@ -92,11 +96,14 @@ export function DashboardSidebar({
         </div>
       </div>
 
-      <nav className="flex-1 space-y-1 px-3 py-6" aria-label="주요 메뉴">
+      <nav
+        className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-6"
+        aria-label="주요 메뉴"
+      >
         <p className="mb-3 px-3 text-[10px] font-semibold tracking-[0.16em] text-slate-500 uppercase">
           Workspace
         </p>
-        {items.map(({ label, href, icon: Icon, count }) => {
+        {items.map(({ label, href, icon: Icon }) => {
           const active = href === currentHref;
 
           return (
@@ -114,23 +121,24 @@ export function DashboardSidebar({
                 aria-hidden="true"
               />
               <span>{label}</span>
-              {count ? (
-                <span className="ml-auto rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-slate-300">
-                  {count}
-                </span>
-              ) : null}
             </Link>
           );
         })}
       </nav>
 
-      <div className="space-y-1 border-t border-white/10 p-3">
+      <div className="shrink-0 space-y-1 border-t border-white/10 p-3">
         <Link
-          href="#"
-          className="flex h-10 items-center gap-3 rounded-xl px-3 text-sm text-slate-400 hover:bg-white/5 hover:text-white"
+          href="/me"
+          className={`flex h-10 items-center gap-3 rounded-xl px-3 text-sm transition-colors ${
+            profileActive
+              ? "bg-blue-500/15 font-medium text-white"
+              : "text-slate-400 hover:bg-white/5 hover:text-white"
+          }`}
         >
-          <Settings className="size-4.5" />
-          설정
+          <Settings
+            className={`size-4.5 ${profileActive ? "text-cyan-300" : ""}`}
+          />
+          내 정보
         </Link>
         <div className="mt-3 flex items-center gap-3 rounded-xl bg-white/[0.05] p-3">
           <div className="flex size-9 items-center justify-center rounded-full bg-cyan-300 text-xs font-bold text-[#081b33]">

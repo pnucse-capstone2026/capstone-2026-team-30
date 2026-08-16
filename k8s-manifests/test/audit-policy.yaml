@@ -1,0 +1,26 @@
+# Kyverno 백그라운드 감사(Audit) 전용 정책 매니페스트
+# 배포를 차단하지 않고 PolicyReport를 생성하여 컴플라이언스 현황을 파악하기 위한 목적
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: e2e-audit-disallow-latest-tag
+  annotations:
+    policies.kyverno.io/title: E2E Audit Disallow Latest Tag
+    policies.kyverno.io/category: Governance E2E Testing
+    policies.kyverno.io/severity: medium
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: check-image-latest-tag
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: "Audit: 컨테이너가 고정된 버전 태그 대신 ':latest'를 사용 중입니다."
+        pattern:
+          spec:
+            containers:
+              - image: "!*:latest"

@@ -7,6 +7,7 @@ describe("getCurrentUserFromRequest", () => {
       id: "user-1",
       email: "admin@example.com",
       role: "ADMIN",
+      clusterIds: [],
     };
     const ctx = {
       switchToHttp: () => ({

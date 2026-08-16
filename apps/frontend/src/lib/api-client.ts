@@ -2,7 +2,7 @@ import { API_BASE_URL, parseResponse } from "@/lib/auth-api";
 import { useAuthStore } from "@/lib/auth-store";
 
 type RequestOptions = {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
 };
 

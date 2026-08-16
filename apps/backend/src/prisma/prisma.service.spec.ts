@@ -1,9 +1,10 @@
 import { Test } from "@nestjs/testing";
 import { Prisma } from "@prisma/client";
 import { PrismaModule } from "./prisma.module";
+import { PRISMA_ERROR_CODE, PrismaErrorCode } from "./prisma-error";
 import { PrismaService } from "./prisma.service";
 
-function createPrismaError(code: string) {
+function createPrismaError(code: PrismaErrorCode) {
   return new Prisma.PrismaClientKnownRequestError("Prisma request failed.", {
     code,
     clientVersion: Prisma.prismaVersion.client,
@@ -52,16 +53,18 @@ describe("PrismaService", () => {
   });
 
   it("runs callbacks in a serializable transaction", async () => {
-    const transaction = { marker: "transaction-client" };
+    const transaction = {
+      marker: "transaction-client",
+    } as unknown as Prisma.TransactionClient;
     const operation = jest.fn().mockResolvedValue("transaction-result");
     const runTransaction = jest
       .spyOn(service, "$transaction")
-      .mockImplementation(async (callback: never, options?: never) => {
+      .mockImplementation(async (callback, options) => {
         expect(options).toEqual({
           isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
         });
 
-        return (callback as (client: unknown) => Promise<unknown>)(transaction);
+        return callback(transaction);
       });
 
     await expect(service.runSerializableTransaction(operation)).resolves.toBe(
@@ -72,7 +75,9 @@ describe("PrismaService", () => {
   });
 
   it("retries P2034 conflicts up to the third attempt", async () => {
-    const transactionError = createPrismaError("P2034");
+    const transactionError = createPrismaError(
+      PRISMA_ERROR_CODE.TRANSACTION_CONFLICT,
+    );
     const runTransaction = jest
       .spyOn(service, "$transaction")
       .mockRejectedValueOnce(transactionError)
@@ -86,7 +91,9 @@ describe("PrismaService", () => {
   });
 
   it("stops retrying after three P2034 conflicts", async () => {
-    const transactionError = createPrismaError("P2034");
+    const transactionError = createPrismaError(
+      PRISMA_ERROR_CODE.TRANSACTION_CONFLICT,
+    );
     const runTransaction = jest
       .spyOn(service, "$transaction")
       .mockRejectedValue(transactionError);

@@ -1,16 +1,16 @@
-import { UnauthorizedException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
-import { Role } from '@prisma/client';
-import * as argon2 from 'argon2';
-import { AuthService } from '../src/auth/auth.service';
-import { PrismaService } from '../src/prisma/prisma.service';
-import { UsersService } from '../src/users/users.service';
+import { ConfigService } from "@nestjs/config";
+import { JwtService } from "@nestjs/jwt";
+import { Role } from "@prisma/client";
+import argon2 from "argon2";
+import { AUTH_ERROR } from "../src/auth/auth.errors";
+import { AuthService } from "../src/auth/auth.service";
+import { PrismaService } from "../src/prisma/prisma.service";
+import { UsersService } from "../src/users/users.service";
 
-const OLD_PASSWORD = 'old-integration-password';
-const NEW_PASSWORD = 'new-integration-password';
+const OLD_PASSWORD = "old-integration-password";
+const NEW_PASSWORD = "new-integration-password";
 
-describe('user session invalidation transactions', () => {
+describe("user session invalidation transactions", () => {
   let prisma: PrismaService;
   let authService: AuthService;
   let usersService: UsersService;
@@ -20,7 +20,7 @@ describe('user session invalidation transactions', () => {
 
     if (!databaseUrl) {
       throw new Error(
-        'TEST_DATABASE_URL must be provided by the disposable PostgreSQL container.',
+        "TEST_DATABASE_URL must be provided by the disposable PostgreSQL container.",
       );
     }
 
@@ -30,10 +30,10 @@ describe('user session invalidation transactions', () => {
       },
     });
     const configValues: Record<string, string> = {
-      JWT_ACCESS_SECRET: 'integration-access-secret',
-      JWT_REFRESH_SECRET: 'integration-refresh-secret',
-      JWT_ACCESS_EXPIRES_IN: '15m',
-      JWT_REFRESH_EXPIRES_IN: '7d',
+      JWT_ACCESS_SECRET: "integration-access-secret",
+      JWT_REFRESH_SECRET: "integration-refresh-secret",
+      JWT_ACCESS_EXPIRES_IN: "15m",
+      JWT_REFRESH_EXPIRES_IN: "7d",
     };
     const configService = {
       get: (key: string) => configValues[key],
@@ -41,7 +41,7 @@ describe('user session invalidation transactions', () => {
         const value = configValues[key];
 
         if (!value) {
-          throw new Error('Missing integration configuration: ' + key);
+          throw new Error("Missing integration configuration: " + key);
         }
 
         return value;
@@ -53,7 +53,12 @@ describe('user session invalidation transactions', () => {
       new JwtService(),
       configService as unknown as ConfigService,
     );
-    usersService = new UsersService(prisma);
+    // setClusters 를 쓰지 않는 스펙이라 ClusterProvider 는 자리만 채운다.
+    usersService = new UsersService(prisma, {
+      getMetadata: () => {
+        throw new Error("not used in this spec");
+      },
+    } as never);
   });
 
   beforeEach(async () => {
@@ -65,8 +70,8 @@ describe('user session invalidation transactions', () => {
     await prisma?.$disconnect();
   });
 
-  it('prevents a concurrent old-password login from surviving password reset', async () => {
-    const user = await createUser('password-reset-race@example.com');
+  it("prevents a concurrent old-password login from surviving password reset", async () => {
+    const user = await createUser("password-reset-race@example.com");
     const existingLogin = await authService.login({
       email: user.email,
       password: OLD_PASSWORD,
@@ -76,21 +81,25 @@ describe('user session invalidation transactions', () => {
       usersService.resetPassword(user.id, { password: NEW_PASSWORD }),
     ]);
 
-    expect(resetResult.status).toBe('fulfilled');
+    expect(resetResult.status).toBe("fulfilled");
     await expect(activeTokenCount(user.id)).resolves.toBe(0);
     await expect(
       authService.refresh(existingLogin.refreshToken),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    ).rejects.toMatchObject({
+      code: AUTH_ERROR.INVALID_REFRESH_TOKEN.code,
+    });
 
-    if (loginResult.status === 'fulfilled') {
+    if (loginResult.status === "fulfilled") {
       await expect(
         authService.refresh(loginResult.value.refreshToken),
-      ).rejects.toBeInstanceOf(UnauthorizedException);
+      ).rejects.toMatchObject({
+        code: AUTH_ERROR.INVALID_REFRESH_TOKEN.code,
+      });
     }
   });
 
-  it('prevents concurrent refresh from surviving disable and re-enable', async () => {
-    const user = await createUser('disable-race@example.com');
+  it("prevents concurrent refresh from surviving disable and re-enable", async () => {
+    const user = await createUser("disable-race@example.com");
     const existingLogin = await authService.login({
       email: user.email,
       password: OLD_PASSWORD,
@@ -100,18 +109,22 @@ describe('user session invalidation transactions', () => {
       usersService.setDisabled(user.id, { disabled: true }),
     ]);
 
-    expect(disableResult.status).toBe('fulfilled');
+    expect(disableResult.status).toBe("fulfilled");
     await expect(activeTokenCount(user.id)).resolves.toBe(0);
 
     await usersService.setDisabled(user.id, { disabled: false });
     await expect(
       authService.refresh(existingLogin.refreshToken),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    ).rejects.toMatchObject({
+      code: AUTH_ERROR.INVALID_REFRESH_TOKEN.code,
+    });
 
-    if (refreshResult.status === 'fulfilled') {
+    if (refreshResult.status === "fulfilled") {
       await expect(
         authService.refresh(refreshResult.value.refreshToken),
-      ).rejects.toBeInstanceOf(UnauthorizedException);
+      ).rejects.toMatchObject({
+        code: AUTH_ERROR.INVALID_REFRESH_TOKEN.code,
+      });
     }
   });
 

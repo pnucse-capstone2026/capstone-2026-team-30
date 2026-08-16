@@ -55,7 +55,10 @@ export function LoginForm() {
   return (
     <form className="space-y-5" onSubmit={handleSubmit}>
       <div className="space-y-2">
-        <Label htmlFor="email" className="text-[13px] font-medium text-slate-700">
+        <Label
+          htmlFor="email"
+          className="text-[13px] font-medium text-slate-700"
+        >
           {"\uc774\uba54\uc77c"}
         </Label>
         <div className="relative">
@@ -100,7 +103,9 @@ export function LoginForm() {
             name="password"
             type={showPassword ? "text" : "password"}
             autoComplete="current-password"
-            placeholder={"\ube44\ubc00\ubc88\ud638\ub97c \uc785\ub825\ud558\uc138\uc694"}
+            placeholder={
+              "\ube44\ubc00\ubc88\ud638\ub97c \uc785\ub825\ud558\uc138\uc694"
+            }
             required
             className="h-12 rounded-xl border-slate-200 bg-white pr-11 pl-10 text-sm shadow-xs placeholder:text-slate-400 focus-visible:border-blue-500 focus-visible:ring-blue-500/15"
           />
@@ -158,7 +163,9 @@ export function LoginForm() {
       </div>
 
       <p className="text-center text-xs leading-5 text-slate-500">
-        {"\uacc4\uc815 \ub610\ub294 \uad8c\ud55c \uad00\ub828 \ubb38\uc758\ub294 "}
+        {
+          "\uacc4\uc815 \ub610\ub294 \uad8c\ud55c \uad00\ub828 \ubb38\uc758\ub294 "
+        }
         <a
           href="mailto:admin@kubeguard.local"
           className="font-medium text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-blue-600"

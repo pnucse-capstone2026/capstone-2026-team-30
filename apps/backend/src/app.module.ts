@@ -1,29 +1,42 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
+import { APP_FILTER } from "@nestjs/core";
 import { LoggerModule } from "nestjs-pino";
+import { BusinessExceptionFilter } from "./common/errors/business-exception.filter";
 import { PrismaModule } from "./prisma/prisma.module";
 import { AuthModule } from "./auth/auth.module";
 import { UsersModule } from "./users/users.module";
+import { ExceptionRequestsModule } from "./exception-requests/exception-requests.module";
+import { AiAgentModule } from "./ai-agent/ai-agent.module";
+import { HealthModule } from "./health/health.module";
+import { createPinoHttpConfig } from "./logging/pino-http.config";
 
+/**
+ * Kyverno Governance Platform 백엔드 루트 모듈
+ */
 @Module({
   imports: [
-    // 환경 변수 로딩 (전역)
+    // 환경 변수 전역 주입 (ConfigService 사용 목적)
     ConfigModule.forRoot({ isGlobal: true }),
 
-    // Pino 구조화 로깅
+    // 핵심 도메인 및 인프라 모듈
     PrismaModule,
     AuthModule,
     UsersModule,
+    ExceptionRequestsModule,
+    AiAgentModule,
+    HealthModule,
 
+    // 구조화된 Pino HTTP 로거 설정
     LoggerModule.forRoot({
-      pinoHttp: {
-        transport:
-          process.env.NODE_ENV !== "production"
-            ? { target: "pino-pretty" }
-            : undefined,
-        level: process.env.NODE_ENV !== "production" ? "debug" : "info",
-      },
+      pinoHttp: createPinoHttpConfig(),
     }),
+  ],
+  providers: [
+    {
+      provide: APP_FILTER,
+      useClass: BusinessExceptionFilter,
+    },
   ],
 })
 export class AppModule {}

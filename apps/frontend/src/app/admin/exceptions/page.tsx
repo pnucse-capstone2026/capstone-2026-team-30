@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Bell,
@@ -28,8 +28,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { listExceptionRequests } from "@/lib/exception-requests-api";
 import {
-  exceptionRequests,
   exceptionRiskClassName,
   exceptionRiskLabel,
   exceptionStatusClassName,
@@ -41,17 +41,27 @@ import {
 
 const statusIcon: Record<ExceptionRequestStatus, typeof Clock3> = {
   pending: Clock3,
+  applying: Clock3,
   approved: CheckCircle2,
   rejected: XCircle,
+  cancelling: Clock3,
+  expiring: FileClock,
   expired: FileClock,
+  cancelled: XCircle,
+  failed: AlertTriangle,
 };
 
 const statusOptions: Array<"all" | ExceptionRequestStatus> = [
   "all",
   "pending",
+  "applying",
   "approved",
   "rejected",
+  "cancelling",
+  "expiring",
   "expired",
+  "cancelled",
+  "failed",
 ];
 const riskOptions: Array<"all" | ExceptionRiskLevel> = [
   "all",
@@ -62,15 +72,43 @@ const riskOptions: Array<"all" | ExceptionRiskLevel> = [
 ];
 
 export default function AdminExceptionsPage() {
-  const [requests, setRequests] = useState<ExceptionRequest[]>(exceptionRequests);
+  const [requests, setRequests] = useState<ExceptionRequest[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | ExceptionRequestStatus>("all");
   const [riskLevel, setRiskLevel] = useState<"all" | ExceptionRiskLevel>("all");
   const [cluster, setCluster] = useState("all");
   const [namespace, setNamespace] = useState("all");
 
-  const pendingRequests = requests.filter((request) => request.status === "pending");
+  async function loadRequests() {
+    setIsLoading(true);
+    setErrorMessage(null);
+    try {
+      const nextRequests = await listExceptionRequests();
+      setRequests(nextRequests);
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "예외 신청 목록을 불러오지 못했습니다.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadRequests();
+  }, []);
+
+  const pendingRequests = requests.filter(
+    (request) => request.status === "pending" || request.status === "applying",
+  );
   const approvedRequests = requests.filter((request) => request.status === "approved");
+  const needsActionRequests = requests.filter((request) =>
+    ["applying", "cancelling", "expiring", "failed"].includes(request.status),
+  );
   const highRiskRequests = requests.filter(
     (request) => request.riskLevel === "critical" || request.riskLevel === "high",
   );
@@ -98,21 +136,39 @@ export default function AdminExceptionsPage() {
       className: "bg-rose-50 text-rose-600",
     },
     {
-      label: "전체 신청",
-      value: requests.length.toString(),
-      detail: "최근 신청 기준",
-      icon: FileClock,
+      label: "조치 필요",
+      value: needsActionRequests.length.toString(),
+      detail: "적용·삭제 확인 필요",
+      icon: AlertTriangle,
       className: "bg-blue-50 text-blue-600",
     },
   ];
 
   const clusters = useMemo(
-    () => Array.from(new Set(exceptionRequests.map((item) => item.clusterName))),
-    [],
+    () =>
+      Array.from(
+        new Map(
+          requests.map((request) => {
+            const clusterId = request.targetClusterId ?? request.clusterName;
+
+            return [
+              clusterId,
+              {
+                id: clusterId,
+                label:
+                  request.targetClusterDisplayName ??
+                  request.clusterName ??
+                  clusterId,
+              },
+            ];
+          }),
+        ).values(),
+      ),
+    [requests],
   );
   const namespaces = useMemo(
-    () => Array.from(new Set(exceptionRequests.map((item) => item.namespace))),
-    [],
+    () => Array.from(new Set(requests.map((item) => item.namespace))),
+    [requests],
   );
 
   const filteredRequests = useMemo(() => {
@@ -127,6 +183,7 @@ export default function AdminExceptionsPage() {
           request.resourceKind,
           request.resourceName,
           request.namespace,
+          request.targetClusterId,
           request.clusterName,
           request.requester,
           request.team,
@@ -139,7 +196,8 @@ export default function AdminExceptionsPage() {
         matchesQuery &&
         (status === "all" || request.status === status) &&
         (riskLevel === "all" || request.riskLevel === riskLevel) &&
-        (cluster === "all" || request.clusterName === cluster) &&
+        (cluster === "all" ||
+          (request.targetClusterId ?? request.clusterName) === cluster) &&
         (namespace === "all" || request.namespace === namespace)
       );
     });
@@ -151,14 +209,6 @@ export default function AdminExceptionsPage() {
     setRiskLevel("all");
     setCluster("all");
     setNamespace("all");
-  }
-
-  function decideRequest(id: string, nextStatus: "approved" | "rejected") {
-    setRequests((currentRequests) =>
-      currentRequests.map((request) =>
-        request.id === id ? { ...request, status: nextStatus, reviewer: "관리자" } : request,
-      ),
-    );
   }
 
   return (
@@ -214,9 +264,10 @@ export default function AdminExceptionsPage() {
               <Button
                 variant="outline"
                 className="h-10 rounded-xl border-slate-200 bg-white text-slate-700"
+                onClick={() => void loadRequests()}
               >
                 <Download className="size-4" />
-                내보내기
+                새로고침
               </Button>
               <Button className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]">
                 <SlidersHorizontal className="size-4" />
@@ -313,8 +364,8 @@ export default function AdminExceptionsPage() {
                   >
                     <option value="all">전체 클러스터</option>
                     {clusters.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
+                      <option key={option.id} value={option.id}>
+                        {option.label}
                       </option>
                     ))}
                   </select>
@@ -349,103 +400,136 @@ export default function AdminExceptionsPage() {
                   <TableHead className="text-xs text-slate-500">기간</TableHead>
                   <TableHead className="text-xs text-slate-500">상태</TableHead>
                   <TableHead className="min-w-[260px] text-xs text-slate-500">보완 통제</TableHead>
-                  <TableHead className="w-[170px] text-xs text-slate-500">조치</TableHead>
+                  <TableHead className="w-[120px] text-xs text-slate-500">조치</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRequests.map((request) => {
-                  const StatusIcon = statusIcon[request.status];
-                  const isPending = request.status === "pending";
+                {isLoading
+                  ? Array.from({ length: 4 }).map((_, index) => (
+                      <TableRow key={`loading-${index}`}>
+                        <TableCell className="px-5 py-4 sm:px-6">
+                          <div className="h-4 w-32 animate-pulse rounded bg-slate-100" />
+                          <div className="mt-2 h-3 w-24 animate-pulse rounded bg-slate-100" />
+                        </TableCell>
+                        <TableCell className="py-4">
+                          <div className="h-4 w-44 animate-pulse rounded bg-slate-100" />
+                          <div className="mt-2 h-3 w-36 animate-pulse rounded bg-slate-100" />
+                        </TableCell>
+                        <TableCell className="py-4">
+                          <div className="h-4 w-24 animate-pulse rounded bg-slate-100" />
+                          <div className="mt-2 h-3 w-32 animate-pulse rounded bg-slate-100" />
+                        </TableCell>
+                        <TableCell className="py-4">
+                          <div className="h-6 w-14 animate-pulse rounded-full bg-slate-100" />
+                        </TableCell>
+                        <TableCell className="py-4">
+                          <div className="h-4 w-24 animate-pulse rounded bg-slate-100" />
+                          <div className="mt-2 h-3 w-20 animate-pulse rounded bg-slate-100" />
+                        </TableCell>
+                        <TableCell className="py-4">
+                          <div className="h-6 w-20 animate-pulse rounded-full bg-slate-100" />
+                        </TableCell>
+                        <TableCell className="py-4">
+                          <div className="h-4 w-56 animate-pulse rounded bg-slate-100" />
+                        </TableCell>
+                        <TableCell className="py-4 pr-5 sm:pr-6">
+                          <div className="h-8 w-20 animate-pulse rounded-lg bg-slate-100" />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  : filteredRequests.map((request) => {
+                      const StatusIcon = statusIcon[request.status];
 
-                  return (
-                    <TableRow key={request.id} className="hover:bg-slate-50/70">
-                      <TableCell className="px-5 py-4 sm:px-6">
-                        <div>
-                          <p className="text-xs font-semibold text-slate-900">{request.id}</p>
-                          <p className="mt-1 text-[11px] text-slate-400">
-                            {request.requestedAt} 신청
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="hidden size-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 sm:flex">
-                            <FileClock className="size-4.5" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="truncate text-xs font-medium text-slate-900">
-                              {request.policyName}
+                      return (
+                        <TableRow key={request.id} className="hover:bg-slate-50/70">
+                          <TableCell className="px-5 py-4 sm:px-6">
+                            <div>
+                              <p className="text-xs font-semibold text-slate-900">{request.id}</p>
+                              <p className="mt-1 text-[11px] text-slate-400">
+                                {request.requestedAt} 신청
+                              </p>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="hidden size-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 sm:flex">
+                                <FileClock className="size-4.5" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate text-xs font-medium text-slate-900">
+                                  {request.policyName}
+                                </p>
+                                <p className="mt-1 truncate text-[11px] text-slate-400">
+                                  {request.resourceKind} / {request.resourceName} / {request.namespace}
+                                </p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-4">
+                            <p className="text-xs font-medium text-slate-800">{request.requester}</p>
+                            <p className="mt-1 text-[11px] text-slate-400">
+                              {request.team} · {request.clusterName}
                             </p>
-                            <p className="mt-1 truncate text-[11px] text-slate-400">
-                              {request.resourceKind} / {request.resourceName} / {request.namespace}
+                          </TableCell>
+                          <TableCell className="py-4">
+                            <Badge className={exceptionRiskClassName[request.riskLevel]}>
+                              {exceptionRiskLabel[request.riskLevel]}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="py-4">
+                            <p className="text-xs text-slate-600">{request.requestedAt}</p>
+                            <p className="mt-1 text-[11px] text-slate-400">만료 {request.expiresAt}</p>
+                          </TableCell>
+                          <TableCell className="py-4">
+                            <Badge className={exceptionStatusClassName[request.status]}>
+                              <StatusIcon className="size-3" />
+                              {exceptionStatusLabel[request.status]}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="max-w-[360px] py-4">
+                            <p className="line-clamp-2 break-all text-xs leading-5 text-slate-500">
+                              {request.compensatingControl}
                             </p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-4">
-                        <p className="text-xs font-medium text-slate-800">{request.requester}</p>
-                        <p className="mt-1 text-[11px] text-slate-400">
-                          {request.team} · {request.clusterName}
-                        </p>
-                      </TableCell>
-                      <TableCell className="py-4">
-                        <Badge className={exceptionRiskClassName[request.riskLevel]}>
-                          {exceptionRiskLabel[request.riskLevel]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="py-4">
-                        <p className="text-xs text-slate-600">{request.requestedAt}</p>
-                        <p className="mt-1 text-[11px] text-slate-400">만료 {request.expiresAt}</p>
-                      </TableCell>
-                      <TableCell className="py-4">
-                        <Badge className={exceptionStatusClassName[request.status]}>
-                          <StatusIcon className="size-3" />
-                          {exceptionStatusLabel[request.status]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="max-w-[360px] py-4">
-                        <p className="line-clamp-2 text-xs leading-5 text-slate-500">
-                          {request.compensatingControl}
-                        </p>
-                      </TableCell>
-                      <TableCell className="py-4 pr-5 sm:pr-6">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Button
-                            asChild
-                            variant="outline"
-                            size="sm"
-                            className="rounded-lg border-slate-200 bg-white text-slate-700"
-                          >
-                            <Link href={`/admin/exceptions/${request.id}`}>상세 검토</Link>
-                          </Button>
-                          <Button
-                            size="sm"
-                            className="rounded-lg bg-[#0b2342] text-white hover:bg-[#12325b]"
-                            disabled={!isPending}
-                            onClick={() => decideRequest(request.id, "approved")}
-                          >
-                            승인
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="rounded-lg border-slate-200 bg-white text-slate-700"
-                            disabled={!isPending}
-                            onClick={() => decideRequest(request.id, "rejected")}
-                          >
-                            거절
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                          </TableCell>
+                          <TableCell className="py-4 pr-5 sm:pr-6">
+                            <Button
+                              asChild
+                              variant="outline"
+                              size="sm"
+                              className="rounded-lg border-slate-200 bg-white text-slate-700"
+                            >
+                              <Link href={`/admin/exceptions/${request.id}`}>상세 검토</Link>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
               </TableBody>
             </Table>
 
-            {filteredRequests.length === 0 ? (
-              <div className="border-t border-slate-100 px-5 py-10 text-center text-sm text-slate-500">
-                조건에 맞는 예외 신청이 없습니다.
+            {!isLoading && errorMessage ? (
+              <div className="border-t border-rose-100 bg-rose-50 px-5 py-6 text-sm text-rose-700 sm:px-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <span>{errorMessage}</span>
+                  <Button
+                    variant="outline"
+                    className="h-9 rounded-lg border-rose-200 bg-white text-rose-700"
+                    onClick={() => void loadRequests()}
+                  >
+                    다시 시도
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            {!isLoading && !errorMessage && filteredRequests.length === 0 ? (
+              <div className="border-t border-slate-100 px-5 py-10 text-center sm:px-6">
+                <p className="text-sm font-medium text-slate-700">
+                  조건에 맞는 예외 신청이 없습니다.
+                </p>
+                <p className="mt-2 text-xs text-slate-400">
+                  사용자 예외 신청이 생성되면 이 목록에 표시됩니다.
+                </p>
               </div>
             ) : null}
           </section>

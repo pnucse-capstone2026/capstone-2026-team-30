@@ -1,14 +1,15 @@
-import { UnauthorizedException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
-import { Prisma, Role } from '@prisma/client';
-import * as argon2 from 'argon2';
-import { AuthService } from '../src/auth/auth.service';
-import { PrismaService } from '../src/prisma/prisma.service';
+import { ConfigService } from "@nestjs/config";
+import { JwtService } from "@nestjs/jwt";
+import { Prisma, Role } from "@prisma/client";
+import argon2 from "argon2";
+import { AUTH_ERROR } from "../src/auth/auth.errors";
+import { AuthService } from "../src/auth/auth.service";
+import { PrismaService } from "../src/prisma/prisma.service";
+import { PRISMA_ERROR_CODE } from "../src/prisma/prisma-error";
 
-const TEST_PASSWORD = 'integration-password';
+const TEST_PASSWORD = "integration-password";
 
-describe('AuthService refresh token transactions', () => {
+describe("AuthService refresh token transactions", () => {
   let prisma: PrismaService;
   let authService: AuthService;
 
@@ -17,7 +18,7 @@ describe('AuthService refresh token transactions', () => {
 
     if (!databaseUrl) {
       throw new Error(
-        'TEST_DATABASE_URL must be provided by the disposable PostgreSQL container.',
+        "TEST_DATABASE_URL must be provided by the disposable PostgreSQL container.",
       );
     }
 
@@ -27,10 +28,10 @@ describe('AuthService refresh token transactions', () => {
       },
     });
     const configValues: Record<string, string> = {
-      JWT_ACCESS_SECRET: 'integration-access-secret',
-      JWT_REFRESH_SECRET: 'integration-refresh-secret',
-      JWT_ACCESS_EXPIRES_IN: '15m',
-      JWT_REFRESH_EXPIRES_IN: '7d',
+      JWT_ACCESS_SECRET: "integration-access-secret",
+      JWT_REFRESH_SECRET: "integration-refresh-secret",
+      JWT_ACCESS_EXPIRES_IN: "15m",
+      JWT_REFRESH_EXPIRES_IN: "7d",
     };
     const configService = {
       get: (key: string) => configValues[key],
@@ -38,7 +39,7 @@ describe('AuthService refresh token transactions', () => {
         const value = configValues[key];
 
         if (!value) {
-          throw new Error('Missing integration configuration: ' + key);
+          throw new Error("Missing integration configuration: " + key);
         }
 
         return value;
@@ -65,8 +66,8 @@ describe('AuthService refresh token transactions', () => {
     await prisma?.$disconnect();
   });
 
-  it('allows exactly one concurrent refresh for the same token', async () => {
-    const user = await createUser('concurrent-refresh@example.com');
+  it("allows exactly one concurrent refresh for the same token", async () => {
+    const user = await createUser("concurrent-refresh@example.com");
     const loginResult = await authService.login({
       email: user.email,
       password: TEST_PASSWORD,
@@ -77,17 +78,17 @@ describe('AuthService refresh token transactions', () => {
       authService.refresh(loginResult.refreshToken),
     ]);
     const fulfilledResults = results.filter(
-      (result) => result.status === 'fulfilled',
+      (result) => result.status === "fulfilled",
     );
     const rejectedResults = results.filter(
-      (result) => result.status === 'rejected',
+      (result) => result.status === "rejected",
     );
 
     expect(fulfilledResults).toHaveLength(1);
     expect(rejectedResults).toHaveLength(1);
-    expect((rejectedResults[0] as PromiseRejectedResult).reason).toBeInstanceOf(
-      UnauthorizedException,
-    );
+    expect((rejectedResults[0] as PromiseRejectedResult).reason).toMatchObject({
+      code: AUTH_ERROR.INVALID_REFRESH_TOKEN.code,
+    });
     await expect(
       prisma.refreshToken.count({
         where: {
@@ -99,8 +100,8 @@ describe('AuthService refresh token transactions', () => {
     ).resolves.toBe(1);
   });
 
-  it('rolls back revocation when replacement token persistence fails', async () => {
-    const user = await createUser('rollback-refresh@example.com');
+  it("rolls back revocation when replacement token persistence fails", async () => {
+    const user = await createUser("rollback-refresh@example.com");
     const loginResult = await authService.login({
       email: user.email,
       password: TEST_PASSWORD,
@@ -108,23 +109,21 @@ describe('AuthService refresh token transactions', () => {
     const originalToken = await prisma.refreshToken.findFirstOrThrow({
       where: { userId: user.id, revokedAt: null },
     });
-    const collisionUser = await createUser('token-collision@example.com');
+    const collisionUser = await createUser("token-collision@example.com");
 
     await prisma.refreshToken.create({
       data: {
         userId: collisionUser.id,
-        tokenHash: 'forced-token-hash-collision',
+        tokenHash: "forced-token-hash-collision",
         expiresAt: new Date(Date.now() + 60_000),
       },
     });
-    jest
-      .spyOn(argon2, 'hash')
-      .mockResolvedValue('forced-token-hash-collision');
+    jest.spyOn(argon2, "hash").mockResolvedValue("forced-token-hash-collision");
 
     await expect(
       authService.refresh(loginResult.refreshToken),
     ).rejects.toMatchObject<Partial<Prisma.PrismaClientKnownRequestError>>({
-      code: 'P2002',
+      code: PRISMA_ERROR_CODE.UNIQUE_CONSTRAINT_VIOLATION,
     });
     await expect(
       prisma.refreshToken.findUniqueOrThrow({
@@ -134,8 +133,8 @@ describe('AuthService refresh token transactions', () => {
     ).resolves.toEqual({ revokedAt: null });
   });
 
-  it('revokes every refresh token for the user on logout', async () => {
-    const user = await createUser('logout-all-sessions@example.com');
+  it("revokes every refresh token for the user on logout", async () => {
+    const user = await createUser("logout-all-sessions@example.com");
     const firstLogin = await authService.login({
       email: user.email,
       password: TEST_PASSWORD,
@@ -151,8 +150,8 @@ describe('AuthService refresh token transactions', () => {
     await expect(activeTokenCount(user.id)).resolves.toBe(0);
   });
 
-  it('revokes a replacement token when logout uses the rotated token', async () => {
-    const user = await createUser('logout-rotated-token@example.com');
+  it("revokes a replacement token when logout uses the rotated token", async () => {
+    const user = await createUser("logout-rotated-token@example.com");
     const loginResult = await authService.login({
       email: user.email,
       password: TEST_PASSWORD,
@@ -167,8 +166,8 @@ describe('AuthService refresh token transactions', () => {
     await expect(activeTokenCount(user.id)).resolves.toBe(0);
   });
 
-  it('does not allow concurrent refresh to survive logout', async () => {
-    const user = await createUser('concurrent-refresh-logout@example.com');
+  it("does not allow concurrent refresh to survive logout", async () => {
+    const user = await createUser("concurrent-refresh-logout@example.com");
     const loginResult = await authService.login({
       email: user.email,
       password: TEST_PASSWORD,
@@ -180,7 +179,7 @@ describe('AuthService refresh token transactions', () => {
     ]);
 
     expect(logoutResult).toEqual({
-      status: 'fulfilled',
+      status: "fulfilled",
       value: { success: true },
     });
     await expect(activeTokenCount(user.id)).resolves.toBe(0);

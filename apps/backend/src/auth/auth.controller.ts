@@ -6,11 +6,12 @@ import {
   Post,
   Req,
   Res,
-  UnauthorizedException,
   UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Request, Response } from "express";
+import { BusinessException } from "../common/errors/business.exception";
+import { AUTH_ERROR } from "./auth.errors";
 import { AuthenticatedUser } from "./auth.types";
 import { AuthService } from "./auth.service";
 import { CurrentUser } from "./decorators/current-user.decorator";
@@ -56,7 +57,7 @@ export class AuthController {
     const refreshToken = this.refreshTokenCookieService.get(request);
 
     if (!refreshToken) {
-      throw new UnauthorizedException("Invalid refresh token.");
+      throw new BusinessException(AUTH_ERROR.INVALID_REFRESH_TOKEN);
     }
 
     const result = await this.authService.refresh(refreshToken);

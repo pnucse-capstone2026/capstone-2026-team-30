@@ -29,8 +29,16 @@ export const PERMISSIONS = [
     description: "Cancel policy exception requests.",
   },
   {
+    key: "exception_requests.retry",
+    description: "Retry failed policy exception requests.",
+  },
+  {
     key: "exception_requests.expire",
     description: "Expire policy exception requests.",
+  },
+  {
+    key: "users.assign_clusters",
+    description: "Assign clusters to users.",
   },
   { key: "audit_logs.read", description: "Read audit logs." },
 ] as const;
@@ -44,6 +52,7 @@ export const ROLE_PERMISSIONS: Record<Role, PermissionKey[]> = {
     "exception_requests.read",
     "exception_requests.approve",
     "exception_requests.reject",
+    "exception_requests.retry",
     "audit_logs.read",
   ],
   [Role.REQUESTER]: [

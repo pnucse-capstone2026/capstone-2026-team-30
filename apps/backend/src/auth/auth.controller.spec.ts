@@ -1,6 +1,6 @@
-import { UnauthorizedException } from "@nestjs/common";
 import { Request, Response } from "express";
 import { AuthController } from "./auth.controller";
+import { AUTH_ERROR } from "./auth.errors";
 
 function createResponse(): Response {
   return {} as Response;
@@ -101,7 +101,9 @@ describe("AuthController", () => {
 
     await expect(
       controller.refresh(createRequest(), createResponse()),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    ).rejects.toMatchObject({
+      code: AUTH_ERROR.INVALID_REFRESH_TOKEN.code,
+    });
     expect(authService.refresh).not.toHaveBeenCalled();
   });
 
