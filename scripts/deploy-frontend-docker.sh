@@ -48,6 +48,10 @@ echo ">>> Tagging and Pushing image to Amazon ECR..."
 docker tag "${REPO_NAME}:latest" "${ECR_URI}"
 docker push "${ECR_URI}"
 
+# 네임스페이스 존재 보장
+echo ">>> Ensuring 'kyverno-platform' namespace exists..."
+"${KUBECTL}" apply -f "${ROOT_DIR}/k8s-manifests/system/namespace.yaml"
+
 # 6. EKS 클러스터 내 프론트엔드 Deployment 업데이트 및 롤아웃
 echo ">>> Updating EKS deployment 'kyverno-frontend' with new ECR image..."
 "${KUBECTL}" apply -f "${ROOT_DIR}/k8s-manifests/system/frontend.yaml"

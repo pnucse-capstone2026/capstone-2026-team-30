@@ -1,11 +1,3 @@
-# AWS Bedrock 호출 시 API 키 하드코딩 없이 안전한 IAM Role 바인딩을 위한 IRSA ServiceAccount
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: kyverno-backend-sa
-  namespace: kyverno-platform
-  # eksctl create iamserviceaccount(scripts/setup-bedrock-irsa.sh) 실행 시 eks.amazonaws.com/role-arn 어노테이션이 자동 관리됨
----
 # Kyverno Governance Platform NestJS 백엔드 (AI 에이전트 및 거버넌스 API) 배포 매니페스트
 apiVersion: apps/v1
 kind: Deployment

@@ -48,6 +48,15 @@ echo ">>> Tagging and Pushing image to Amazon ECR..."
 docker tag "${REPO_NAME}:latest" "${ECR_URI}"
 docker push "${ECR_URI}"
 
+# 네임스페이스 및 선행 시스템 리소스(RBAC, PostgreSQL) 존재 보장
+echo ">>> Ensuring 'kyverno-platform' namespace and foundational resources exist..."
+"${KUBECTL}" apply -f "${ROOT_DIR}/k8s-manifests/system/namespace.yaml"
+"${KUBECTL}" apply -f "${ROOT_DIR}/k8s-manifests/system/rbac.yaml"
+"${KUBECTL}" apply -f "${ROOT_DIR}/k8s-manifests/system/postgres.yaml"
+
+# PostgreSQL 롤아웃 상태 대기
+"${KUBECTL}" rollout status deployment/postgres -n kyverno-platform --timeout=120s || true
+
 # EKS 클러스터 Deployment 이미지 갱신 및 무중단 롤아웃 수행
 echo ">>> Updating EKS deployment 'kyverno-backend' with new ECR image..."
 "${KUBECTL}" apply -f "${ROOT_DIR}/k8s-manifests/system/backend.yaml"
