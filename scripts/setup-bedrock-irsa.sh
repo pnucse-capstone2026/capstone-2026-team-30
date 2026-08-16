@@ -8,7 +8,8 @@ REGION="${2:-${REGION:-us-east-1}}"
 NAMESPACE="kyverno-platform"
 SERVICE_ACCOUNT="kyverno-backend-sa"
 POLICY_NAME="KyvernoBedrockClaudeInvocationPolicy"
-ROLE_NAME="kyverno-backend-bedrock-irsa-role"
+# 멀티 클러스터 환경에서 IAM Role 이름 충돌을 방지하기 위해 클러스터명을 접두사로 결합
+ROLE_NAME="${CLUSTER_NAME}-backend-bedrock-irsa-role"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOCAL_BIN_DIR="${SCRIPT_DIR}/bin"
