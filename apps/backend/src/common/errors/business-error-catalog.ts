@@ -4,6 +4,7 @@ import { EXCEPTION_REQUEST_ERROR } from "../../exception-requests/exception-requ
 import { KUBERNETES_ERROR } from "../../kubernetes/kubernetes.errors";
 import { POLICY_ERROR } from "../../policies/policy.errors";
 import { USER_ERROR } from "../../users/user.errors";
+import { VIOLATION_ERROR } from "../../violations/violation.errors";
 
 export const BUSINESS_ERRORS = [
   ...Object.values(AUTH_ERROR),
@@ -12,6 +13,7 @@ export const BUSINESS_ERRORS = [
   ...Object.values(EXCEPTION_REQUEST_ERROR),
   ...Object.values(KUBERNETES_ERROR),
   ...Object.values(POLICY_ERROR),
+  ...Object.values(VIOLATION_ERROR),
 ] as const;
 
 export type BusinessError = (typeof BUSINESS_ERRORS)[number];

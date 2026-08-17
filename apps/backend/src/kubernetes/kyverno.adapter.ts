@@ -14,6 +14,11 @@ const POLICY_PLURAL = "clusterpolicies";
 const EXCEPTION_VERSION = "v2beta1";
 const EXCEPTION_PLURAL = "policyexceptions";
 
+const WG_POLICY_GROUP = "wgpolicyk8s.io";
+const POLICY_REPORT_VERSION = "v1alpha2";
+const POLICY_REPORT_PLURAL = "policyreports";
+const CLUSTER_POLICY_REPORT_PLURAL = "clusterpolicyreports";
+
 export type KubeObject = {
   metadata?: {
     name?: string;
@@ -316,6 +321,117 @@ export class KyvernoAdapter {
         version: POLICY_VERSION,
         namespace,
         plural: "policies",
+        name,
+      })) as KubeObject;
+    } catch (error) {
+      if (statusCode(error) === 404) return null;
+      throw error;
+    }
+  }
+
+  /**
+   * 대상 클러스터의 모든 ClusterPolicyReport(클러스터 전역 위반 보고서)를 조회합니다.
+   *
+   * @param clusterId 조회 대상 클러스터 식별자
+   * @returns ClusterPolicyReport 리소스 배열
+   */
+  async listClusterPolicyReports(clusterId: string): Promise<KubeObject[]> {
+    const connection = this.clusters.get(clusterId);
+    try {
+      const response = (await connection.customObjectsApi.listClusterCustomObject({
+        group: WG_POLICY_GROUP,
+        version: POLICY_REPORT_VERSION,
+        plural: CLUSTER_POLICY_REPORT_PLURAL,
+      })) as { items?: KubeObject[] };
+
+      return Array.isArray(response?.items) ? response.items : [];
+    } catch (error) {
+      if (statusCode(error) === 404) return [];
+      throw error;
+    }
+  }
+
+  /**
+   * 대상 클러스터의 특정 또는 전체 네임스페이스에 대한 PolicyReport(네임스페이스 범위 위반 보고서)를 조회합니다.
+   *
+   * @param clusterId 조회 대상 클러스터 식별자
+   * @param namespace 네임스페이스 (생략 시 전체 네임스페이스 대상)
+   * @returns PolicyReport 리소스 배열
+   */
+  async listNamespacedPolicyReports(
+    clusterId: string,
+    namespace?: string,
+  ): Promise<KubeObject[]> {
+    const connection = this.clusters.get(clusterId);
+    try {
+      let response: { items?: KubeObject[] };
+      if (namespace) {
+        response = (await connection.customObjectsApi.listNamespacedCustomObject({
+          group: WG_POLICY_GROUP,
+          version: POLICY_REPORT_VERSION,
+          namespace,
+          plural: POLICY_REPORT_PLURAL,
+        })) as { items?: KubeObject[] };
+      } else {
+        response = (await connection.customObjectsApi.listClusterCustomObject({
+          group: WG_POLICY_GROUP,
+          version: POLICY_REPORT_VERSION,
+          plural: POLICY_REPORT_PLURAL,
+        })) as { items?: KubeObject[] };
+      }
+
+      return Array.isArray(response?.items) ? response.items : [];
+    } catch (error) {
+      if (statusCode(error) === 404) return [];
+      throw error;
+    }
+  }
+
+  /**
+   * 대상 클러스터에서 특정 ClusterPolicyReport 단건을 조회합니다.
+   *
+   * @param clusterId 조회 대상 클러스터 식별자
+   * @param name ClusterPolicyReport 이름
+   * @returns ClusterPolicyReport 리소스 (미존재 시 null)
+   */
+  async getClusterPolicyReport(
+    clusterId: string,
+    name: string,
+  ): Promise<KubeObject | null> {
+    const connection = this.clusters.get(clusterId);
+    try {
+      return (await connection.customObjectsApi.getClusterCustomObject({
+        group: WG_POLICY_GROUP,
+        version: POLICY_REPORT_VERSION,
+        plural: CLUSTER_POLICY_REPORT_PLURAL,
+        name,
+      })) as KubeObject;
+    } catch (error) {
+      if (statusCode(error) === 404) return null;
+      throw error;
+    }
+  }
+
+  /**
+   * 대상 클러스터에서 특정 네임스페이스의 PolicyReport 단건을 조회합니다.
+   *
+   * @param clusterId 조회 대상 클러스터 식별자
+   * @param namespace 네임스페이스
+   * @param name PolicyReport 이름
+   * @returns PolicyReport 리소스 (미존재 시 null)
+   */
+  async getNamespacedPolicyReport(
+    clusterId: string,
+    namespace: string,
+    name: string,
+  ): Promise<KubeObject | null> {
+    const connection = this.clusters.get(clusterId);
+    try {
+      return (await connection.customObjectsApi.getNamespacedCustomObject({
+        group: WG_POLICY_GROUP,
+        version: POLICY_REPORT_VERSION,
+        namespace,
+        plural: POLICY_REPORT_PLURAL,
         name,
       })) as KubeObject;
     } catch (error) {

@@ -12,6 +12,7 @@ import { EXCEPTION_REQUEST_ERROR } from "../../exception-requests/exception-requ
 import { KUBERNETES_ERROR } from "../../kubernetes/kubernetes.errors";
 import { POLICY_ERROR } from "../../policies/policy.errors";
 import { USER_ERROR } from "../../users/user.errors";
+import { VIOLATION_ERROR } from "../../violations/violation.errors";
 import type { BusinessErrorCode } from "./business-error-catalog";
 import { BusinessException } from "./business.exception";
 
@@ -40,6 +41,9 @@ export const BUSINESS_ERROR_HTTP_STATUS = {
   [POLICY_ERROR.NOT_FOUND.code]: HttpStatus.NOT_FOUND,
   [POLICY_ERROR.CLUSTER_ACCESS_DENIED.code]: HttpStatus.FORBIDDEN,
   [POLICY_ERROR.LOOKUP_FAILED.code]: HttpStatus.BAD_GATEWAY,
+  [VIOLATION_ERROR.NOT_FOUND.code]: HttpStatus.NOT_FOUND,
+  [VIOLATION_ERROR.CLUSTER_ACCESS_DENIED.code]: HttpStatus.FORBIDDEN,
+  [VIOLATION_ERROR.REPORT_LOOKUP_FAILED.code]: HttpStatus.BAD_GATEWAY,
 } as const satisfies Record<BusinessErrorCode, HttpStatus>;
 
 /**
