@@ -90,7 +90,6 @@ export class ViolationsService {
           const extracted = this.extractViolationsFromReport(
             raw as PolicyReportRaw,
             cluster,
-            "ClusterPolicyReport",
           );
           for (const item of extracted) {
             if (this.matchesFilter(item, query)) {
@@ -103,7 +102,6 @@ export class ViolationsService {
           const extracted = this.extractViolationsFromReport(
             raw as PolicyReportRaw,
             cluster,
-            "PolicyReport",
           );
           for (const item of extracted) {
             if (this.matchesFilter(item, query)) {
@@ -220,7 +218,6 @@ export class ViolationsService {
   private extractViolationsFromReport(
     report: PolicyReportRaw,
     cluster: ClusterMetadata,
-    _scope: "ClusterPolicyReport" | "PolicyReport",
   ): ViolationSummaryDto[] {
     const results = report.results ?? [];
     const violations: ViolationSummaryDto[] = [];
