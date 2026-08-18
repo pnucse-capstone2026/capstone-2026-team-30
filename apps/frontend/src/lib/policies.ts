@@ -1,4 +1,6 @@
-export type PolicyType = "validate" | "mutate" | "generate";
+import { requestWithAuth } from "@/lib/api-client";
+
+export type PolicyType = "validate" | "mutate" | "generate" | "verifyImages";
 export type PolicyScope = "ClusterPolicy" | "Policy";
 export type PolicyMode = "enforce" | "audit";
 export type PolicyStatus = "active" | "warning" | "draft";
@@ -10,14 +12,86 @@ export type KyvernoPolicy = {
   scope: PolicyScope;
   mode: PolicyMode;
   status: PolicyStatus;
+  clusterId?: string;
   clusterName: string;
+  clusterDisplayName?: string;
   namespace: string | null;
   ruleCount: number;
+  rules?: string[];
   violationCount: number;
-  owner: string;
+  owner?: string;
   updatedAt: string;
+  createdAt?: string;
   description: string;
+  spec?: Record<string, unknown>;
+  autogenRules?: string[];
+  rawJson?: Record<string, unknown>;
 };
+
+export type PolicyListFilter = {
+  clusterId?: string;
+  namespace?: string;
+  type?: PolicyType;
+  mode?: PolicyMode;
+  scope?: PolicyScope;
+  search?: string;
+};
+
+/**
+ * 백엔드에서 실시간 Kyverno 정책 목록을 조회합니다.
+ */
+export async function getPolicies(filter: PolicyListFilter = {}): Promise<KyvernoPolicy[]> {
+  const params = new URLSearchParams();
+  if (filter.clusterId) params.append("clusterId", filter.clusterId);
+  if (filter.namespace) params.append("namespace", filter.namespace);
+  if (filter.type) params.append("type", filter.type);
+  if (filter.mode) params.append("mode", filter.mode);
+  if (filter.scope) params.append("scope", filter.scope);
+  if (filter.search) params.append("search", filter.search);
+
+  const queryStr = params.toString();
+  const path = `/policies${queryStr ? `?${queryStr}` : ""}`;
+
+  try {
+    const data = await requestWithAuth<KyvernoPolicy[]>(path);
+    return data.map((item) => ({
+      ...item,
+      clusterName: item.clusterDisplayName ?? item.clusterId ?? "default",
+      updatedAt: item.createdAt ? new Date(item.createdAt).toLocaleString("ko-KR") : "최근",
+      violationCount: 0,
+    }));
+  } catch (error) {
+    // API 연결 실패 시 빈 배열 반환 (fallback)
+    return [];
+  }
+}
+
+/**
+ * 특정 클러스터의 정책 상세 명세를 조회합니다.
+ */
+export async function getPolicyDetail(
+  clusterId: string,
+  name: string,
+  namespace?: string,
+): Promise<KyvernoPolicy | null> {
+  const params = new URLSearchParams();
+  if (namespace) params.append("namespace", namespace);
+
+  const queryStr = params.toString();
+  const path = `/policies/${clusterId}/${name}${queryStr ? `?${queryStr}` : ""}`;
+
+  try {
+    const data = await requestWithAuth<KyvernoPolicy>(path);
+    return {
+      ...data,
+      clusterName: data.clusterDisplayName ?? data.clusterId ?? clusterId,
+      updatedAt: data.createdAt ? new Date(data.createdAt).toLocaleString("ko-KR") : "최근",
+      violationCount: 0,
+    };
+  } catch {
+    return null;
+  }
+}
 
 export const kyvernoPolicies: KyvernoPolicy[] = [
   {

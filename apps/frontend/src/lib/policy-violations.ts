@@ -1,9 +1,13 @@
-export type ViolationSeverity = "critical" | "high" | "medium" | "low";
+import { requestWithAuth } from "@/lib/api-client";
+
+export type ViolationSeverity = "critical" | "high" | "medium" | "low" | "info";
 export type ViolationStatus = "open" | "inReview" | "resolved";
 export type ExceptionStatus = "none" | "requested" | "approved";
 
 export type PolicyViolation = {
   id: string;
+  clusterId?: string;
+  clusterDisplayName?: string;
   policyName: string;
   policyType: "validate" | "mutate" | "generate";
   clusterName: string;
@@ -28,7 +32,149 @@ export type PolicyViolation = {
     at: string;
     description: string;
   }[];
+  rawResult?: Record<string, unknown>;
+  resourceSpec?: Record<string, unknown>;
 };
+
+export type ViolationListFilter = {
+  clusterId?: string;
+  namespace?: string;
+  policyName?: string;
+  severity?: string;
+  status?: string;
+  search?: string;
+};
+
+/**
+ * 백엔드에서 실시간 PolicyReport 기반 정책 위반 목록을 조회합니다.
+ */
+export async function getViolations(filter: ViolationListFilter = {}): Promise<PolicyViolation[]> {
+  const params = new URLSearchParams();
+  if (filter.clusterId) params.append("clusterId", filter.clusterId);
+  if (filter.namespace) params.append("namespace", filter.namespace);
+  if (filter.policyName) params.append("policyName", filter.policyName);
+  if (filter.severity) params.append("severity", filter.severity);
+  if (filter.status) params.append("status", filter.status);
+  if (filter.search) params.append("search", filter.search);
+
+  const queryStr = params.toString();
+  const path = `/violations${queryStr ? `?${queryStr}` : ""}`;
+
+  try {
+    const data = await requestWithAuth<Array<{
+      id: string;
+      clusterId: string;
+      clusterDisplayName: string;
+      namespace: string;
+      policyName: string;
+      ruleName: string;
+      resourceKind: string;
+      resourceName: string;
+      severity: ViolationSeverity;
+      status: ViolationStatus;
+      message: string;
+      detectedAt: string;
+      reportName: string;
+    }>>(path);
+
+    return data.map((item) => ({
+      id: item.id,
+      clusterId: item.clusterId,
+      clusterDisplayName: item.clusterDisplayName,
+      policyName: item.policyName,
+      policyType: "validate",
+      clusterName: item.clusterDisplayName || item.clusterId,
+      namespace: item.namespace,
+      resourceKind: item.resourceKind,
+      resourceName: item.resourceName,
+      severity: item.severity,
+      status: item.status,
+      exceptionStatus: "none",
+      detectedAt: item.detectedAt ? new Date(item.detectedAt).toLocaleString("ko-KR") : "최근",
+      assignee: "담당 보안팀",
+      message: item.message,
+      ruleName: item.ruleName,
+      engineResponse: "fail",
+      admissionReviewId: item.id,
+      resourcePath: `spec.template.spec`,
+      recommendation: `정책 '${item.policyName}' 규칙 위반이 감지되었습니다.`,
+      manifest: `apiVersion: v1\nkind: ${item.resourceKind}\nmetadata:\n  name: ${item.resourceName}\n  namespace: ${item.namespace}`,
+      events: [
+        {
+          label: "탐지됨",
+          at: item.detectedAt ? new Date(item.detectedAt).toLocaleString("ko-KR") : "최근",
+          description: item.message,
+        },
+      ],
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 특정 위반 항목의 상세 정보 및 원본 K8s PolicyReport 결과를 조회합니다.
+ */
+export async function getViolationDetail(
+  clusterId: string,
+  id: string,
+): Promise<PolicyViolation | null> {
+  try {
+    const item = await requestWithAuth<{
+      id: string;
+      clusterId: string;
+      clusterDisplayName: string;
+      namespace: string;
+      policyName: string;
+      ruleName: string;
+      resourceKind: string;
+      resourceName: string;
+      severity: ViolationSeverity;
+      status: ViolationStatus;
+      message: string;
+      detectedAt: string;
+      reportName: string;
+      recommendation: string;
+      resourceSpec: Record<string, unknown>;
+      rawResult: Record<string, unknown>;
+    }>(`/violations/${clusterId}/${id}`);
+
+    return {
+      id: item.id,
+      clusterId: item.clusterId,
+      clusterDisplayName: item.clusterDisplayName,
+      policyName: item.policyName,
+      policyType: "validate",
+      clusterName: item.clusterDisplayName || item.clusterId,
+      namespace: item.namespace,
+      resourceKind: item.resourceKind,
+      resourceName: item.resourceName,
+      severity: item.severity,
+      status: item.status,
+      exceptionStatus: "none",
+      detectedAt: item.detectedAt ? new Date(item.detectedAt).toLocaleString("ko-KR") : "최근",
+      assignee: "담당 보안팀",
+      message: item.message,
+      ruleName: item.ruleName,
+      engineResponse: "fail",
+      admissionReviewId: item.id,
+      resourcePath: `spec.template.spec`,
+      recommendation: item.recommendation,
+      manifest: JSON.stringify(item.resourceSpec, null, 2),
+      events: [
+        {
+          label: "탐지됨",
+          at: item.detectedAt ? new Date(item.detectedAt).toLocaleString("ko-KR") : "최근",
+          description: item.message,
+        },
+      ],
+      rawResult: item.rawResult,
+      resourceSpec: item.resourceSpec,
+    };
+  } catch {
+    return null;
+  }
+}
 
 export const policyViolations: PolicyViolation[] = [
   {
