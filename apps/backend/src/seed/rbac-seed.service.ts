@@ -43,6 +43,7 @@ export const PERMISSIONS = [
   { key: "policies.read", description: "Read Kyverno policies." },
   { key: "audit_logs.read", description: "Read audit logs." },
   { key: "mlops.notebooks", description: "Manage MLOps Kubeflow Notebooks." },
+  { key: "mlops.governance", description: "Manage MLOps Governance & FinOps." },
 ] as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[number]["key"];
@@ -57,6 +58,7 @@ export const ROLE_PERMISSIONS: Record<Role, PermissionKey[]> = {
     "exception_requests.reject",
     "exception_requests.retry",
     "audit_logs.read",
+    "mlops.governance",
   ],
   [Role.REQUESTER]: [
     "policies.read",
@@ -65,11 +67,13 @@ export const ROLE_PERMISSIONS: Record<Role, PermissionKey[]> = {
     "exception_requests.create",
     "exception_requests.cancel",
     "mlops.notebooks",
+    "mlops.governance",
   ],
   [Role.VIEWER]: [
     "policies.read",
     "violations.read",
     "exception_requests.read",
+    "mlops.governance",
   ],
 };
 
