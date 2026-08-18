@@ -8,6 +8,7 @@ import {
   Files,
   History,
   FileWarning,
+  Layers,
   LayoutDashboard,
   Server,
   Settings,
@@ -33,6 +34,7 @@ type NavigationItem = {
 const navigation: Record<"user" | "admin", NavigationItem[]> = {
   user: [
     { label: "대시보드", href: "/dashboard", icon: LayoutDashboard },
+    { label: "MLOps 노트북", href: "/mlops/notebooks", icon: Layers },
     { label: "클러스터", href: "/clusters", icon: Server },
     { label: "정책", href: "/policies", icon: ShieldCheck },
     { label: "내 리소스 위반", href: "/violations", icon: FileWarning },
@@ -46,6 +48,7 @@ const navigation: Record<"user" | "admin", NavigationItem[]> = {
       href: "/admin/dashboard",
       icon: LayoutDashboard,
     },
+    { label: "MLOps 노트북 관리", href: "/mlops/notebooks", icon: Layers },
     { label: "클러스터 관리", href: "/admin/clusters", icon: Server },
     { label: "정책 관리", href: "/admin/policies", icon: ShieldCheck },
     { label: "사용자 관리", href: "/admin/users", icon: Users },
