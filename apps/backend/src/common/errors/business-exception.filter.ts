@@ -6,6 +6,7 @@ import {
   Logger,
 } from "@nestjs/common";
 import { HttpAdapterHost } from "@nestjs/core";
+import { AUDIT_LOG_ERROR } from "../../audit-logs/audit-log.errors";
 import { AUTH_ERROR } from "../../auth/auth.errors";
 import { EXCEPTION_LIFECYCLE_ERROR } from "../../exception-lifecycle/exception-lifecycle.errors";
 import { EXCEPTION_REQUEST_ERROR } from "../../exception-requests/exception-request.errors";
@@ -17,6 +18,8 @@ import type { BusinessErrorCode } from "./business-error-catalog";
 import { BusinessException } from "./business.exception";
 
 export const BUSINESS_ERROR_HTTP_STATUS = {
+  [AUDIT_LOG_ERROR.NOT_FOUND.code]: HttpStatus.NOT_FOUND,
+  [AUDIT_LOG_ERROR.INVALID_DATE_RANGE.code]: HttpStatus.BAD_REQUEST,
   [AUTH_ERROR.INVALID_CREDENTIALS.code]: HttpStatus.UNAUTHORIZED,
   [AUTH_ERROR.INVALID_REFRESH_TOKEN.code]: HttpStatus.UNAUTHORIZED,
   [AUTH_ERROR.AUTHENTICATION_REQUIRED.code]: HttpStatus.UNAUTHORIZED,

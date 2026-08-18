@@ -1,3 +1,4 @@
+import { AUDIT_LOG_ERROR } from "../../audit-logs/audit-log.errors";
 import { AUTH_ERROR } from "../../auth/auth.errors";
 import { EXCEPTION_LIFECYCLE_ERROR } from "../../exception-lifecycle/exception-lifecycle.errors";
 import { EXCEPTION_REQUEST_ERROR } from "../../exception-requests/exception-request.errors";
@@ -7,6 +8,7 @@ import { USER_ERROR } from "../../users/user.errors";
 import { VIOLATION_ERROR } from "../../violations/violation.errors";
 
 export const BUSINESS_ERRORS = [
+  ...Object.values(AUDIT_LOG_ERROR),
   ...Object.values(AUTH_ERROR),
   ...Object.values(USER_ERROR),
   ...Object.values(EXCEPTION_LIFECYCLE_ERROR),
