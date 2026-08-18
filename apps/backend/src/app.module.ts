@@ -9,6 +9,7 @@ import { UsersModule } from "./users/users.module";
 import { ExceptionRequestsModule } from "./exception-requests/exception-requests.module";
 import { PoliciesModule } from "./policies/policies.module";
 import { ViolationsModule } from "./violations/violations.module";
+import { AuditLogsModule } from "./audit-logs/audit-logs.module";
 import { AiAgentModule } from "./ai-agent/ai-agent.module";
 import { HealthModule } from "./health/health.module";
 import { createPinoHttpConfig } from "./logging/pino-http.config";
@@ -28,6 +29,7 @@ import { createPinoHttpConfig } from "./logging/pino-http.config";
     ExceptionRequestsModule,
     PoliciesModule,
     ViolationsModule,
+    AuditLogsModule,
     AiAgentModule,
     HealthModule,
 
