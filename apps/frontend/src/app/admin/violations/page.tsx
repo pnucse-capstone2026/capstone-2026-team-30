@@ -31,14 +31,17 @@ import {
 import {
   exceptionClassName,
   exceptionLabel,
+  getViolations,
   policyViolations,
   severityClassName,
   severityLabel,
   statusClassName,
   statusLabel,
+  type PolicyViolation,
   type ViolationSeverity,
   type ViolationStatus,
 } from "@/lib/policy-violations";
+import { useEffect } from "react";
 
 const severityOptions: Array<"all" | ViolationSeverity> = [
   "all",
@@ -54,44 +57,8 @@ const statusOptions: Array<"all" | ViolationStatus> = [
   "resolved",
 ];
 
-const summaryCards = [
-  {
-    label: "전체 오류",
-    value: policyViolations.length.toString(),
-    detail: "감지된 정책 위반 이력",
-    icon: ShieldAlert,
-    className: "bg-amber-50 text-amber-600",
-  },
-  {
-    label: "긴급 처리",
-    value: policyViolations
-      .filter((item) => item.severity === "critical" || item.severity === "high")
-      .length.toString(),
-    detail: "긴급 또는 높음",
-    icon: AlertTriangle,
-    className: "bg-rose-50 text-rose-600",
-  },
-  {
-    label: "검토 중",
-    value: policyViolations
-      .filter((item) => item.status === "inReview")
-      .length.toString(),
-    detail: "담당자 확인 진행",
-    icon: Clock3,
-    className: "bg-blue-50 text-blue-600",
-  },
-  {
-    label: "해결 완료",
-    value: policyViolations
-      .filter((item) => item.status === "resolved")
-      .length.toString(),
-    detail: "정책 재검사 통과",
-    icon: CheckCircle2,
-    className: "bg-emerald-50 text-emerald-600",
-  },
-];
-
 export default function AdminViolationsPage() {
+  const [violations, setViolations] = useState<PolicyViolation[]>(policyViolations);
   const [query, setQuery] = useState("");
   const [cluster, setCluster] = useState("all");
   const [policy, setPolicy] = useState("all");
@@ -100,27 +67,76 @@ export default function AdminViolationsPage() {
   const [severity, setSeverity] = useState<"all" | ViolationSeverity>("all");
   const [status, setStatus] = useState<"all" | ViolationStatus>("all");
 
+  useEffect(() => {
+    let isMounted = true;
+    getViolations().then((data) => {
+      if (isMounted && data.length > 0) {
+        setViolations(data);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const summaryCards = [
+    {
+      label: "전체 오류",
+      value: violations.length.toString(),
+      detail: "감지된 정책 위반 이력",
+      icon: ShieldAlert,
+      className: "bg-amber-50 text-amber-600",
+    },
+    {
+      label: "긴급 처리",
+      value: violations
+        .filter((item) => item.severity === "critical" || item.severity === "high")
+        .length.toString(),
+      detail: "긴급 또는 높음",
+      icon: AlertTriangle,
+      className: "bg-rose-50 text-rose-600",
+    },
+    {
+      label: "검토 중",
+      value: violations
+        .filter((item) => item.status === "inReview")
+        .length.toString(),
+      detail: "담당자 확인 진행",
+      icon: Clock3,
+      className: "bg-blue-50 text-blue-600",
+    },
+    {
+      label: "해결 완료",
+      value: violations
+        .filter((item) => item.status === "resolved")
+        .length.toString(),
+      detail: "정책 재검사 통과",
+      icon: CheckCircle2,
+      className: "bg-emerald-50 text-emerald-600",
+    },
+  ];
+
   const clusters = useMemo(
-    () => Array.from(new Set(policyViolations.map((item) => item.clusterName))),
-    [],
+    () => Array.from(new Set(violations.map((item) => item.clusterName))),
+    [violations],
   );
   const policies = useMemo(
-    () => Array.from(new Set(policyViolations.map((item) => item.policyName))),
-    [],
+    () => Array.from(new Set(violations.map((item) => item.policyName))),
+    [violations],
   );
   const rules = useMemo(
-    () => Array.from(new Set(policyViolations.map((item) => item.ruleName))),
-    [],
+    () => Array.from(new Set(violations.map((item) => item.ruleName))),
+    [violations],
   );
   const namespaces = useMemo(
-    () => Array.from(new Set(policyViolations.map((item) => item.namespace))),
-    [],
+    () => Array.from(new Set(violations.map((item) => item.namespace))),
+    [violations],
   );
 
   const filteredViolations = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
-    return policyViolations.filter((violation) => {
+    return violations.filter((violation) => {
       const matchesQuery =
         normalizedQuery.length === 0 ||
         [

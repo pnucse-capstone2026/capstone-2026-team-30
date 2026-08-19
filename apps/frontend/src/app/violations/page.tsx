@@ -20,10 +20,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   exceptionClassName,
+  getViolations,
   policyViolations,
   severityClassName,
   statusClassName,
   type ExceptionStatus,
+  type PolicyViolation,
   type ViolationSeverity,
   type ViolationStatus,
 } from "@/lib/policy-violations";
@@ -33,6 +35,7 @@ const severityLabel: Record<ViolationSeverity, string> = {
   high: "높음",
   medium: "중간",
   low: "낮음",
+  info: "정보",
 };
 
 const statusLabel: Record<ViolationStatus, string> = {
@@ -59,16 +62,16 @@ const violationCopy: Record<
     recommendation: "컨테이너 resources.limits에 cpu와 memory 값을 추가한 뒤 다시 배포하세요.",
   },
   "vio-002": {
-    message: "worker Pod가 latest 이미지 태그를 사용하고 있습니다.",
-    recommendation: "재현 가능한 배포를 위해 빌드 번호나 SemVer 기반의 고정 태그를 사용하세요.",
+    message: "batch-sync-worker 컨테이너가 latest 이미지 태그를 참조하고 있습니다.",
+    recommendation: "고정된 이미지 태그나 digest를 지정해 항상 동일한 이미지가 실행되도록 변경하세요.",
   },
   "vio-003": {
-    message: "user-service 리소스에 team 라벨이 없습니다.",
-    recommendation: "metadata.labels.team 값을 추가해 소유 팀을 추적할 수 있게 하세요.",
+    message: "payments 네임스페이스 리소스에 team 라벨이 누락되었습니다.",
+    recommendation: "metadata.labels에 team: payments 라벨을 추가하세요.",
   },
   "vio-004": {
-    message: "node-exporter가 제한된 hostPath 볼륨을 사용하고 있습니다.",
-    recommendation: "승인된 모니터링 목적의 예외인지 확인하고 만료 전 대체 구성을 검토하세요.",
+    message: "crypto-wallet-cron 컨테이너가 privileged 모드로 실행되고 있습니다.",
+    recommendation: "보안 취약점 방지를 위해 securityContext.privileged 설정을 제거하거나 false로 변경하세요.",
   },
   "vio-005": {
     message: "허용된 이미지 레지스트리 접두어가 누락되어 정책 보정이 필요합니다.",
@@ -99,6 +102,7 @@ const exceptionOptions: Array<"all" | ExceptionStatus> = [
 ];
 
 export default function MyViolationsPage() {
+  const [violations, setViolations] = useState<PolicyViolation[]>(policyViolations);
   const [query, setQuery] = useState("");
   const [cluster, setCluster] = useState("all");
   const [policy, setPolicy] = useState("all");
@@ -107,23 +111,35 @@ export default function MyViolationsPage() {
   const [status, setStatus] = useState<"all" | ViolationStatus>("all");
   const [exceptionStatus, setExceptionStatus] = useState<"all" | ExceptionStatus>("all");
 
+  useEffect(() => {
+    let isMounted = true;
+    getViolations().then((data) => {
+      if (isMounted && data.length > 0) {
+        setViolations(data);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const clusters = useMemo(
-    () => Array.from(new Set(policyViolations.map((item) => item.clusterName))),
-    [],
+    () => Array.from(new Set(violations.map((item) => item.clusterName))),
+    [violations],
   );
   const policies = useMemo(
-    () => Array.from(new Set(policyViolations.map((item) => item.policyName))),
-    [],
+    () => Array.from(new Set(violations.map((item) => item.policyName))),
+    [violations],
   );
   const namespaces = useMemo(
-    () => Array.from(new Set(policyViolations.map((item) => item.namespace))),
-    [],
+    () => Array.from(new Set(violations.map((item) => item.namespace))),
+    [violations],
   );
 
   const filteredViolations = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
-    return policyViolations.filter((violation) => {
+    return violations.filter((violation) => {
       const copy = violationCopy[violation.id];
       const matchesQuery =
         normalizedQuery.length === 0 ||

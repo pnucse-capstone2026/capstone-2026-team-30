@@ -28,31 +28,53 @@ import {
   auditLogs,
   entityTypeClassName,
   entityTypeLabel,
+  getAuditLogs,
   type AuditLog,
 } from "@/lib/audit-logs";
+import { useEffect } from "react";
 
 type EntityFilter = "all" | AuditLog["entityType"];
 type ActorRoleFilter = "all" | AuditLog["actorRole"];
-
-const entityOptions = Array.from(new Set(auditLogs.map((log) => log.entityType)));
-const actorRoleOptions = Array.from(new Set(auditLogs.map((log) => log.actorRole)));
 
 const roleLabel: Record<AuditLog["actorRole"], string> = {
   ADMIN: "관리자",
   APPROVER: "승인자",
   REQUESTER: "요청자",
   VIEWER: "조회자",
+  SYSTEM: "시스템",
 };
 
 export default function AdminAuditLogsPage() {
+  const [logs, setLogs] = useState<AuditLog[]>(auditLogs);
   const [query, setQuery] = useState("");
   const [entityType, setEntityType] = useState<EntityFilter>("all");
   const [actorRole, setActorRole] = useState<ActorRoleFilter>("all");
 
+  useEffect(() => {
+    let isMounted = true;
+    getAuditLogs({ limit: 100 }).then((res) => {
+      if (isMounted && res.items.length > 0) {
+        setLogs(res.items);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const entityOptions = useMemo(
+    () => Array.from(new Set(logs.map((log) => log.entityType))),
+    [logs],
+  );
+  const actorRoleOptions = useMemo(
+    () => Array.from(new Set(logs.map((log) => log.actorRole))),
+    [logs],
+  );
+
   const filteredLogs = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
-    return auditLogs.filter((log) => {
+    return logs.filter((log) => {
       const matchesQuery =
         normalizedQuery.length === 0 ||
         [

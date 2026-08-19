@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { DashboardPageShell } from "@/components/dashboard/dashboard-page-shell";
+import { AiErrorExplainerDialog } from "@/components/ai-agent/ai-error-explainer-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -140,18 +141,26 @@ export default async function MyViolationDetailPage({
             {copy?.message ?? violation.message}
           </p>
         </div>
-        {violation.relatedExceptionId ? (
-          <Button asChild className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]">
-            <Link href={`/exceptions/${violation.relatedExceptionId}`}>내 신청 보기</Link>
-          </Button>
-        ) : (
-          <Button asChild className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]">
-            <Link href="/exceptions/new">
-              <FilePlus2 className="size-4" />
-              예외 신청
-            </Link>
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <AiErrorExplainerDialog
+            errorMessage={copy?.message ?? violation.message}
+            policyName={violation.policyName}
+            resourceManifest={violation.manifest}
+            clusterContext={violation.clusterName}
+          />
+          {violation.relatedExceptionId ? (
+            <Button asChild className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]">
+              <Link href={`/exceptions/${violation.relatedExceptionId}`}>내 신청 보기</Link>
+            </Button>
+          ) : (
+            <Button asChild className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]">
+              <Link href="/exceptions/new">
+                <FilePlus2 className="size-4" />
+                예외 신청 작성
+              </Link>
+            </Button>
+          )}
+        </div>
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">

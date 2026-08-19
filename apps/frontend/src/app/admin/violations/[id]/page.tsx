@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar";
+import { AiErrorExplainerDialog } from "@/components/ai-agent/ai-error-explainer-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -132,6 +133,12 @@ export default async function AdminViolationDetailPage({
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <AiErrorExplainerDialog
+                errorMessage={violation.message}
+                policyName={violation.policyName}
+                resourceManifest={violation.manifest}
+                clusterContext={violation.clusterName}
+              />
               <Button
                 variant="outline"
                 className="h-10 rounded-xl border-slate-200 bg-white text-slate-700"

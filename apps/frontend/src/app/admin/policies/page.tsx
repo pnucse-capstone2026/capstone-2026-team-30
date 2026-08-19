@@ -27,12 +27,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  getPolicies,
   kyvernoPolicies,
   policyModeLabel,
   policyStatusClassName,
   policyStatusLabel,
   policyTypeClassName,
   policyTypeLabel,
+  type KyvernoPolicy,
   type PolicyMode,
   type PolicyScope,
   type PolicyStatus,
@@ -50,6 +52,7 @@ const modeOptions: PolicyMode[] = ["enforce", "audit"];
 const statusOptions: PolicyStatus[] = ["active", "warning", "draft"];
 
 export default function AdminPoliciesPage() {
+  const [policies, setPolicies] = useState<KyvernoPolicy[]>(kyvernoPolicies);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("all");
@@ -57,15 +60,27 @@ export default function AdminPoliciesPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [clusterFilter, setClusterFilter] = useState("all");
 
+  useEffect(() => {
+    let isMounted = true;
+    getPolicies().then((data) => {
+      if (isMounted && data.length > 0) {
+        setPolicies(data);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const clusters = useMemo(
-    () => Array.from(new Set(kyvernoPolicies.map((policy) => policy.clusterName))),
-    [],
+    () => Array.from(new Set(policies.map((p) => p.clusterName))),
+    [policies],
   );
 
   const filteredPolicies = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
-    return kyvernoPolicies.filter((policy) => {
+    return policies.filter((policy) => {
       const matchesQuery =
         normalizedQuery.length === 0 ||
         [

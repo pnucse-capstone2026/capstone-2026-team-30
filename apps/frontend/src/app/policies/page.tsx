@@ -21,16 +21,19 @@ import {
   exceptionStatusLabel,
 } from "@/lib/exception-requests";
 import {
+  getPolicies,
   kyvernoPolicies,
   policyModeLabel,
   policyStatusClassName,
   policyStatusLabel,
   policyTypeClassName,
   policyTypeLabel,
+  type KyvernoPolicy,
   type PolicyMode,
   type PolicyStatus,
   type PolicyType,
 } from "@/lib/policies";
+import { useEffect } from "react";
 
 type TypeFilter = "all" | PolicyType;
 type ModeFilter = "all" | PolicyMode;
@@ -41,12 +44,26 @@ const modeOptions: PolicyMode[] = ["enforce", "audit"];
 const statusOptions: PolicyStatus[] = ["active", "warning"];
 
 export default function PoliciesPage() {
-  const visiblePolicies = kyvernoPolicies.filter((policy) => policy.status !== "draft");
+  const [policies, setPolicies] = useState<KyvernoPolicy[]>(kyvernoPolicies);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [modeFilter, setModeFilter] = useState<ModeFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [clusterFilter, setClusterFilter] = useState("all");
+
+  useEffect(() => {
+    let isMounted = true;
+    getPolicies().then((data) => {
+      if (isMounted && data.length > 0) {
+        setPolicies(data);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const visiblePolicies = policies.filter((policy) => policy.status !== "draft");
 
   const clusters = useMemo(
     () => Array.from(new Set(visiblePolicies.map((policy) => policy.clusterName))),
