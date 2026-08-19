@@ -2,7 +2,7 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { AuditActorType, Role } from "@prisma/client";
 import { BusinessException } from "../common/errors/business.exception";
 import { PrismaService } from "../prisma/prisma.service";
-import { AUDIT_LOG_ERROR } from "./audit-log.errors";
+import { AUDIT_LOG_ERROR } from "./audit-logs.errors";
 import { AuditLogsService } from "./audit-logs.service";
 
 describe("AuditLogsService", () => {

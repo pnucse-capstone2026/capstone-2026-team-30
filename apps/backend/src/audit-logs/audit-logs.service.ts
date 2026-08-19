@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { BusinessException } from "../common/errors/business.exception";
 import { PrismaService } from "../prisma/prisma.service";
-import { AUDIT_LOG_ERROR } from "./audit-log.errors";
+import { AUDIT_LOG_ERROR } from "./audit-logs.errors";
 import { AuditLogItemDto } from "./dto/audit-log-item.dto";
 import { ListAuditLogsQueryDto } from "./dto/list-audit-logs-query.dto";
 import { PaginatedAuditLogsDto } from "./dto/paginated-audit-logs.dto";

@@ -1,4 +1,4 @@
-import { AUDIT_LOG_ERROR } from "../../audit-logs/audit-log.errors";
+import { AUDIT_LOG_ERROR } from "../../audit-logs/audit-logs.errors";
 import { AUTH_ERROR } from "../../auth/auth.errors";
 import { EXCEPTION_LIFECYCLE_ERROR } from "../../exception-lifecycle/exception-lifecycle.errors";
 import { EXCEPTION_REQUEST_ERROR } from "../../exception-requests/exception-request.errors";

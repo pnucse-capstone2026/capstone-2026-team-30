@@ -191,7 +191,7 @@ export class ViolationsService {
     user: AuthenticatedUser,
     clusterId: string,
   ): ClusterMetadata {
-    if (!user.clusterIds.includes(clusterId)) {
+    if (user.role !== "ADMIN" && !user.clusterIds.includes(clusterId)) {
       throw new BusinessException(VIOLATION_ERROR.CLUSTER_ACCESS_DENIED);
     }
     const all = this.clusters.list();
@@ -207,7 +207,10 @@ export class ViolationsService {
     targetClusterId?: string,
   ): ClusterMetadata[] {
     const all = this.clusters.list();
-    const userClusters = all.filter((c) => user.clusterIds.includes(c.id));
+    const userClusters =
+      user.role === "ADMIN"
+        ? all
+        : all.filter((c) => user.clusterIds.includes(c.id));
 
     if (targetClusterId) {
       return userClusters.filter((c) => c.id === targetClusterId);

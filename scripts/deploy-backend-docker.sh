@@ -41,7 +41,7 @@ aws ecr get-login-password --region "${REGION}" | docker login --username AWS --
 
 # 모노레포 루트 컨텍스트에서 백엔드 프로덕션 이미지 빌드 (Slim glibc 베이스 + Prisma Client 포함)
 echo ">>> Building NestJS backend Docker image from apps/backend/Dockerfile..."
-docker build -t "${REPO_NAME}:latest" -f "${ROOT_DIR}/apps/backend/Dockerfile" "${ROOT_DIR}"
+docker build --no-cache -t "${REPO_NAME}:latest" -f "${ROOT_DIR}/apps/backend/Dockerfile" "${ROOT_DIR}"
 
 # ECR 원격 레지스트리로 푸시
 echo ">>> Tagging and Pushing image to Amazon ECR..."
@@ -57,10 +57,20 @@ echo ">>> Ensuring 'kyverno-platform' namespace and foundational resources exist
 # PostgreSQL 롤아웃 상태 대기
 "${KUBECTL}" rollout status deployment/postgres -n kyverno-platform --timeout=120s || true
 
+# PostgreSQL 데이터베이스 스키마 및 시드 데이터 자동 동기화
+echo ">>> Synchronizing PostgreSQL schema and seeding initial admin/RBAC..."
+"${KUBECTL}" port-forward svc/postgres 5432:5432 -n kyverno-platform > /dev/null 2>&1 &
+PF_PG_PID=$!
+sleep 3
+DATABASE_URL="postgresql://devuser:devpassword@localhost:5432/kyverno_dashboard?schema=public" pnpm --filter @kyverno-platform/backend exec prisma db push --accept-data-loss || true
+DATABASE_URL="postgresql://devuser:devpassword@localhost:5432/kyverno_dashboard?schema=public" SEED_ADMIN_EMAIL="admin@example.com" SEED_ADMIN_PASSWORD="change-this-admin-password" pnpm --filter @kyverno-platform/backend exec prisma db seed || true
+kill $PF_PG_PID 2>/dev/null || true
+
 # EKS 클러스터 Deployment 이미지 갱신 및 무중단 롤아웃 수행
 echo ">>> Updating EKS deployment 'kyverno-backend' with new ECR image..."
 "${KUBECTL}" apply -f "${ROOT_DIR}/k8s-manifests/system/backend.yaml"
 "${KUBECTL}" set image deployment/kyverno-backend backend="${ECR_URI}" -n kyverno-platform
+"${KUBECTL}" rollout restart deployment/kyverno-backend -n kyverno-platform
 "${KUBECTL}" rollout status deployment/kyverno-backend -n kyverno-platform --timeout=180s
 
 echo "=========================================================="
