@@ -77,7 +77,7 @@ export function PolicyForm({
           status: policy.status,
           clusterName: policy.clusterName,
           namespace: policy.namespace ?? "",
-          owner: policy.owner,
+          owner: policy.owner ?? "플랫폼팀",
           ruleName: `${policy.type}-${policy.name}`,
           matchKinds: "Pod, Deployment",
           message: policy.description,

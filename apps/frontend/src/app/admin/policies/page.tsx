@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -105,15 +105,15 @@ export default function AdminPoliciesPage() {
         (clusterFilter === "all" || policy.clusterName === clusterFilter)
       );
     });
-  }, [clusterFilter, modeFilter, query, scopeFilter, statusFilter, typeFilter]);
+  }, [policies, clusterFilter, modeFilter, query, scopeFilter, statusFilter, typeFilter]);
 
-  const activePolicies = kyvernoPolicies.filter(
+  const activePolicies = policies.filter(
     (policy) => policy.status === "active",
   ).length;
-  const warningPolicies = kyvernoPolicies.filter(
+  const warningPolicies = policies.filter(
     (policy) => policy.status === "warning",
   ).length;
-  const totalViolations = kyvernoPolicies.reduce(
+  const totalViolations = policies.reduce(
     (sum, policy) => sum + policy.violationCount,
     0,
   );

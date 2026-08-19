@@ -95,7 +95,7 @@ export default function AdminAuditLogsPage() {
         (actorRole === "all" || log.actorRole === actorRole)
       );
     });
-  }, [actorRole, entityType, query]);
+  }, [logs, actorRole, entityType, query]);
 
   function resetFilters() {
     setQuery("");

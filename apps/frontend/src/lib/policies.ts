@@ -190,6 +190,7 @@ export const policyTypeLabel: Record<PolicyType, string> = {
   validate: "검증",
   mutate: "변경",
   generate: "생성",
+  verifyImages: "이미지 검증",
 };
 
 export const policyModeLabel: Record<PolicyMode, string> = {
@@ -213,4 +214,5 @@ export const policyTypeClassName: Record<PolicyType, string> = {
   validate: "bg-blue-50 text-blue-700 ring-1 ring-blue-100",
   mutate: "bg-violet-50 text-violet-700 ring-1 ring-violet-100",
   generate: "bg-cyan-50 text-cyan-700 ring-1 ring-cyan-100",
+  verifyImages: "bg-teal-50 text-teal-700 ring-1 ring-teal-100",
 };

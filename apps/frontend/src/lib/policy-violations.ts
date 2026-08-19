@@ -405,6 +405,7 @@ export const severityLabel: Record<ViolationSeverity, string> = {
   high: "높음",
   medium: "중간",
   low: "낮음",
+  info: "정보",
 };
 
 export const severityClassName: Record<ViolationSeverity, string> = {
@@ -412,6 +413,7 @@ export const severityClassName: Record<ViolationSeverity, string> = {
   high: "bg-orange-50 text-orange-700 ring-1 ring-orange-100",
   medium: "bg-amber-50 text-amber-700 ring-1 ring-amber-100",
   low: "bg-slate-100 text-slate-600 ring-1 ring-slate-200",
+  info: "bg-blue-50 text-blue-700 ring-1 ring-blue-100",
 };
 
 export const statusLabel: Record<ViolationStatus, string> = {

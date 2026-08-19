@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -33,7 +33,6 @@ import {
   type PolicyStatus,
   type PolicyType,
 } from "@/lib/policies";
-import { useEffect } from "react";
 
 type TypeFilter = "all" | PolicyType;
 type ModeFilter = "all" | PolicyMode;

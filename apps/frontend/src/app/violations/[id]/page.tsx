@@ -33,6 +33,7 @@ const severityLabel = {
   high: "높음",
   medium: "중간",
   low: "낮음",
+  info: "정보",
 };
 
 const statusLabel = {

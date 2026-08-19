@@ -163,7 +163,7 @@ export default function AdminViolationsPage() {
         (status === "all" || violation.status === status)
       );
     });
-  }, [cluster, namespace, policy, query, rule, severity, status]);
+  }, [violations, cluster, namespace, policy, query, rule, severity, status]);
 
   function resetFilters() {
     setQuery("");

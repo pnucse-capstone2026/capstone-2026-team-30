@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -167,16 +167,16 @@ export default function MyViolationsPage() {
         (exceptionStatus === "all" || violation.exceptionStatus === exceptionStatus)
       );
     });
-  }, [cluster, exceptionStatus, namespace, policy, query, severity, status]);
+  }, [violations, cluster, exceptionStatus, namespace, policy, query, severity, status]);
 
-  const openCount = policyViolations.filter((item) => item.status === "open").length;
-  const urgentCount = policyViolations.filter(
+  const openCount = violations.filter((item) => item.status === "open").length;
+  const urgentCount = violations.filter(
     (item) => item.severity === "critical" || item.severity === "high",
   ).length;
-  const exceptionRequestedCount = policyViolations.filter(
+  const exceptionRequestedCount = violations.filter(
     (item) => item.exceptionStatus !== "none",
   ).length;
-  const resolvedCount = policyViolations.filter((item) => item.status === "resolved").length;
+  const resolvedCount = violations.filter((item) => item.status === "resolved").length;
 
   function resetFilters() {
     setQuery("");
