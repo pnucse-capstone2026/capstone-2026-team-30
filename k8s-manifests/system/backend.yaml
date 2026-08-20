@@ -44,6 +44,11 @@ spec:
               value: "us-east-1"
             - name: BEDROCK_MODEL_ID
               value: "anthropic.claude-3-5-sonnet-20240620-v1:0"
+            # GitOps 게시 배포 전략 및 임시 예외 TTL 필터링 환경 변수
+            - name: GITOPS_PUBLISHING_MODE
+              value: "DUAL_PATH"
+            - name: GITOPS_MIN_DURATION_HOURS
+              value: "24"
           ports:
             - containerPort: 3001
           # 인스턴스 자원 고갈 및 OOMKilled 방지를 위한 리소스 상한선 설정
