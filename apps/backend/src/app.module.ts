@@ -12,6 +12,7 @@ import { ViolationsModule } from "./violations/violations.module";
 import { AuditLogsModule } from "./audit-logs/audit-logs.module";
 import { AiAgentModule } from "./ai-agent/ai-agent.module";
 import { HealthModule } from "./health/health.module";
+import { GitOpsModule } from "./gitops/gitops.module";
 import { createPinoHttpConfig } from "./logging/pino-http.config";
 
 /**
@@ -32,6 +33,7 @@ import { createPinoHttpConfig } from "./logging/pino-http.config";
     AuditLogsModule,
     AiAgentModule,
     HealthModule,
+    GitOpsModule,
 
     // 구조화된 Pino HTTP 로거 설정
     LoggerModule.forRoot({
