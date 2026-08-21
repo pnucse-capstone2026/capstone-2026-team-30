@@ -1,8 +1,62 @@
+import * as fs from "fs";
+import * as path from "path";
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PolicyExceptionRequest } from "@prisma/client";
+import { dumpYaml } from "@kubernetes/client-node";
+import { buildPolicyExceptionManifest } from "../kubernetes/policy-exception-manifest";
 
 export type PublishingMode = "DUAL_PATH" | "STRICT_GITOPS" | "RUNTIME_ONLY";
+
+/**
+ * PolicyExceptionRequest 객체를 kyverno.io/v2 PolicyException YAML 포맷으로 직렬화합니다.
+ *
+ * @param request 승인된 정책 예외 요청 객체
+ * @returns kyverno.io/v2 규격의 YAML 문자열
+ */
+export function dumpPolicyExceptionYaml(
+  request: PolicyExceptionRequest,
+): string {
+  const namespace = request.resourceNamespace || "default";
+  const ruleNames =
+    request.appliedRuleNames && request.appliedRuleNames.length > 0
+      ? request.appliedRuleNames
+      : request.ruleNames;
+
+  const manifest = buildPolicyExceptionManifest({
+    name: request.k8sExceptionName || `pac-exception-${request.id}`,
+    namespace,
+    requestId: request.id,
+    policyName: request.policyName,
+    ruleNames,
+    resourceKind: request.resourceKind,
+    resourceName: request.resourceName,
+    resourceNamespace: request.resourceNamespace,
+  });
+
+  const v2Manifest = {
+    ...manifest,
+    apiVersion: "kyverno.io/v2",
+  };
+
+  return dumpYaml(v2Manifest);
+}
+
+/**
+ * GitOps 매니페스트 저장 대상 상대 경로를 생성합니다.
+ *
+ * @param request 승인된 정책 예외 요청 객체
+ * @returns k8s-manifests/exceptions/<namespace>/<request-id>.yaml 포맷의 상대 경로
+ */
+export function getGitOpsRelativePath(request: PolicyExceptionRequest): string {
+  const namespace = request.resourceNamespace || "default";
+  return path.join(
+    "k8s-manifests",
+    "exceptions",
+    namespace,
+    `${request.id}.yaml`,
+  );
+}
 
 /**
  * GitOps 매니페스트 게시 및 Dual-Path 배포 제어
@@ -32,6 +86,26 @@ export class GitOpsPublisherService {
         : 24;
   }
 
+  /**
+   * PolicyExceptionRequest를 kyverno.io/v2 PolicyException YAML 문자열로 변환합니다.
+   *
+   * @param request 승인된 정책 예외 요청 객체
+   * @returns kyverno.io/v2 YAML 문자열
+   */
+  dumpPolicyExceptionYaml(request: PolicyExceptionRequest): string {
+    return dumpPolicyExceptionYaml(request);
+  }
+
+  /**
+   * GitOps 매니페스트 저장 상대 경로를 반환합니다.
+   *
+   * @param request 승인된 정책 예외 요청 객체
+   * @returns 매니페스트 파일 상대 경로
+   */
+  getGitOpsRelativePath(request: PolicyExceptionRequest): string {
+    return getGitOpsRelativePath(request);
+  }
+
   // 런타임 모드 검사
   shouldApplyDirectly(emergencyBypass = false): boolean {
     if (emergencyBypass) return true;
@@ -41,10 +115,13 @@ export class GitOpsPublisherService {
     );
   }
 
-  // 잔여수명, 정책 등을 검사하여 GitOps 매니페스트 수행
-  async publishManifest(
-    request: PolicyExceptionRequest,
-  ): Promise<{
+  /**
+   * 승인된 PolicyException 요청에 대한 GitOps 매니페스트를 생성하고 로컬 파일 시스템에 저장합니다.
+   *
+   * @param request 승인된 정책 예외 요청 객체
+   * @returns 매니페스트 게시 및 런타임 적용 결과 객체
+   */
+  async publishManifest(request: PolicyExceptionRequest): Promise<{
     publishedToGitOps: boolean;
     appliedDirectly: boolean;
     filePath?: string;
@@ -58,14 +135,46 @@ export class GitOpsPublisherService {
       return { publishedToGitOps: false, appliedDirectly };
     }
 
-    // TODO: connect getGitOpsRelativePath and dumpPolicyExceptionYaml here
-    this.logger.log(
-      `[Draft] GitOps publish triggered for request ${request.id} (minDurationHours: ${this.minDurationHours}h)`,
-    );
+    try {
+      const yamlContent = dumpPolicyExceptionYaml(request);
+      const relativePath = getGitOpsRelativePath(request);
 
-    return {
-      publishedToGitOps: true,
-      appliedDirectly,
-    };
+      // 모노레포 루트 또는 패키지 실행 위치에 대응하여 k8s-manifests 디렉토리 결정
+      let baseDir = path.resolve(process.cwd(), "k8s-manifests");
+      if (
+        !fs.existsSync(baseDir) &&
+        fs.existsSync(path.resolve(process.cwd(), "../../k8s-manifests"))
+      ) {
+        baseDir = path.resolve(process.cwd(), "../../k8s-manifests");
+      }
+
+      const namespace = request.resourceNamespace || "default";
+      const targetDir = path.join(baseDir, "exceptions", namespace);
+      const targetFilePath = path.join(targetDir, `${request.id}.yaml`);
+
+      fs.mkdirSync(targetDir, { recursive: true });
+      fs.writeFileSync(targetFilePath, yamlContent, "utf8");
+
+      this.logger.log(
+        `[Mock GitOps] Manifest successfully saved to ${targetFilePath} for request ${request.id} (minDurationHours: ${this.minDurationHours}h)`,
+      );
+
+      return {
+        publishedToGitOps: true,
+        appliedDirectly,
+        filePath: relativePath,
+      };
+    } catch (error) {
+      // remote Git 접근 오류나 파일 시스템 이슈 발생 시 런타임 직접 적용으로 안전하게 폴백
+      this.logger.error(
+        `Failed to generate GitOps manifest for request ${request.id}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return {
+        publishedToGitOps: false,
+        appliedDirectly: true,
+      };
+    }
   }
 }
