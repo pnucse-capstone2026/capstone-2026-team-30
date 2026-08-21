@@ -1,0 +1,37 @@
+# Pod Security Standards(PSS) 기준을 충족하고 호스트 노드 권한 에스컬레이션을 차단하기 위해 privileged 모드를 금지하는 Kyverno 정책
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-privileged-containers
+  annotations:
+    policies.kyverno.io/title: Disallow Privileged Containers
+    policies.kyverno.io/category: Pod Security Standards (PSS)
+    policies.kyverno.io/minversion: "1.6.0"
+    policies.kyverno.io/severity: Critical
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      특권(privileged) 모드로 실행되는 컨테이너는 호스트 노드의 모든 장치 및 보안 경계를 우회할 수 있어
+      치명적인 보안 위험을 초래합니다. main, init, ephemeral 컨테이너 전반에서 privileged: true 설정을 전면 금지합니다.
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: disallow-privileged-containers
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: "privileged: true 옵션이 설정된 특권 컨테이너는 보안 정책상 실행될 수 없습니다."
+        pattern:
+          spec:
+            =(ephemeralContainers):
+              - =(securityContext):
+                  =(privileged): "!true"
+            =(initContainers):
+              - =(securityContext):
+                  =(privileged): "!true"
+            containers:
+              - =(securityContext):
+                  =(privileged): "!true"

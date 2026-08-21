@@ -1,18 +1,18 @@
+# 모노레포 및 프로덕션 환경의 공급망 보안을 위해 컨테이너 이미지 태그 유효성을 검증하는 Kyverno 정책
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
   name: disallow-latest-tag
   annotations:
     policies.kyverno.io/title: Disallow Latest Tag
-    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/category: Best Practices & Supply Chain
     policies.kyverno.io/minversion: "1.6.0"
-    policies.kyverno.io/severity: medium
+    policies.kyverno.io/severity: High
     policies.kyverno.io/subject: Pod
     policies.kyverno.io/description: >-
-      컨테이너 이미지에 :latest 태그를 사용하면 이미지가 예고 없이 교체될 수 있어
-      재현 불가능한 배포 환경이 만들어집니다. 모든 Pod는 커밋 해시나 버전 번호와 같은
-      고정된 이미지 태그를 사용해야 합니다.
-      출처: https://kyverno.io/policies/best-practices/disallow-latest-tag/
+      컨테이너 이미지에 :latest 태그를 사용하거나 명시적 태그가 누락되면 이미지가 불확실하게 업데이트되어
+      재현 불가능한 배포 환경 및 보안 취약점을 유발합니다. 모든 Pod 컨테이너(main, init, ephemeral)는
+      명시적인 버전/커밋 해시 태그를 사용해야 합니다.
 spec:
   validationFailureAction: Audit
   background: true
@@ -24,9 +24,13 @@ spec:
               kinds:
                 - Pod
       validate:
-        message: "이미지 태그를 반드시 명시해야 합니다. ':latest' 태그 또는 태그 없는 이미지는 허용되지 않습니다."
+        message: "이미지 태그를 반드시 명시해야 합니다. 태그가 없는 이미지는 허용되지 않습니다."
         pattern:
           spec:
+            =(ephemeralContainers):
+              - image: "*:*"
+            =(initContainers):
+              - image: "*:*"
             containers:
               - image: "*:*"
 
@@ -37,8 +41,12 @@ spec:
               kinds:
                 - Pod
       validate:
-        message: "':latest' 태그는 이미지 재현성을 보장하지 않으므로 사용할 수 없습니다. 커밋 해시 또는 버전 태그를 사용하세요."
+        message: "':latest' 태그는 이미지 재현성과 안정성을 보장하지 않으므로 사용할 수 없습니다. 커밋 해시 또는 특정 버전 태그를 사용하세요."
         pattern:
           spec:
+            =(ephemeralContainers):
+              - image: "!*:latest"
+            =(initContainers):
+              - image: "!*:latest"
             containers:
               - image: "!*:latest"

@@ -1,29 +1,49 @@
+# Production Kyverno Policies 검증용 CLI 자동화 스위트
 apiVersion: cli.kyverno.io/v1alpha1
 kind: Test
 metadata:
-  name: disallow-latest-tag-test
+  name: production-policies-test
 policies:
   - disallow-latest-tag.yaml
+  - require-resource-limits.yaml
+  - disallow-privileged-containers.yaml
 resources:
-  - resource.yaml
+  - ../testbed/violating-web-app.yaml
+  - ../testbed/violating-privileged-debugger.yaml
+  - ../testbed/compliant-app.yaml
 results:
   - policy: disallow-latest-tag
-    rule: require-image-tag
-    resource: bad-pod
-    kind: Pod
-    result: pass
-  - policy: disallow-latest-tag
-    rule: require-image-tag
-    resource: good-pod
-    kind: Pod
-    result: pass
-  - policy: disallow-latest-tag
     rule: disallow-latest-tag
-    resource: bad-pod
+    resource: violating-web-app
+    kind: Pod
+    result: fail
+  - policy: require-resource-limits
+    rule: validate-resource-requests-limits
+    resource: violating-web-app
+    kind: Pod
+    result: fail
+  - policy: disallow-privileged-containers
+    rule: disallow-privileged-containers
+    resource: violating-privileged-debugger
+    kind: Pod
+    result: fail
+  - policy: require-resource-limits
+    rule: validate-resource-requests-limits
+    resource: violating-privileged-debugger
     kind: Pod
     result: fail
   - policy: disallow-latest-tag
     rule: disallow-latest-tag
-    resource: good-pod
+    resource: compliant-app
+    kind: Pod
+    result: pass
+  - policy: require-resource-limits
+    rule: validate-resource-requests-limits
+    resource: compliant-app
+    kind: Pod
+    result: pass
+  - policy: disallow-privileged-containers
+    rule: disallow-privileged-containers
+    resource: compliant-app
     kind: Pod
     result: pass

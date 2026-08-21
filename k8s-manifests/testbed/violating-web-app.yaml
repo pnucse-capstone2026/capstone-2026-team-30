@@ -1,0 +1,14 @@
+# Kyverno 거버넌스 정책(disallow-latest-tag 및 require-resource-limits) 위반 감지를 검증하기 위한 웹 애플리케이션 파드
+apiVersion: v1
+kind: Pod
+metadata:
+  name: violating-web-app
+  namespace: governance-testbed
+  labels:
+    app: violating-web-app
+spec:
+  containers:
+    - name: web-server
+      image: nginx:latest
+      ports:
+        - containerPort: 80
