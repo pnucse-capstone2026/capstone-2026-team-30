@@ -68,15 +68,16 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 5
-          # 프로세스 데드락 및 장애 발생 시 자동 재기동을 통한 고가용성 유지
+          # 프로세스 데드락 및 장애 발생 시 자동 재기동을 통한 고가용성 유지 (Readiness 프로브 타임라인 정렬)
           livenessProbe:
             httpGet:
               path: /api/health
               port: 3001
-            initialDelaySeconds: 10
-            periodSeconds: 10
+            initialDelaySeconds: 5
+            periodSeconds: 5
             timeoutSeconds: 3
-            failureThreshold: 3
+            failureThreshold: 5
+
 ---
 # 클러스터 내부 통신 및 로컬 포트포워딩 진입을 위한 백엔드 Service
 apiVersion: v1

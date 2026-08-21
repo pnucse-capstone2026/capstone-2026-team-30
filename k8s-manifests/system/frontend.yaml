@@ -54,15 +54,16 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 5
-          # UI 웹 프로세스 멈춤 현상 발생 시 자동 복구를 위한 라이브니스 프로브
+          # UI 웹 프로세스 멈춤 현상 발생 시 자동 복구를 위한 라이브니스 프로브 (Readiness 프로브 타임라인 정렬)
           livenessProbe:
             httpGet:
               path: /
               port: 3000
-            initialDelaySeconds: 10
-            periodSeconds: 10
+            initialDelaySeconds: 5
+            periodSeconds: 5
             timeoutSeconds: 3
-            failureThreshold: 3
+            failureThreshold: 5
+
 ---
 # 외부 노출을 위한 프론트엔드 Service
 apiVersion: v1

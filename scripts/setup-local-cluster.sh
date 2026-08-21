@@ -92,7 +92,7 @@ helm upgrade --install kyverno kyverno/kyverno \
 echo ">>> Waiting for Kyverno Admission Controller to be Ready..."
 kubectl -n kyverno rollout status deployment/kyverno-admission-controller --timeout=300s
 
-# 9. 기본 테스트 정책 배포
+# 9. 기본 테스트 정책 배포 (Disallow latest tag 등 보안 베이스라인 규정)
 POLICIES_PATH="${SCRIPT_DIR}/../k8s-manifests/policies/disallow-latest-tag.yaml"
 if [ -f "${POLICIES_PATH}" ]; then
   echo ">>> Applying initial baseline policies..."
@@ -102,6 +102,11 @@ else
   echo ">>> Baseline policy path not found at: ${POLICIES_PATH}"
 fi
 
+# 10. 로컬 플랫폼 네임스페이스 생성 사전 보장
+echo ">>> Ensuring 'kyverno-platform' namespace exists for local development..."
+kubectl create namespace kyverno-platform --dry-run=client -o yaml | kubectl apply -f -
+
 echo "================================================"
 echo " Kubernetes Lab Setup Completed Successfully!"
 echo "================================================"
+

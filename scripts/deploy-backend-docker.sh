@@ -1,9 +1,10 @@
 #!/bin/bash
-# NestJS 백엔드(AI 에이전트 및 거버넌스 API)를 Docker로 빌드하고 AWS ECR 및 EKS 클러스터에 원클릭 자동 롤아웃하는 스크립트
-# 변경된 백엔드 이미지를 빌드하여 EKS 클러스터에 무중단 롤링 업데이트로 신속하게 반영하기 위한 목적
+# NestJS 백엔드(AI 에이전트 및 거버넌스 API)를 Docker로 빌드하고 AWS ECR 및 EKS 클러스터(또는 Kind 로컬)에 자동 배포하는 스크립트
+# 주 리전(us-east-1) 및 보조 리전(us-east-2) 멀티 리전 배포와 로컬 클러스터 연동을 유연하게 지원하여 무중단 서비스를 보장 목적
 set -e
 
-REGION="us-east-1"
+# 기본 AWS 리전을 us-east-1로 지정하며 환경 변수 및 스크립트 인자로 us-east-2 등 타 리전 전환 지원
+REGION="${1:-${AWS_REGION:-us-east-1}}"
 REPO_NAME="kyverno-backend"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="${SCRIPT_DIR}/.."
@@ -14,39 +15,48 @@ if [ ! -f "${KUBECTL}" ]; then
 fi
 
 echo "=========================================================="
-echo " Docker-based Backend Build & Deploy to AWS EKS (us-east-1)"
+echo " Docker-based Backend Build & Deploy to EKS/Kind (${REGION})"
 echo "=========================================================="
 
-# AWS CLI 자격 증명 상태 사전 확인
-if ! aws sts get-caller-identity &> /dev/null; then
-  echo "[ERROR] AWS CLI authentication failed. Please run 'aws configure' first."
-  exit 1
+# EKS 원격 배포 및 ECR 푸시 전용 레지스트리 URI 결정
+if aws sts get-caller-identity &> /dev/null; then
+  ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+  ECR_URI="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/${REPO_NAME}:latest"
+  echo ">>> Authenticated AWS Account: ${ACCOUNT_ID}"
+  echo ">>> Target ECR Image URI: ${ECR_URI}"
+  IS_EKS=true
+else
+  echo ">>> AWS CLI authentication not found. Falling back to local Kind deployment mode."
+  IS_EKS=false
 fi
-
-ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
-ECR_URI="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/${REPO_NAME}:latest"
-
-echo ">>> Target AWS Account: ${ACCOUNT_ID}"
-echo ">>> Target ECR Image URI: ${ECR_URI}"
-
-# ECR 레포지토리가 없을 경우 신규 생성
-if ! aws ecr describe-repositories --repository-names "${REPO_NAME}" --region "${REGION}" &> /dev/null; then
-  echo ">>> Creating ECR repository '${REPO_NAME}' in ${REGION}..."
-  aws ecr create-repository --repository-name "${REPO_NAME}" --region "${REGION}"
-fi
-
-# 도커 클라이언트 ECR 인증 획득
-echo ">>> Logging in to Amazon ECR..."
-aws ecr get-login-password --region "${REGION}" | docker login --username AWS --password-stdin "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
 
 # 모노레포 루트 컨텍스트에서 백엔드 프로덕션 이미지 빌드 (Slim glibc 베이스 + Prisma Client 포함)
 echo ">>> Building NestJS backend Docker image from apps/backend/Dockerfile..."
-docker build --no-cache -t "${REPO_NAME}:latest" -f "${ROOT_DIR}/apps/backend/Dockerfile" "${ROOT_DIR}"
+docker build -t "${REPO_NAME}:latest" -f "${ROOT_DIR}/apps/backend/Dockerfile" "${ROOT_DIR}"
 
-# ECR 원격 레지스트리로 푸시
-echo ">>> Tagging and Pushing image to Amazon ECR..."
-docker tag "${REPO_NAME}:latest" "${ECR_URI}"
-docker push "${ECR_URI}"
+if [ "${IS_EKS}" = true ]; then
+  # ECR 레포지토리가 없을 경우 신규 생성 (동적 리전 호환)
+  if ! aws ecr describe-repositories --repository-names "${REPO_NAME}" --region "${REGION}" &> /dev/null; then
+    echo ">>> Creating ECR repository '${REPO_NAME}' in ${REGION}..."
+    aws ecr create-repository --repository-name "${REPO_NAME}" --region "${REGION}"
+  fi
+
+  # 도커 클라이언트 ECR 인증 획득 및 이미지 푸시
+  echo ">>> Logging in to Amazon ECR (${REGION})..."
+  aws ecr get-login-password --region "${REGION}" | docker login --username AWS --password-stdin "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
+
+  echo ">>> Tagging and Pushing image to Amazon ECR..."
+  docker tag "${REPO_NAME}:latest" "${ECR_URI}"
+  docker push "${ECR_URI}"
+  IMAGE_TARGET="${ECR_URI}"
+else
+  # 로컬 Kind 클러스터 존재 시 도커 이미지를 Kind 노드 내부로 자동 로드
+  if command -v kind &> /dev/null && kind get clusters 2>/dev/null | grep -q "k8s-lab"; then
+    echo ">>> Loading Docker image '${REPO_NAME}:latest' into local Kind cluster 'k8s-lab'..."
+    kind load docker-image "${REPO_NAME}:latest" --name "k8s-lab"
+  fi
+  IMAGE_TARGET="${REPO_NAME}:latest"
+fi
 
 # 네임스페이스 및 선행 시스템 리소스(RBAC, PostgreSQL) 존재 보장
 echo ">>> Ensuring 'kyverno-platform' namespace and foundational resources exist..."
@@ -66,15 +76,16 @@ DATABASE_URL="postgresql://devuser:devpassword@localhost:5432/kyverno_dashboard?
 DATABASE_URL="postgresql://devuser:devpassword@localhost:5432/kyverno_dashboard?schema=public" SEED_ADMIN_EMAIL="admin@example.com" SEED_ADMIN_PASSWORD="change-this-admin-password" pnpm --filter @kyverno-platform/backend exec prisma db seed || true
 kill $PF_PG_PID 2>/dev/null || true
 
-# EKS 클러스터 Deployment 이미지 갱신 및 무중단 롤아웃 수행
-echo ">>> Updating EKS deployment 'kyverno-backend' with new ECR image..."
+# Deployment 이미지 갱신 및 Zero-Downtime RollingUpdate 배포 수행
+echo ">>> Updating deployment 'kyverno-backend' with target image '${IMAGE_TARGET}'..."
 "${KUBECTL}" apply -f "${ROOT_DIR}/k8s-manifests/system/backend.yaml"
-"${KUBECTL}" set image deployment/kyverno-backend backend="${ECR_URI}" -n kyverno-platform
+"${KUBECTL}" set image deployment/kyverno-backend backend="${IMAGE_TARGET}" -n kyverno-platform
 "${KUBECTL}" rollout restart deployment/kyverno-backend -n kyverno-platform
 "${KUBECTL}" rollout status deployment/kyverno-backend -n kyverno-platform --timeout=180s
 
 echo "=========================================================="
-echo " Backend successfully deployed & rolled out to AWS EKS!"
+echo " Backend successfully deployed & rolled out to cluster!"
 echo "=========================================================="
 echo ">>> To test Swagger API, run: ./scripts/bin/kubectl port-forward svc/kyverno-backend 3001:3001 -n kyverno-platform"
 echo ">>> Open Swagger UI at: http://localhost:3001/api"
+
