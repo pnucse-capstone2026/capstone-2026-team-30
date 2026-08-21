@@ -167,6 +167,12 @@ if ! command -v helm &> /dev/null; then
   chmod +x "${LOCAL_BIN_DIR}/helm"
 fi
 
+# 컨테이너 빌드 및 Kind 이미지 로드를 위한 로컬 Docker CLI 환경 사전 검증
+if ! command -v docker &> /dev/null; then
+  log_fail "Docker CLI not found in PATH. Docker is required for cluster integration testing."
+  exit 1
+fi
+
 log_pass "All required CLI tools are ready (kind, kubectl, helm, docker)."
 
 # ==============================================================================
