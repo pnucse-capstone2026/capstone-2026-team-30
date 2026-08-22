@@ -4,6 +4,7 @@ import { AuthenticatedUser } from "../auth/auth.types";
 import { BusinessException } from "../common/errors/business.exception";
 import { ClusterProvider } from "../kubernetes/cluster-provider";
 import { KyvernoAdapter } from "../kubernetes/kyverno.adapter";
+import { PrismaService } from "../prisma/prisma.service";
 import { ViolationSeverityFilter } from "./dto/list-violations-query.dto";
 import { VIOLATION_ERROR } from "./violation.errors";
 import { ViolationsService } from "./violations.service";
@@ -12,6 +13,13 @@ describe("ViolationsService", () => {
   let service: ViolationsService;
   let mockClusterProvider: Partial<ClusterProvider>;
   let mockKyvernoAdapter: Partial<KyvernoAdapter>;
+  let mockPrismaService: {
+    violationHistory: {
+      findMany: jest.Mock;
+      findFirst: jest.Mock;
+      create: jest.Mock;
+    };
+  };
 
   const mockUser: AuthenticatedUser = {
     id: "user-1",
@@ -107,11 +115,22 @@ describe("ViolationsService", () => {
       getNamespacedPolicyReport: jest
         .fn()
         .mockResolvedValue(mockPolicyReportRaw),
+      getClusterPolicyReports: jest.fn().mockResolvedValue([]),
+      getPolicyReports: jest.fn().mockResolvedValue([]),
+    };
+
+    mockPrismaService = {
+      violationHistory: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: "db-vio-1" }),
+      },
     };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ViolationsService,
+        { provide: PrismaService, useValue: mockPrismaService },
         { provide: ClusterProvider, useValue: mockClusterProvider },
         { provide: KyvernoAdapter, useValue: mockKyvernoAdapter },
       ],
@@ -207,6 +226,76 @@ describe("ViolationsService", () => {
           mockUser,
         ),
       ).rejects.toThrow(new BusinessException(VIOLATION_ERROR.NOT_FOUND));
+    });
+  });
+
+  describe("getViolations DB Fallback", () => {
+    it("K8s API 호출 시 장애 발생 시 DB ViolationHistory 조회를 fallback으로 실행한다", async () => {
+      (
+        mockKyvernoAdapter.listClusterPolicyReports as jest.Mock
+      ).mockRejectedValue(new Error("K8s cluster unreachable"));
+      (
+        mockKyvernoAdapter.listNamespacedPolicyReports as jest.Mock
+      ).mockRejectedValue(new Error("K8s cluster unreachable"));
+
+      mockPrismaService.violationHistory.findMany.mockResolvedValueOnce([
+        {
+          id: "db-vio-001",
+          policyName: "disallow-latest-tag",
+          ruleName: "require-image-tag",
+          targetClusterId: "cluster-1",
+          targetClusterDisplayName: "Cluster One",
+          occurredAt: new Date("2026-08-19T05:30:00Z"),
+        },
+      ]);
+
+      const result = await service.getViolations(mockUser, {});
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe("db-vio-001");
+      expect(result[0].policyName).toBe("disallow-latest-tag");
+      expect(result[0].reportName).toBe("db-fallback");
+    });
+  });
+
+  describe("syncLiveViolations", () => {
+    it("K8s의 live 위반 보고서를 수집하여 DB ViolationHistory에 새로 생성한다", async () => {
+      (
+        mockKyvernoAdapter.getClusterPolicyReports as jest.Mock
+      ).mockResolvedValueOnce([
+        {
+          id: "cluster-1:cpolr-cluster:0",
+          clusterId: "cluster-1",
+          clusterDisplayName: "Cluster One",
+          namespace: "cluster-wide",
+          policyName: "require-ro-rootfs",
+          ruleName: "check-read-only-root-filesystem",
+          resourceKind: "Deployment",
+          resourceName: "batch-worker",
+          severity: "critical",
+          status: "open",
+          message: "rootFS must be read-only",
+          detectedAt: "2026-08-19T05:30:00.000Z",
+          reportName: "cpolr-cluster",
+        },
+      ]);
+      (mockKyvernoAdapter.getPolicyReports as jest.Mock).mockResolvedValueOnce(
+        [],
+      );
+
+      mockPrismaService.violationHistory.findFirst.mockResolvedValueOnce(null);
+
+      await service.syncLiveViolations();
+
+      expect(mockPrismaService.violationHistory.create).toHaveBeenCalledWith({
+        data: {
+          targetClusterId: "cluster-1",
+          targetClusterDisplayName: "Cluster One",
+          policyName: "require-ro-rootfs",
+          ruleName: "check-read-only-root-filesystem",
+          occurredAt: new Date("2026-08-19T05:30:00.000Z"),
+        },
+      });
     });
   });
 });

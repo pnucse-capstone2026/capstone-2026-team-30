@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { ClusterProvider } from "./cluster-provider";
+import { ClusterMetadata, ClusterProvider } from "./cluster-provider";
 import {
   buildPolicyExceptionManifest,
   MANAGED_BY_LABEL,
@@ -7,6 +7,7 @@ import {
   PolicyExceptionManifestInput,
   REQUEST_ID_LABEL,
 } from "./policy-exception-manifest";
+import { ViolationSummaryDto } from "../violations/dto/violation-summary.dto";
 
 const KYVERNO_GROUP = "kyverno.io";
 const POLICY_VERSION = "v1";
@@ -442,5 +443,166 @@ export class KyvernoAdapter {
       if (statusCode(error) === 404) return null;
       throw error;
     }
+  }
+
+  /**
+   * 특정 클러스터 또는 전체 클러스터에서 네임스페이스 범위 PolicyReport(wgpolicyk8s.io)를 수집하고
+   * 정규화된 ViolationSummaryDto DTO 배열로 파싱하여 반환합니다.
+   *
+   * @param clusterName (선택) 특정 클러스터 ID 또는 표시명
+   * @returns 정규화된 정책 위반 요약 DTO 배열
+   */
+  async getPolicyReports(clusterName?: string): Promise<ViolationSummaryDto[]> {
+    // 수집 대상 클러스터 식별자를 추출하여 다중 클러스터 조회를 격리 수행함
+    const targetClusters = this.resolveTargetClusters(clusterName);
+    const violations: ViolationSummaryDto[] = [];
+
+    for (const cluster of targetClusters) {
+      try {
+        const rawReports = await this.listNamespacedPolicyReports(cluster.id);
+        for (const raw of rawReports) {
+          const extracted = this.extractViolationsFromReportObject(
+            raw as Record<string, unknown>,
+            cluster,
+          );
+          violations.push(...extracted);
+        }
+      } catch {
+        // 단일 클러스터 조회 실패가 전체 위반 조회를 중단하지 않도록 실패 격리
+        continue;
+      }
+    }
+
+    return violations;
+  }
+
+  /**
+   * 특정 클러스터 또는 전체 클러스터에서 클러스터 전역 범위 ClusterPolicyReport(wgpolicyk8s.io)를 수집하고
+   * 정규화된 ViolationSummaryDto DTO 배열로 파싱하여 반환합니다.
+   *
+   * @param clusterName (선택) 특정 클러스터 ID 또는 표시명
+   * @returns 정규화된 정책 위반 요약 DTO 배열
+   */
+  async getClusterPolicyReports(
+    clusterName?: string,
+  ): Promise<ViolationSummaryDto[]> {
+    // 수집 대상 클러스터 식별자를 추출하여 다중 클러스터 조회를 격리 수행함
+    const targetClusters = this.resolveTargetClusters(clusterName);
+    const violations: ViolationSummaryDto[] = [];
+
+    for (const cluster of targetClusters) {
+      try {
+        const rawReports = await this.listClusterPolicyReports(cluster.id);
+        for (const raw of rawReports) {
+          const extracted = this.extractViolationsFromReportObject(
+            raw as Record<string, unknown>,
+            cluster,
+          );
+          violations.push(...extracted);
+        }
+      } catch {
+        // 특정 클러스터의 API 오류 발생 시 나머지 클러스터 응답성 유지
+        continue;
+      }
+    }
+
+    return violations;
+  }
+
+  /**
+   * 입력받은 clusterName 인수를 기반으로 검색 대상 클러스터 목록을 반환합니다.
+   *
+   * @param clusterName 클러스터 식별자 또는 표시명
+   * @returns 검색 대상 클러스터 메타데이터 배열
+   */
+  private resolveTargetClusters(clusterName?: string): ClusterMetadata[] {
+    const all = this.clusters.list();
+    if (!clusterName) {
+      return all;
+    }
+    return all.filter(
+      (c) => c.id === clusterName || c.displayName === clusterName,
+    );
+  }
+
+  /**
+   * raw K8s PolicyReport JSON 리소스 객체에서 fail/warn/error 결과 항목들을 추출 및 정규화합니다.
+   *
+   * @param report raw PolicyReport K8s 객체
+   * @param cluster 클러스터 메타데이터
+   * @returns 정규화된 위반 DTO 배열
+   */
+  private extractViolationsFromReportObject(
+    report: Record<string, unknown>,
+    cluster: ClusterMetadata,
+  ): ViolationSummaryDto[] {
+    const metadata = (report.metadata as Record<string, unknown>) ?? {};
+    const results = (report.results as Array<Record<string, unknown>>) ?? [];
+    const violations: ViolationSummaryDto[] = [];
+
+    results.forEach((result, index) => {
+      const outcome = (
+        (result.result as string) ||
+        (result.status as string) ||
+        ""
+      ).toLowerCase();
+
+      // fail, warn, error 상태의 검사 결과만 정규화 DTO로 변환
+      if (outcome === "fail" || outcome === "warn" || outcome === "error") {
+        const reportName = (metadata.name as string) ?? "unknown-report";
+        const id = `${cluster.id}:${reportName}:${index}`;
+        const policyName = (result.policy as string) ?? "unknown-policy";
+        const ruleName = (result.rule as string) ?? "unknown-rule";
+
+        const resources =
+          (result.resources as Array<Record<string, unknown>>) ?? [];
+        const targetResource = resources[0];
+        const resourceKind = (targetResource?.kind as string) ?? "Unknown";
+        const resourceName = (targetResource?.name as string) ?? "Unknown";
+        const namespace =
+          (targetResource?.namespace as string) ??
+          (metadata.namespace as string) ??
+          "cluster-wide";
+
+        let severity: "critical" | "high" | "medium" | "low" | "info" =
+          "medium";
+        const rawSev = (result.severity as string)?.toLowerCase();
+        if (rawSev === "critical") severity = "critical";
+        else if (rawSev === "high") severity = "high";
+        else if (rawSev === "low") severity = "low";
+        else if (rawSev === "info") severity = "info";
+
+        let detectedAt =
+          (metadata.creationTimestamp as string) ?? new Date().toISOString();
+        const timestampObj = result.timestamp as
+          | { seconds?: number }
+          | undefined;
+        if (timestampObj?.seconds) {
+          detectedAt = new Date(timestampObj.seconds * 1000).toISOString();
+        }
+
+        const message =
+          (result.message as string) ??
+          `Policy '${policyName}' violation detected on ${resourceKind}/${resourceName}.`;
+
+        violations.push({
+          id,
+          clusterId: cluster.id,
+          clusterDisplayName: cluster.displayName,
+          namespace,
+          policyName,
+          ruleName,
+          resourceKind,
+          resourceName,
+          severity,
+          status: "open",
+          message,
+          detectedAt,
+          reportName,
+        });
+      }
+    });
+
+    return violations;
   }
 }

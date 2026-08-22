@@ -1,4 +1,5 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
+import { Interval } from "@nestjs/schedule";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { BusinessException } from "../common/errors/business.exception";
 import {
@@ -6,6 +7,7 @@ import {
   ClusterProvider,
 } from "../kubernetes/cluster-provider";
 import { KyvernoAdapter } from "../kubernetes/kyverno.adapter";
+import { PrismaService } from "../prisma/prisma.service";
 import { ListViolationsQueryDto } from "./dto/list-violations-query.dto";
 import { ViolationDetailDto } from "./dto/violation-detail.dto";
 import { ViolationSummaryDto } from "./dto/violation-summary.dto";
@@ -52,14 +54,108 @@ type PolicyReportRaw = {
 };
 
 /**
- * Kyverno 정책 위반(PolicyReport) 실시간 수집 및 분석 서비스
+ * Kyverno 정책 위반(PolicyReport) 실시간 수집, DB 동기화 및 분석 서비스
  */
 @Injectable()
 export class ViolationsService {
+  private readonly logger = new Logger(ViolationsService.name);
+
   constructor(
+    private readonly prisma: PrismaService,
     private readonly clusters: ClusterProvider,
     private readonly kyvernoAdapter: KyvernoAdapter,
   ) {}
+
+  /**
+   * K8s 연결 상태에서 live PolicyReport 수집을 우선 시도하고, K8s 연결/수집 실패 시
+   * PostgreSQL ViolationHistory DB 테이블을 fallback으로 조회합니다.
+   *
+   * @param user (선택) 인증된 요청자 정보
+   * @param query 위반 필터링 및 검색 옵션
+   * @returns 정규화된 정책 위반 요약 DTO 배열
+   */
+  async getViolations(
+    user?: AuthenticatedUser,
+    query: ListViolationsQueryDto = {},
+  ): Promise<ViolationSummaryDto[]> {
+    const accessibleClusters = user
+      ? this.getAccessibleClusters(user, query.clusterId)
+      : this.clusters.list();
+
+    if (user && accessibleClusters.length === 0) {
+      return [];
+    }
+
+    try {
+      // K8s API 커스텀 객체 조회를 통한 라이브 위반 보고서 수집
+      const allViolations: ViolationSummaryDto[] = [];
+      let successClusterCount = 0;
+      let failedClusterCount = 0;
+
+      for (const cluster of accessibleClusters) {
+        try {
+          const clusterReports =
+            await this.kyvernoAdapter.listClusterPolicyReports(cluster.id);
+          const namespacedReports =
+            await this.kyvernoAdapter.listNamespacedPolicyReports(
+              cluster.id,
+              query.namespace,
+            );
+
+          for (const raw of clusterReports) {
+            const extracted = this.extractViolationsFromReport(
+              raw as PolicyReportRaw,
+              cluster,
+            );
+            for (const item of extracted) {
+              if (this.matchesFilter(item, query)) {
+                allViolations.push(item);
+              }
+            }
+          }
+
+          for (const raw of namespacedReports) {
+            const extracted = this.extractViolationsFromReport(
+              raw as PolicyReportRaw,
+              cluster,
+            );
+            for (const item of extracted) {
+              if (this.matchesFilter(item, query)) {
+                allViolations.push(item);
+              }
+            }
+          }
+          successClusterCount++;
+        } catch (err) {
+          // 단일 클러스터 장애 시 개별 처리 후 실패 카운트 증가
+          failedClusterCount++;
+          this.logger.warn(
+            `Failed to fetch live policy reports for cluster ${cluster.id}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
+
+      // 모든 대상 클러스터 조회가 실패하였을 경우 PostgreSQL DB Fallback 실행
+      if (successClusterCount === 0 && failedClusterCount > 0) {
+        this.logger.warn(
+          `All K8s cluster connections failed (${failedClusterCount} failed). Falling back to ViolationHistory DB.`,
+        );
+        return this.getViolationsFromDb(accessibleClusters, query);
+      }
+
+      return allViolations.sort(
+        (a, b) =>
+          new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime(),
+      );
+    } catch (error) {
+      // 예상치 못한 예외 발생 시 회복성 확보를 위한 DB Fallback 실행
+      this.logger.warn(
+        `Unexpected error fetching live policy reports, falling back to ViolationHistory DB`,
+        error instanceof Error ? error.message : String(error),
+      );
+      return this.getViolationsFromDb(accessibleClusters, query);
+    }
+  }
 
   /**
    * 사용자에게 배정된 클러스터에서 실시간 정책 위반 내역을 집계하여 조회합니다.
@@ -72,59 +168,7 @@ export class ViolationsService {
     user: AuthenticatedUser,
     query: ListViolationsQueryDto,
   ): Promise<ViolationSummaryDto[]> {
-    const accessibleClusters = this.getAccessibleClusters(
-      user,
-      query.clusterId,
-    );
-    if (accessibleClusters.length === 0) {
-      return [];
-    }
-
-    const allViolations: ViolationSummaryDto[] = [];
-
-    for (const cluster of accessibleClusters) {
-      try {
-        const clusterReports =
-          await this.kyvernoAdapter.listClusterPolicyReports(cluster.id);
-        const namespacedReports =
-          await this.kyvernoAdapter.listNamespacedPolicyReports(
-            cluster.id,
-            query.namespace,
-          );
-
-        for (const raw of clusterReports) {
-          const extracted = this.extractViolationsFromReport(
-            raw as PolicyReportRaw,
-            cluster,
-          );
-          for (const item of extracted) {
-            if (this.matchesFilter(item, query)) {
-              allViolations.push(item);
-            }
-          }
-        }
-
-        for (const raw of namespacedReports) {
-          const extracted = this.extractViolationsFromReport(
-            raw as PolicyReportRaw,
-            cluster,
-          );
-          for (const item of extracted) {
-            if (this.matchesFilter(item, query)) {
-              allViolations.push(item);
-            }
-          }
-        }
-      } catch {
-        // 단일 클러스터 조회 실패가 전체 위반 목록 조회를 중단시키지 않도록 격리
-        continue;
-      }
-    }
-
-    return allViolations.sort(
-      (a, b) =>
-        new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime(),
-    );
+    return this.getViolations(user, query);
   }
 
   /**
@@ -336,5 +380,103 @@ export class ViolationsService {
       if (!matched) return false;
     }
     return true;
+  }
+
+  /**
+   * 주기적으로 (30초 간격) K8s 클러스터의 라이브 PolicyReport 위반 내역을
+   * PostgreSQL ViolationHistory 모델에 실시간 동기화하는 백그라운드 워커입니다.
+   */
+  @Interval(30_000)
+  async syncLiveViolations(): Promise<void> {
+    try {
+      const clusterReports =
+        await this.kyvernoAdapter.getClusterPolicyReports();
+      const namespacedReports = await this.kyvernoAdapter.getPolicyReports();
+      const liveViolations = [...clusterReports, ...namespacedReports];
+
+      for (const violation of liveViolations) {
+        const occurredAt = new Date(violation.detectedAt);
+        // 동일 위반 항목의 중복 DB 저장을 방지하기 위한 유니크 조건 확인
+        const existing = await this.prisma.violationHistory.findFirst({
+          where: {
+            targetClusterId: violation.clusterId,
+            policyName: violation.policyName,
+            ruleName: violation.ruleName,
+            occurredAt,
+          },
+        });
+
+        if (!existing) {
+          await this.prisma.violationHistory.create({
+            data: {
+              targetClusterId: violation.clusterId,
+              targetClusterDisplayName: violation.clusterDisplayName,
+              policyName: violation.policyName,
+              ruleName: violation.ruleName,
+              occurredAt,
+            },
+          });
+        }
+      }
+    } catch (error) {
+      // 백그라운드 동기화 실패 시 캡처 후 지속 실행 수명주기 유지
+      this.logger.error(
+        `Failed to sync live violations to ViolationHistory DB`,
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
+  }
+
+  /**
+   * PostgreSQL ViolationHistory 테이블에서 정책 위반 이력을 조회하여 정규화 DTO로 변환합니다.
+   *
+   * @param accessibleClusters 권한이 있는 클러스터 목록
+   * @param query 필터 쿼리
+   * @returns DB 기반 위반 요약 DTO 배열
+   */
+  private async getViolationsFromDb(
+    accessibleClusters: ClusterMetadata[],
+    query: ListViolationsQueryDto,
+  ): Promise<ViolationSummaryDto[]> {
+    const clusterIds = accessibleClusters.map((c) => c.id);
+    const clusterMap = new Map(
+      accessibleClusters.map((c) => [c.id, c.displayName]),
+    );
+
+    const dbRecords = await this.prisma.violationHistory.findMany({
+      where: {
+        ...(clusterIds.length > 0
+          ? { targetClusterId: { in: clusterIds } }
+          : {}),
+        ...(query.policyName ? { policyName: query.policyName } : {}),
+      },
+      orderBy: { occurredAt: "desc" },
+    });
+
+    const mapped = dbRecords.map((record) => {
+      const clusterDisplayName =
+        clusterMap.get(record.targetClusterId) ??
+        record.targetClusterDisplayName ??
+        record.targetClusterId;
+
+      const item: ViolationSummaryDto = {
+        id: record.id,
+        clusterId: record.targetClusterId,
+        clusterDisplayName,
+        namespace: "cluster-wide",
+        policyName: record.policyName,
+        ruleName: record.ruleName,
+        resourceKind: "Unknown",
+        resourceName: "Unknown",
+        severity: "medium",
+        status: "open",
+        message: `[DB Fallback] Policy '${record.policyName}' rule '${record.ruleName}' violation recorded in cluster '${clusterDisplayName}'.`,
+        detectedAt: record.occurredAt.toISOString(),
+        reportName: "db-fallback",
+      };
+      return item;
+    });
+
+    return mapped.filter((item) => this.matchesFilter(item, query));
   }
 }
