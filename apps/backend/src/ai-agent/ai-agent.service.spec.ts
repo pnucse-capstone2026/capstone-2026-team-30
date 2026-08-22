@@ -1,6 +1,8 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { ConfigService } from "@nestjs/config";
 import { AiAgentService } from "./ai-agent.service";
 import { BedrockService } from "./bedrock.service";
+import { KyvernoRuleTemplateEngine } from "./rule-template.engine";
 
 describe("AiAgentService", () => {
   let service: AiAgentService;
@@ -11,12 +13,21 @@ describe("AiAgentService", () => {
       invokeClaude: jest.fn(),
     };
 
+    const mockConfigService = {
+      get: jest.fn().mockReturnValue("3500"),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AiAgentService,
+        KyvernoRuleTemplateEngine,
         {
           provide: BedrockService,
           useValue: mockBedrockService,
+        },
+        {
+          provide: ConfigService,
+          useValue: mockConfigService,
         },
       ],
     }).compile();
@@ -44,11 +55,12 @@ describe("AiAgentService", () => {
     });
 
     expect(result.summary).toContain("루트 파일시스템");
+    expect(result.provider).toBe("BEDROCK");
     expect(result.resolutionSteps).toHaveLength(1);
     expect(result.suggestedFixYaml).toBeDefined();
   });
 
-  it("should fallback gracefully when Bedrock throws an error", async () => {
+  it("should fallback gracefully to rule template engine when Bedrock throws an error", async () => {
     bedrockService.invokeClaude.mockRejectedValue(
       new Error("AWS credentials error"),
     );
@@ -58,9 +70,24 @@ describe("AiAgentService", () => {
         "action: deny, rule check-read-only-root-filesystem failed: rootFS must be read-only",
     });
 
-    // AWS Bedrock 연동 장애 상황에서도 사용자 응답이 차단되지 않고 스터브 가이드가 반환됩니다.
-    expect(result.summary).toContain("컨테이너 파일시스템");
+    expect(result.summary).toContain("읽기 전용");
+    expect(result.provider).toBe("RULE_ENGINE_FALLBACK");
     expect(result.resolutionSteps.length).toBeGreaterThan(0);
     expect(result.governanceRationale).toBeDefined();
   });
+
+  it("should fallback when Bedrock API times out", async () => {
+    // 10초 대기하도록 하여 3.5초 타임아웃 유발
+    bedrockService.invokeClaude.mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve("{}"), 10000)),
+    );
+
+    const result = await service.explainKyvernoError({
+      errorMessage:
+        "disallow-latest-tag rule failed: image tag latest is not allowed",
+    });
+
+    expect(result.summary).toContain("latest");
+    expect(result.provider).toBe("RULE_ENGINE_FALLBACK");
+  }, 10000);
 });
