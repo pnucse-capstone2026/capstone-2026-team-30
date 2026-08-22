@@ -1,3 +1,13 @@
+# Kyverno Governance Platform 백엔드 ServiceAccount(kyverno-backend-sa) 정의
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kyverno-backend-sa
+  namespace: kyverno-platform
+  labels:
+    app.kubernetes.io/name: kyverno-backend
+    app.kubernetes.io/part-of: kyverno-governance-platform
+---
 # Kyverno Governance Platform 백엔드 ServiceAccount(kyverno-backend-sa) 권한 정의
 # 플랫폼 백엔드 및 AI 거버넌스 에이전트가 정책, 리포트, 리소스 상태를 감사하고 정책 예외를 처리할 수 있도록 최소 권한(Least-Privilege) 부여
 apiVersion: rbac.authorization.k8s.io/v1

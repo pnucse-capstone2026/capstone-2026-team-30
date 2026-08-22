@@ -26,7 +26,8 @@ spec:
       containers:
         - name: frontend
           image: kyverno-frontend:latest
-          imagePullPolicy: Always
+          # Kind 로컬 클러스터에 로드된 인클러스터 이미지를 참조하도록 IfNotPresent 적용
+          imagePullPolicy: IfNotPresent
           env:
             - name: NODE_ENV
               value: "production"

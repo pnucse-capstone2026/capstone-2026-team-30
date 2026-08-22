@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -24,9 +24,13 @@ import {
   clusterStatusLabel,
   kyvernoStatusClassName,
   kyvernoStatusLabel,
+  listClusterCatalog,
+  listClusters,
   type ClusterEnvironment,
+  type ClusterMetadata,
   type ClusterStatus,
   type KyvernoStatus,
+  type ManagedCluster,
 } from "@/lib/clusters";
 import { kyvernoPolicies } from "@/lib/policies";
 import { policyViolations } from "@/lib/policy-violations";
@@ -44,6 +48,10 @@ const environmentOptions: ClusterEnvironment[] = [
 const clusterStatusOptions: ClusterStatus[] = ["healthy", "syncing", "warning"];
 const kyvernoStatusOptions: KyvernoStatus[] = ["ready", "syncing", "degraded"];
 
+/**
+ * 클러스터 상태 및 정책 적용 현황을 조회하는 메인 페이지 컴포넌트입니다.
+ * 백엔드 API로부터 라이브 클러스터 목록을 동적으로 조회하며, 연동 실패 시 기본 mock 데이터를 폴백으로 제공합니다.
+ */
 export default function ClustersPage() {
   const [query, setQuery] = useState("");
   const [environmentFilter, setEnvironmentFilter] =
@@ -53,9 +61,78 @@ export default function ClustersPage() {
   const [kyvernoStatusFilter, setKyvernoStatusFilter] =
     useState<KyvernoStatusFilter>("all");
 
+  const [liveClusters, setLiveClusters] = useState<ClusterMetadata[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    /**
+     * 백엔드 API에서 라이브 클러스터 목록을 가져오고 실패 시 카탈로그 API로 폴백합니다.
+     */
+    async function fetchLiveClusters() {
+      try {
+        const data = await listClusters();
+        if (!cancelled && Array.isArray(data) && data.length > 0) {
+          setLiveClusters(data);
+          return;
+        }
+      } catch {
+        // 일반 클러스터 조회 실패 시 권한에 따른 카탈로그 API 조회 재시도
+        try {
+          const catalogData = await listClusterCatalog();
+          if (!cancelled && Array.isArray(catalogData) && catalogData.length > 0) {
+            setLiveClusters(catalogData);
+          }
+        } catch {
+          // 백엔드 연동 불가 시 graceful fallback 유지
+        }
+      }
+    }
+
+    void fetchLiveClusters();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const activeClusters: ManagedCluster[] = useMemo(() => {
+    if (liveClusters && liveClusters.length > 0) {
+      return liveClusters.map((item) => {
+        const existing = clusters.find(
+          (c) => c.id === item.id || c.name === item.id || c.name === item.displayName,
+        );
+        if (existing) {
+          return {
+            ...existing,
+            id: item.id,
+            name: item.displayName || existing.name,
+          };
+        }
+        return {
+          id: item.id,
+          name: item.displayName || item.id,
+          environment: "production",
+          region: "us-east-1",
+          provider: "EKS",
+          status: "healthy",
+          kyvernoStatus: "ready",
+          nodeCount: 3,
+          namespaceCount: 8,
+          policyCount: 1,
+          violationCount: 0,
+          lastSyncedAt: new Date().toISOString().slice(0, 16).replace("T", " "),
+          owner: "플랫폼팀",
+          description: `${item.displayName || item.id} 라이브 연동 클러스터입니다.`,
+        };
+      });
+    }
+    return clusters;
+  }, [liveClusters]);
+
   const clusterRows = useMemo(
     () =>
-      clusters.map((cluster) => {
+      activeClusters.map((cluster) => {
         const policies = kyvernoPolicies.filter(
           (policy) =>
             policy.clusterName === cluster.name && policy.status !== "draft",
@@ -74,7 +151,7 @@ export default function ClustersPage() {
           unresolvedViolations,
         };
       }),
-    [],
+    [activeClusters],
   );
 
   const filteredClusters = useMemo(() => {
