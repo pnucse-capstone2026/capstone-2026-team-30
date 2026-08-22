@@ -13,6 +13,8 @@ export type ExplainKyvernoErrorResponse = {
   resolutionSteps: string[];
   suggestedFixYaml: string | null;
   policySnippet: string | null;
+  provider?: "BEDROCK" | "RULE_ENGINE_FALLBACK";
+  latencyMs?: number;
 };
 
 /**

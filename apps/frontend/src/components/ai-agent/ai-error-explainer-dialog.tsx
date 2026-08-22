@@ -110,10 +110,17 @@ export function AiErrorExplainerDialog({
             <div>
               <DialogTitle className="flex items-center gap-2 text-xl">
                 Bedrock AI 거버넌스 분석 가이드
-                <Badge variant="secondary" className="gap-1 text-xs font-normal">
-                  <Sparkles className="h-3 w-3 text-indigo-500" />
-                  Claude 3.5 Sonnet
-                </Badge>
+                {result?.provider === "RULE_ENGINE_FALLBACK" ? (
+                  <Badge variant="outline" className="gap-1 text-xs font-normal border-amber-300 bg-amber-50 text-amber-800">
+                    <Sparkles className="h-3 w-3 text-amber-600" />
+                    규칙 기반 고속 가이드 {result.latencyMs ? `(${result.latencyMs}ms)` : ""}
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary" className="gap-1 text-xs font-normal">
+                    <Sparkles className="h-3 w-3 text-indigo-500" />
+                    Claude 3.5 Sonnet {result?.latencyMs ? `(${result.latencyMs}ms)` : ""}
+                  </Badge>
+                )}
               </DialogTitle>
               <DialogDescription>
                 {policyName
