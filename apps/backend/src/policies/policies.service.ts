@@ -1,7 +1,10 @@
 import { Injectable } from "@nestjs/common";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { BusinessException } from "../common/errors/business.exception";
-import { ClusterMetadata, ClusterProvider } from "../kubernetes/cluster-provider";
+import {
+  ClusterMetadata,
+  ClusterProvider,
+} from "../kubernetes/cluster-provider";
 import { KyvernoAdapter } from "../kubernetes/kyverno.adapter";
 import {
   ListPoliciesQueryDto,
@@ -62,7 +65,10 @@ export class PoliciesService {
     user: AuthenticatedUser,
     query: ListPoliciesQueryDto,
   ): Promise<PolicySummaryDto[]> {
-    const accessibleClusters = this.getAccessibleClusters(user, query.clusterId);
+    const accessibleClusters = this.getAccessibleClusters(
+      user,
+      query.clusterId,
+    );
     if (accessibleClusters.length === 0) {
       return [];
     }
@@ -85,14 +91,22 @@ export class PoliciesService {
               );
 
         for (const raw of clusterPolicies) {
-          const summary = this.mapToSummary(raw as KubePolicyRaw, cluster, "ClusterPolicy");
+          const summary = this.mapToSummary(
+            raw as KubePolicyRaw,
+            cluster,
+            "ClusterPolicy",
+          );
           if (this.matchesFilter(summary, query)) {
             allSummaries.push(summary);
           }
         }
 
         for (const raw of namespacedPolicies) {
-          const summary = this.mapToSummary(raw as KubePolicyRaw, cluster, "Policy");
+          const summary = this.mapToSummary(
+            raw as KubePolicyRaw,
+            cluster,
+            "Policy",
+          );
           if (this.matchesFilter(summary, query)) {
             allSummaries.push(summary);
           }
@@ -142,7 +156,8 @@ export class PoliciesService {
 
       // ClusterPolicy로 찾지 못한 경우 전체 네임스페이스에서 검색 시도
       if (!rawPolicy) {
-        const namespaced = await this.kyvernoAdapter.listNamespacedPolicies(clusterId);
+        const namespaced =
+          await this.kyvernoAdapter.listNamespacedPolicies(clusterId);
         const match = namespaced.find((item) => item.metadata?.name === name);
         if (match) {
           rawPolicy = match as KubePolicyRaw;
@@ -207,7 +222,8 @@ export class PoliciesService {
     const name = raw.metadata?.name ?? "unnamed";
     const namespace = raw.metadata?.namespace ?? null;
     const action = raw.spec?.validationFailureAction?.toLowerCase();
-    const mode: "enforce" | "audit" = action === "enforce" ? "enforce" : "audit";
+    const mode: "enforce" | "audit" =
+      action === "enforce" ? "enforce" : "audit";
 
     const rules = raw.spec?.rules ?? [];
     const ruleNames = rules

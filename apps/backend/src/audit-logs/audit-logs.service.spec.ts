@@ -65,7 +65,8 @@ describe("AuditLogsService", () => {
         action: "EXCEPTION_REQUEST_APPROVED",
         actorEmail: "admin@example.com",
         actorRole: "ADMIN",
-        summary: "admin@example.com님이 정책 예외를 승인했습니다. (EXCEPTION_REQUEST (req-101))",
+        summary:
+          "admin@example.com님이 정책 예외를 승인했습니다. (EXCEPTION_REQUEST (req-101))",
       });
     });
 
@@ -75,11 +76,16 @@ describe("AuditLogsService", () => {
           from: "2026-08-30T00:00:00Z",
           to: "2026-08-01T00:00:00Z",
         }),
-      ).rejects.toThrow(new BusinessException(AUDIT_LOG_ERROR.INVALID_DATE_RANGE));
+      ).rejects.toThrow(
+        new BusinessException(AUDIT_LOG_ERROR.INVALID_DATE_RANGE),
+      );
     });
 
     it("검색어 및 액션 필터를 Prisma where 절에 정상 적용한다", async () => {
-      await service.list({ action: "EXCEPTION_REQUEST_APPROVED", search: "admin" });
+      await service.list({
+        action: "EXCEPTION_REQUEST_APPROVED",
+        search: "admin",
+      });
 
       expect(mockPrismaService.auditLog.findMany).toHaveBeenCalledWith(
         expect.objectContaining({

@@ -34,12 +34,18 @@ export class ListViolationsQueryDto {
   @IsString()
   policyName?: string;
 
-  @ApiPropertyOptional({ enum: ViolationSeverityFilter, description: "위반 심각도 필터링" })
+  @ApiPropertyOptional({
+    enum: ViolationSeverityFilter,
+    description: "위반 심각도 필터링",
+  })
   @IsOptional()
   @IsEnum(ViolationSeverityFilter)
   severity?: ViolationSeverityFilter;
 
-  @ApiPropertyOptional({ enum: ViolationStatusFilter, description: "처리 상태 필터링" })
+  @ApiPropertyOptional({
+    enum: ViolationStatusFilter,
+    description: "처리 상태 필터링",
+  })
   @IsOptional()
   @IsEnum(ViolationStatusFilter)
   status?: ViolationStatusFilter;

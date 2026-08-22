@@ -126,10 +126,16 @@ describe("ViolationsService", () => {
 
       // 2 clusters * (1 cpolr failure + 1 polr failure) = 4 violations
       expect(result).toHaveLength(4);
-      expect(result.some((v) => v.policyName === "disallow-latest-tag")).toBe(true);
-      expect(result.some((v) => v.policyName === "require-ro-rootfs")).toBe(true);
+      expect(result.some((v) => v.policyName === "disallow-latest-tag")).toBe(
+        true,
+      );
+      expect(result.some((v) => v.policyName === "require-ro-rootfs")).toBe(
+        true,
+      );
       // pass 상태는 제외되어야 함
-      expect(result.some((v) => v.policyName === "require-team-label")).toBe(false);
+      expect(result.some((v) => v.policyName === "require-team-label")).toBe(
+        false,
+      );
     });
 
     it("특정 클러스터 및 심각도로 필터링하여 위반 목록을 반환한다", async () => {
@@ -147,7 +153,9 @@ describe("ViolationsService", () => {
       const result = await service.list(mockUser, { search: "payment-api" });
 
       expect(result).toHaveLength(2);
-      expect(result.every((v) => v.resourceName === "payment-api-pod")).toBe(true);
+      expect(result.every((v) => v.resourceName === "payment-api-pod")).toBe(
+        true,
+      );
     });
 
     it("접근 권한이 없는 클러스터 지정 시 빈 목록을 반환한다", async () => {
@@ -167,7 +175,9 @@ describe("ViolationsService", () => {
       expect(detail).toBeDefined();
       expect(detail.policyName).toBe("disallow-latest-tag");
       expect(detail.severity).toBe("high");
-      expect(detail.recommendation).toContain("':latest' 태그 사용을 제거하세요");
+      expect(detail.recommendation).toContain(
+        "':latest' 태그 사용을 제거하세요",
+      );
       expect(detail.resourceSpec).toBeDefined();
     });
 
@@ -184,7 +194,9 @@ describe("ViolationsService", () => {
           "cluster-3:polr-ns-payments:0",
           mockUser,
         ),
-      ).rejects.toThrow(new BusinessException(VIOLATION_ERROR.CLUSTER_ACCESS_DENIED));
+      ).rejects.toThrow(
+        new BusinessException(VIOLATION_ERROR.CLUSTER_ACCESS_DENIED),
+      );
     });
 
     it("존재하지 않는 결과 인덱스 조회 시 BusinessException(NOT_FOUND)을 던진다", async () => {

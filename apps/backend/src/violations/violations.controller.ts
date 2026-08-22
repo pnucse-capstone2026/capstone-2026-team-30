@@ -1,11 +1,10 @@
+import { Controller, Get, Param, Query, UseGuards } from "@nestjs/common";
 import {
-  Controller,
-  Get,
-  Param,
-  Query,
-  UseGuards,
-} from "@nestjs/common";
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from "@nestjs/swagger";
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from "@nestjs/swagger";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import { RequirePermissions } from "../auth/decorators/require-permissions.decorator";

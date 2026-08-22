@@ -1,5 +1,10 @@
 import { Controller, Get, Param, Query, UseGuards } from "@nestjs/common";
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from "@nestjs/swagger";
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from "@nestjs/swagger";
 import { RequirePermissions } from "../auth/decorators/require-permissions.decorator";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { PermissionsGuard } from "../auth/guards/permissions.guard";

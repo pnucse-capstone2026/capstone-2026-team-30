@@ -1,7 +1,10 @@
 import { Injectable } from "@nestjs/common";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { BusinessException } from "../common/errors/business.exception";
-import { ClusterMetadata, ClusterProvider } from "../kubernetes/cluster-provider";
+import {
+  ClusterMetadata,
+  ClusterProvider,
+} from "../kubernetes/cluster-provider";
 import { KyvernoAdapter } from "../kubernetes/kyverno.adapter";
 import { ListViolationsQueryDto } from "./dto/list-violations-query.dto";
 import { ViolationDetailDto } from "./dto/violation-detail.dto";
@@ -69,7 +72,10 @@ export class ViolationsService {
     user: AuthenticatedUser,
     query: ListViolationsQueryDto,
   ): Promise<ViolationSummaryDto[]> {
-    const accessibleClusters = this.getAccessibleClusters(user, query.clusterId);
+    const accessibleClusters = this.getAccessibleClusters(
+      user,
+      query.clusterId,
+    );
     if (accessibleClusters.length === 0) {
       return [];
     }
@@ -152,10 +158,12 @@ export class ViolationsService {
     let report: PolicyReportRaw | null = null;
 
     // Namespaced PolicyReport 우선 조회
-    const namespaced = await this.kyvernoAdapter.listNamespacedPolicyReports(clusterId);
-    report = (namespaced.find(
-      (r) => r.metadata?.name === reportName,
-    ) as PolicyReportRaw) ?? null;
+    const namespaced =
+      await this.kyvernoAdapter.listNamespacedPolicyReports(clusterId);
+    report =
+      (namespaced.find(
+        (r) => r.metadata?.name === reportName,
+      ) as PolicyReportRaw) ?? null;
 
     // ClusterPolicyReport 조회 시도
     if (!report) {
@@ -262,7 +270,8 @@ export class ViolationsService {
     else if (rawSev === "low") severity = "low";
     else if (rawSev === "info") severity = "info";
 
-    let detectedAt = report.metadata?.creationTimestamp ?? new Date().toISOString();
+    let detectedAt =
+      report.metadata?.creationTimestamp ?? new Date().toISOString();
     if (result.timestamp?.seconds) {
       detectedAt = new Date(result.timestamp.seconds * 1000).toISOString();
     }

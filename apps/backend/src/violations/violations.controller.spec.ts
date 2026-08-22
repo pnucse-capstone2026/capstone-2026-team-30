@@ -8,9 +8,10 @@ import { ViolationsController } from "./violations.controller";
 
 describe("ViolationsController", () => {
   it("protects every endpoint with JWT and permission guards", () => {
-    expect(
-      Reflect.getMetadata(GUARDS_METADATA, ViolationsController),
-    ).toEqual([JwtAuthGuard, PermissionsGuard]);
+    expect(Reflect.getMetadata(GUARDS_METADATA, ViolationsController)).toEqual([
+      JwtAuthGuard,
+      PermissionsGuard,
+    ]);
   });
 
   it.each([
@@ -20,9 +21,7 @@ describe("ViolationsController", () => {
     expect(
       Reflect.getMetadata(
         REQUIRED_PERMISSIONS_KEY,
-        ViolationsController.prototype[
-          method as keyof ViolationsController
-        ],
+        ViolationsController.prototype[method as keyof ViolationsController],
       ),
     ).toEqual([permission]);
   });
@@ -57,7 +56,11 @@ describe("ViolationsController", () => {
       clusterIds: ["cluster-1"],
     };
 
-    await controller.getDetail("cluster-1", "cluster-1:polr-ns-payments:0", user);
+    await controller.getDetail(
+      "cluster-1",
+      "cluster-1:polr-ns-payments:0",
+      user,
+    );
     expect(service.getDetail).toHaveBeenCalledWith(
       "cluster-1",
       "cluster-1:polr-ns-payments:0",

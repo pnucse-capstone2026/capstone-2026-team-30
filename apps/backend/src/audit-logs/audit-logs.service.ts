@@ -143,7 +143,8 @@ export class AuditLogsService {
   }
 
   private mapToItemDto(log: AuditLogWithUser): AuditLogItemDto {
-    const actorEmail = log.user?.email ?? (log.actorType === "SYSTEM" ? "SYSTEM" : null);
+    const actorEmail =
+      log.user?.email ?? (log.actorType === "SYSTEM" ? "SYSTEM" : null);
     const actorRole = log.user?.role ?? null;
     const summary = this.generateSummary(log, actorEmail);
 
@@ -163,7 +164,10 @@ export class AuditLogsService {
     };
   }
 
-  private generateSummary(log: AuditLogWithUser, actorEmail: string | null): string {
+  private generateSummary(
+    log: AuditLogWithUser,
+    actorEmail: string | null,
+  ): string {
     const actor = actorEmail ?? "익명 사용자";
     const entity = `${log.entityType} (${log.entityId})`;
 

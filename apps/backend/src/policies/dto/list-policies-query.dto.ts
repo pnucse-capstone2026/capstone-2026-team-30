@@ -27,22 +27,33 @@ export class ListPoliciesQueryDto {
   @IsString()
   clusterId?: string;
 
-  @ApiPropertyOptional({ description: "특정 네임스페이스로 필터링 (Namespaced Policy인 경우)" })
+  @ApiPropertyOptional({
+    description: "특정 네임스페이스로 필터링 (Namespaced Policy인 경우)",
+  })
   @IsOptional()
   @IsString()
   namespace?: string;
 
-  @ApiPropertyOptional({ enum: PolicyTypeFilter, description: "정책 유형 필터링" })
+  @ApiPropertyOptional({
+    enum: PolicyTypeFilter,
+    description: "정책 유형 필터링",
+  })
   @IsOptional()
   @IsEnum(PolicyTypeFilter)
   type?: PolicyTypeFilter;
 
-  @ApiPropertyOptional({ enum: PolicyModeFilter, description: "동작 모드 필터링 (enforce | audit)" })
+  @ApiPropertyOptional({
+    enum: PolicyModeFilter,
+    description: "동작 모드 필터링 (enforce | audit)",
+  })
   @IsOptional()
   @IsEnum(PolicyModeFilter)
   mode?: PolicyModeFilter;
 
-  @ApiPropertyOptional({ enum: PolicyScopeFilter, description: "정책 스코프 필터링 (ClusterPolicy | Policy)" })
+  @ApiPropertyOptional({
+    enum: PolicyScopeFilter,
+    description: "정책 스코프 필터링 (ClusterPolicy | Policy)",
+  })
   @IsOptional()
   @IsEnum(PolicyScopeFilter)
   scope?: PolicyScopeFilter;

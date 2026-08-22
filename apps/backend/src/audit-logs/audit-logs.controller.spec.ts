@@ -6,9 +6,10 @@ import { AuditLogsController } from "./audit-logs.controller";
 
 describe("AuditLogsController", () => {
   it("protects every endpoint with JWT and permission guards", () => {
-    expect(
-      Reflect.getMetadata(GUARDS_METADATA, AuditLogsController),
-    ).toEqual([JwtAuthGuard, PermissionsGuard]);
+    expect(Reflect.getMetadata(GUARDS_METADATA, AuditLogsController)).toEqual([
+      JwtAuthGuard,
+      PermissionsGuard,
+    ]);
   });
 
   it.each([
@@ -18,9 +19,7 @@ describe("AuditLogsController", () => {
     expect(
       Reflect.getMetadata(
         REQUIRED_PERMISSIONS_KEY,
-        AuditLogsController.prototype[
-          method as keyof AuditLogsController
-        ],
+        AuditLogsController.prototype[method as keyof AuditLogsController],
       ),
     ).toEqual([permission]);
   });

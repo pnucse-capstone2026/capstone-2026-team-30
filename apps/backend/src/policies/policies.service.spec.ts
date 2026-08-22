@@ -76,7 +76,9 @@ describe("PoliciesService", () => {
 
     mockKyvernoAdapter = {
       listClusterPolicies: jest.fn().mockResolvedValue([mockClusterPolicyRaw]),
-      listNamespacedPolicies: jest.fn().mockResolvedValue([mockNamespacedPolicyRaw]),
+      listNamespacedPolicies: jest
+        .fn()
+        .mockResolvedValue([mockNamespacedPolicyRaw]),
       getClusterPolicy: jest.fn().mockResolvedValue(mockClusterPolicyRaw),
       getNamespacedPolicy: jest.fn().mockResolvedValue(mockNamespacedPolicyRaw),
     };
@@ -132,7 +134,11 @@ describe("PoliciesService", () => {
 
   describe("getDetail", () => {
     it("ClusterPolicy 상세 정보를 정상 반환한다", async () => {
-      const detail = await service.getDetail("cluster-1", "disallow-latest-tag", mockUser);
+      const detail = await service.getDetail(
+        "cluster-1",
+        "disallow-latest-tag",
+        mockUser,
+      );
 
       expect(detail).toBeDefined();
       expect(detail.name).toBe("disallow-latest-tag");
@@ -162,8 +168,12 @@ describe("PoliciesService", () => {
     });
 
     it("존재하지 않는 정책 조회 시 BusinessException(POLICY_NOT_FOUND)을 던진다", async () => {
-      (mockKyvernoAdapter.getClusterPolicy as jest.Mock).mockResolvedValue(null);
-      (mockKyvernoAdapter.listNamespacedPolicies as jest.Mock).mockResolvedValue([]);
+      (mockKyvernoAdapter.getClusterPolicy as jest.Mock).mockResolvedValue(
+        null,
+      );
+      (
+        mockKyvernoAdapter.listNamespacedPolicies as jest.Mock
+      ).mockResolvedValue([]);
 
       await expect(
         service.getDetail("cluster-1", "non-existent-policy", mockUser),

@@ -8,9 +8,10 @@ import { PoliciesController } from "./policies.controller";
 
 describe("PoliciesController", () => {
   it("protects every endpoint with JWT and permission guards", () => {
-    expect(
-      Reflect.getMetadata(GUARDS_METADATA, PoliciesController),
-    ).toEqual([JwtAuthGuard, PermissionsGuard]);
+    expect(Reflect.getMetadata(GUARDS_METADATA, PoliciesController)).toEqual([
+      JwtAuthGuard,
+      PermissionsGuard,
+    ]);
   });
 
   it.each([
@@ -20,9 +21,7 @@ describe("PoliciesController", () => {
     expect(
       Reflect.getMetadata(
         REQUIRED_PERMISSIONS_KEY,
-        PoliciesController.prototype[
-          method as keyof PoliciesController
-        ],
+        PoliciesController.prototype[method as keyof PoliciesController],
       ),
     ).toEqual([permission]);
   });
@@ -57,7 +56,12 @@ describe("PoliciesController", () => {
       clusterIds: ["cluster-1"],
     };
 
-    await controller.getDetail("cluster-1", "disallow-latest-tag", "payments", user);
+    await controller.getDetail(
+      "cluster-1",
+      "disallow-latest-tag",
+      "payments",
+      user,
+    );
     expect(service.getDetail).toHaveBeenCalledWith(
       "cluster-1",
       "disallow-latest-tag",

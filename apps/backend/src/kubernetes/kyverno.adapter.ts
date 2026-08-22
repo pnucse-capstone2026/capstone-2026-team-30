@@ -227,11 +227,12 @@ export class KyvernoAdapter {
   async listClusterPolicies(clusterId: string): Promise<KubeObject[]> {
     const connection = this.clusters.get(clusterId);
     try {
-      const response = (await connection.customObjectsApi.listClusterCustomObject({
-        group: KYVERNO_GROUP,
-        version: POLICY_VERSION,
-        plural: POLICY_PLURAL,
-      })) as { items?: KubeObject[] };
+      const response =
+        (await connection.customObjectsApi.listClusterCustomObject({
+          group: KYVERNO_GROUP,
+          version: POLICY_VERSION,
+          plural: POLICY_PLURAL,
+        })) as { items?: KubeObject[] };
 
       return Array.isArray(response?.items) ? response.items : [];
     } catch (error) {
@@ -255,12 +256,13 @@ export class KyvernoAdapter {
     try {
       let response: { items?: KubeObject[] };
       if (namespace) {
-        response = (await connection.customObjectsApi.listNamespacedCustomObject({
-          group: KYVERNO_GROUP,
-          version: POLICY_VERSION,
-          namespace,
-          plural: "policies",
-        })) as { items?: KubeObject[] };
+        response =
+          (await connection.customObjectsApi.listNamespacedCustomObject({
+            group: KYVERNO_GROUP,
+            version: POLICY_VERSION,
+            namespace,
+            plural: "policies",
+          })) as { items?: KubeObject[] };
       } else {
         response = (await connection.customObjectsApi.listClusterCustomObject({
           group: KYVERNO_GROUP,
@@ -338,11 +340,12 @@ export class KyvernoAdapter {
   async listClusterPolicyReports(clusterId: string): Promise<KubeObject[]> {
     const connection = this.clusters.get(clusterId);
     try {
-      const response = (await connection.customObjectsApi.listClusterCustomObject({
-        group: WG_POLICY_GROUP,
-        version: POLICY_REPORT_VERSION,
-        plural: CLUSTER_POLICY_REPORT_PLURAL,
-      })) as { items?: KubeObject[] };
+      const response =
+        (await connection.customObjectsApi.listClusterCustomObject({
+          group: WG_POLICY_GROUP,
+          version: POLICY_REPORT_VERSION,
+          plural: CLUSTER_POLICY_REPORT_PLURAL,
+        })) as { items?: KubeObject[] };
 
       return Array.isArray(response?.items) ? response.items : [];
     } catch (error) {
@@ -366,12 +369,13 @@ export class KyvernoAdapter {
     try {
       let response: { items?: KubeObject[] };
       if (namespace) {
-        response = (await connection.customObjectsApi.listNamespacedCustomObject({
-          group: WG_POLICY_GROUP,
-          version: POLICY_REPORT_VERSION,
-          namespace,
-          plural: POLICY_REPORT_PLURAL,
-        })) as { items?: KubeObject[] };
+        response =
+          (await connection.customObjectsApi.listNamespacedCustomObject({
+            group: WG_POLICY_GROUP,
+            version: POLICY_REPORT_VERSION,
+            namespace,
+            plural: POLICY_REPORT_PLURAL,
+          })) as { items?: KubeObject[] };
       } else {
         response = (await connection.customObjectsApi.listClusterCustomObject({
           group: WG_POLICY_GROUP,
