@@ -4,6 +4,7 @@ import { AuthenticatedUser } from "../auth/auth.types";
 import { BusinessException } from "../common/errors/business.exception";
 import { EXCEPTION_LIFECYCLE_ERROR } from "../exception-lifecycle/exception-lifecycle.errors";
 import { ExceptionLifecycleService } from "../exception-lifecycle/exception-lifecycle.service";
+import { GitOpsPublisherService } from "../gitops/gitops-publisher.service";
 import { ClusterProvider } from "../kubernetes/cluster-provider";
 import { KyvernoAdapter } from "../kubernetes/kyverno.adapter";
 import { KUBERNETES_ERROR } from "../kubernetes/kubernetes.errors";
@@ -106,6 +107,13 @@ function harness(found: PolicyExceptionRequest | null = record()) {
   const kyverno = {
     resolveRuleNames: jest.fn().mockResolvedValue(["rule"]),
   } as unknown as KyvernoAdapter;
+  const gitOpsPublisher = {
+    publishManifest: jest.fn().mockResolvedValue({
+      publishedToGitOps: true,
+      appliedDirectly: true,
+      filePath: "k8s-manifests/exceptions/default/request-1.yaml",
+    }),
+  } as unknown as GitOpsPublisherService;
   const config = {
     get: jest.fn().mockReturnValue(undefined),
   } as unknown as ConfigService;
@@ -116,6 +124,7 @@ function harness(found: PolicyExceptionRequest | null = record()) {
       lifecycle,
       clusters,
       kyverno,
+      gitOpsPublisher,
       config,
     ),
     prisma: prisma as unknown as {
@@ -132,6 +141,9 @@ function harness(found: PolicyExceptionRequest | null = record()) {
     },
     kyverno: kyverno as unknown as { resolveRuleNames: jest.Mock },
     clusters: clusters as unknown as { getMetadata: jest.Mock },
+    gitOpsPublisher: gitOpsPublisher as unknown as {
+      publishManifest: jest.Mock;
+    },
   };
 }
 
@@ -361,5 +373,18 @@ describe("ExceptionRequestsService access control", () => {
       code: EXCEPTION_REQUEST_ERROR.EXPIRED.code,
     });
     expect(context.kyverno.resolveRuleNames).not.toHaveBeenCalled();
+  });
+
+  it("triggers GitOps publishManifest when an exception request is approved", async () => {
+    const context = harness();
+    await context.service.approve("request-1", {}, approver);
+
+    expect(context.lifecycle.approve).toHaveBeenCalledWith(
+      "request-1",
+      approver.id,
+      ["rule"],
+      undefined,
+    );
+    expect(context.gitOpsPublisher.publishManifest).toHaveBeenCalled();
   });
 });

@@ -14,6 +14,7 @@ import {
 } from "../common/errors/business.exception";
 import { EXCEPTION_LIFECYCLE_ERROR } from "../exception-lifecycle/exception-lifecycle.errors";
 import { ExceptionLifecycleService } from "../exception-lifecycle/exception-lifecycle.service";
+import { GitOpsPublisherService } from "../gitops/gitops-publisher.service";
 import { ClusterProvider } from "../kubernetes/cluster-provider";
 import {
   KyvernoAdapter,
@@ -38,6 +39,7 @@ export class ExceptionRequestsService {
     private readonly lifecycle: ExceptionLifecycleService,
     private readonly clusters: ClusterProvider,
     private readonly kyverno: KyvernoAdapter,
+    private readonly gitOpsPublisher: GitOpsPublisherService,
     config: ConfigService,
   ) {
     const configured = Number(
@@ -186,12 +188,32 @@ export class ExceptionRequestsService {
       );
     }
 
-    return this.lifecycle.approve(
+    const approvedRequest = await this.lifecycle.approve(
       id,
       user.id,
       appliedRuleNames,
       dto.decisionNote?.trim(),
     );
+
+    // 승인 완료 후 GitOps 매니페스트 게시 (오류 발생 시 런타임 적용 유지를 위해 안전하게 처리)
+    try {
+      await this.gitOpsPublisher.publishManifest(approvedRequest);
+    } catch {
+      // GitOps 게시 실패가 승인 프로세스를 중단시키지 않도록 예외 처리
+    }
+
+    return approvedRequest;
+  }
+
+  /**
+   * approve 메서드의 별칭(Alias)으로, 정책 예외 승인 처리 및 GitOps 매니페스트 발행을 수행합니다.
+   */
+  async approveExceptionRequest(
+    id: string,
+    dto: ApproveExceptionRequestDto,
+    user: AuthenticatedUser,
+  ): Promise<PolicyExceptionRequest> {
+    return this.approve(id, dto, user);
   }
 
   async reject(
