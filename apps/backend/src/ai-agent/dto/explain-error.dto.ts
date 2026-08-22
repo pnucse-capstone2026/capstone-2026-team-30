@@ -90,4 +90,21 @@ export class KyvernoErrorExplanationResultDto {
     description: "Why this policy exists in the cluster governance model",
   })
   governanceRationale!: string;
+
+  /**
+   * 해설 결과를 제공한 프로바이더 (BEDROCK: Bedrock AI, RULE_ENGINE_FALLBACK: 룰 기반 템플릿)
+   */
+  @ApiPropertyOptional({
+    description: "Source provider of the explanation result",
+    enum: ["BEDROCK", "RULE_ENGINE_FALLBACK"],
+  })
+  provider?: "BEDROCK" | "RULE_ENGINE_FALLBACK";
+
+  /**
+   * 분석 응답 소요 시간 (밀리초)
+   */
+  @ApiPropertyOptional({
+    description: "Response latency in milliseconds",
+  })
+  latencyMs?: number;
 }
