@@ -16,6 +16,7 @@ describe("ViolationsController", () => {
 
   it.each([
     ["list", "violations.read"],
+    ["getSummary", "violations.read"],
     ["getDetail", "violations.read"],
   ])("declares %s permission as %s", (method, permission) => {
     expect(
@@ -29,6 +30,7 @@ describe("ViolationsController", () => {
   it("delegates list call to service", async () => {
     const service = {
       list: jest.fn().mockResolvedValue([]),
+      getViolations: jest.fn(),
       getDetail: jest.fn(),
     };
     const controller = new ViolationsController(service as never);
@@ -43,9 +45,30 @@ describe("ViolationsController", () => {
     expect(service.list).toHaveBeenCalledWith(user, { clusterId: "cluster-1" });
   });
 
+  it("delegates getSummary call to service getViolations", async () => {
+    const service = {
+      list: jest.fn(),
+      getViolations: jest.fn().mockResolvedValue([]),
+      getDetail: jest.fn(),
+    };
+    const controller = new ViolationsController(service as never);
+    const user: AuthenticatedUser = {
+      id: "user-1",
+      email: "user@example.com",
+      role: Role.APPROVER,
+      clusterIds: ["cluster-1"],
+    };
+
+    await controller.getSummary(user, { clusterId: "cluster-1" });
+    expect(service.getViolations).toHaveBeenCalledWith(user, {
+      clusterId: "cluster-1",
+    });
+  });
+
   it("delegates getDetail call to service", async () => {
     const service = {
       list: jest.fn(),
+      getViolations: jest.fn(),
       getDetail: jest.fn().mockResolvedValue({ id: "v-1" }),
     };
     const controller = new ViolationsController(service as never);

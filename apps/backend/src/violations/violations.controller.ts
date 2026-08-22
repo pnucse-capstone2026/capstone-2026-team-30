@@ -48,6 +48,28 @@ export class ViolationsController {
   }
 
   /**
+   * 실시간 K8s 보고서 및 DB 백업 기반 정책 위반 요약 정보를 조회합니다.
+   *
+   * @param user 인증된 요청자 정보
+   * @param query 필터 및 검색 옵션
+   * @returns 위반 요약 DTO 배열
+   */
+  @Get("summary")
+  @RequirePermissions("violations.read")
+  @ApiOperation({ summary: "정책 위반 요약 정보 조회" })
+  @ApiResponse({
+    status: 200,
+    description: "위반 요약 정보 조회 성공",
+    type: [ViolationSummaryDto],
+  })
+  getSummary(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: ListViolationsQueryDto,
+  ): Promise<ViolationSummaryDto[]> {
+    return this.service.getViolations(user, query);
+  }
+
+  /**
    * 특정 정책 위반의 상세 정보 및 원본 K8s PolicyReport 결과를 조회합니다.
    *
    * @param clusterId 클러스터 식별자
