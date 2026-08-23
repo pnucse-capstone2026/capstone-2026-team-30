@@ -1,5 +1,29 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsNotEmpty, IsOptional, IsString } from "class-validator";
+import {
+  IsEnum,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Min,
+} from "class-validator";
+
+/**
+ * AI 분석 작업 스코프 (단일 리소스 / 다중 정책 / 클러스터 전역)
+ */
+export enum AnalysisTaskScope {
+  SINGLE_RESOURCE = "SINGLE_RESOURCE",
+  MULTI_POLICY = "MULTI_POLICY",
+  CLUSTER_WIDE = "CLUSTER_WIDE",
+}
+
+/**
+ * AI 분석 실행 모드 (단일 에이전트 / 마스터-서브 에이전트)
+ */
+export enum AnalysisMode {
+  SINGLE_AGENT = "SINGLE_AGENT",
+  MASTER_SUBAGENT = "MASTER_SUBAGENT",
+}
 
 /**
  * Kyverno 오류 해석 요청 DTO
@@ -51,6 +75,30 @@ export class ExplainKyvernoErrorDto {
   @IsString()
   @IsOptional()
   clusterContext?: string;
+
+  /**
+   * 명시적 분석 작업 범위 지정 (옵션: SINGLE_RESOURCE, MULTI_POLICY, CLUSTER_WIDE)
+   */
+  @ApiPropertyOptional({
+    description: "Optional explicit task scope for workload evaluation",
+    enum: AnalysisTaskScope,
+    example: AnalysisTaskScope.SINGLE_RESOURCE,
+  })
+  @IsEnum(AnalysisTaskScope)
+  @IsOptional()
+  taskScope?: AnalysisTaskScope;
+
+  /**
+   * 요청에 포함된 위반 개수 (옵션, 기본값: 1)
+   */
+  @ApiPropertyOptional({
+    description: "Number of policy violations included in request",
+    example: 1,
+  })
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  violationCount?: number;
 }
 
 /**
@@ -99,6 +147,26 @@ export class KyvernoErrorExplanationResultDto {
     enum: ["BEDROCK", "RULE_ENGINE_FALLBACK"],
   })
   provider?: "BEDROCK" | "RULE_ENGINE_FALLBACK";
+
+  /**
+   * 선택 및 적용된 AI 분석 실행 모드 (SINGLE_AGENT: 단일 에이전트, MASTER_SUBAGENT: 마스터-서브 에이전트)
+   */
+  @ApiPropertyOptional({
+    description: "Execution mode determined by Workload Evaluator",
+    enum: AnalysisMode,
+    example: AnalysisMode.SINGLE_AGENT,
+  })
+  analysisMode?: AnalysisMode;
+
+  /**
+   * 판별된 분석 작업 범위 (SINGLE_RESOURCE, MULTI_POLICY, CLUSTER_WIDE)
+   */
+  @ApiPropertyOptional({
+    description: "Evaluated task scope",
+    enum: AnalysisTaskScope,
+    example: AnalysisTaskScope.SINGLE_RESOURCE,
+  })
+  taskScope?: AnalysisTaskScope;
 
   /**
    * 분석 응답 소요 시간 (밀리초)
