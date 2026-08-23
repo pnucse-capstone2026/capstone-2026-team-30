@@ -4,6 +4,7 @@ import { AiAgentController } from "./ai-agent.controller";
 import { AiAgentService } from "./ai-agent.service";
 import { BedrockService } from "./bedrock.service";
 import { KyvernoRuleTemplateEngine } from "./rule-template.engine";
+import { WorkloadEvaluatorService } from "./services/workload-evaluator.service";
 
 /**
  * AWS Bedrock 연동 Kyverno 에이전트 모듈
@@ -11,7 +12,16 @@ import { KyvernoRuleTemplateEngine } from "./rule-template.engine";
 @Module({
   imports: [ConfigModule],
   controllers: [AiAgentController],
-  providers: [BedrockService, AiAgentService, KyvernoRuleTemplateEngine],
-  exports: [AiAgentService, KyvernoRuleTemplateEngine],
+  providers: [
+    BedrockService,
+    AiAgentService,
+    KyvernoRuleTemplateEngine,
+    WorkloadEvaluatorService,
+  ],
+  exports: [
+    AiAgentService,
+    KyvernoRuleTemplateEngine,
+    WorkloadEvaluatorService,
+  ],
 })
 export class AiAgentModule {}

@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { AiAgentService } from "./ai-agent.service";
 import { BedrockService } from "./bedrock.service";
 import { KyvernoRuleTemplateEngine } from "./rule-template.engine";
+import { WorkloadEvaluatorService } from "./services/workload-evaluator.service";
 
 describe("AiAgentService", () => {
   let service: AiAgentService;
@@ -21,6 +22,7 @@ describe("AiAgentService", () => {
       providers: [
         AiAgentService,
         KyvernoRuleTemplateEngine,
+        WorkloadEvaluatorService,
         {
           provide: BedrockService,
           useValue: mockBedrockService,

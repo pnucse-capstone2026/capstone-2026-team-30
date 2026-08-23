@@ -6,6 +6,7 @@ import {
   KyvernoErrorExplanationResultDto,
 } from "./dto/explain-error.dto";
 import { KyvernoRuleTemplateEngine } from "./rule-template.engine";
+import { WorkloadEvaluatorService } from "./services/workload-evaluator.service";
 
 /**
  * 플랫폼 비전문 사용자를 위한 Kyverno 오류 해설 및 수정 가이드 생성 AI 에이전트 서비스
@@ -18,6 +19,7 @@ export class AiAgentService {
   constructor(
     private readonly bedrockService: BedrockService,
     private readonly ruleTemplateEngine: KyvernoRuleTemplateEngine,
+    private readonly workloadEvaluator: WorkloadEvaluatorService,
     config: ConfigService,
   ) {
     // Bedrock API 응답 대기 상한 타임아웃 (기본값: 3500ms)
@@ -41,6 +43,7 @@ export class AiAgentService {
     dto: ExplainKyvernoErrorDto,
   ): Promise<KyvernoErrorExplanationResultDto> {
     const startTime = Date.now();
+    const evalResult = this.workloadEvaluator.evaluate(dto);
 
     const systemPrompt = `You are a helpful, empathetic Platform Engineering AI Assistant.
 Your mission is to explain Kyverno policy rejection errors to application developers who do NOT have deep Kubernetes or Platform Engineering knowledge.
@@ -102,6 +105,8 @@ Please analyze the failure above and generate the JSON response.
       return {
         ...parsed,
         provider: "BEDROCK",
+        analysisMode: evalResult.mode,
+        taskScope: evalResult.scope,
         latencyMs,
       };
     } catch (error) {
@@ -111,7 +116,16 @@ Please analyze the failure above and generate the JSON response.
       );
 
       // 정규식 매칭 기반 오프라인 룰 템플릿 엔진으로 즉시 조치 가이드 생성
-      return this.ruleTemplateEngine.matchAndGenerate(dto, latencyMs);
+      const fallbackResult = this.ruleTemplateEngine.matchAndGenerate(
+        dto,
+        latencyMs,
+      );
+
+      return {
+        ...fallbackResult,
+        analysisMode: evalResult.mode,
+        taskScope: evalResult.scope,
+      };
     }
   }
 }
