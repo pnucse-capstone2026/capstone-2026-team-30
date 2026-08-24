@@ -1,7 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -17,6 +23,7 @@ import { DashboardPageShell } from "@/components/dashboard/dashboard-page-shell"
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAuthStore } from "@/lib/auth-store";
 import {
   clusters,
   clusterEnvironmentLabel,
@@ -79,65 +86,62 @@ export default function ClustersPage() {
     PolicyViolation[] | null
   >(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  const authStatus = useAuthStore((state) => state.status);
+  const initializeAuth = useAuthStore((state) => state.initialize);
 
-    /**
-     * 백엔드 API에서 라이브 클러스터, 실시간 정책, 정책 위반 내역을 병렬 조회합니다.
-     */
-    async function fetchDashboardData() {
+  /**
+   * 백엔드 API에서 라이브 클러스터, 실시간 정책, 정책 위반 내역을 병렬 조회합니다.
+   */
+  const loadDashboardData = useCallback(async () => {
+    try {
+      await initializeAuth();
+
+      let clustersData: ClusterMetadata[] | null = null;
       try {
-        let clustersData: ClusterMetadata[] | null = null;
-        try {
-          const data = await listClusters();
-          if (Array.isArray(data)) {
-            clustersData = data;
-          }
-        } catch {
-          try {
-            const catalogData = await listClusterCatalog();
-            if (Array.isArray(catalogData)) {
-              clustersData = catalogData;
-            }
-          } catch {
-            // 백엔드 연동 실패 시 graceful fallback 유지
-          }
-        }
-
-        if (!cancelled && clustersData !== null) {
-          setLiveClusters(clustersData);
-        }
-
-        const [policiesResult, violationsResult] = await Promise.allSettled([
-          getPolicies(),
-          getViolations(),
-        ]);
-
-        if (!cancelled) {
-          if (
-            policiesResult.status === "fulfilled" &&
-            policiesResult.value.length > 0
-          ) {
-            setLivePolicies(policiesResult.value);
-          }
-          if (
-            violationsResult.status === "fulfilled" &&
-            violationsResult.value.length > 0
-          ) {
-            setLiveViolations(violationsResult.value);
-          }
+        const data = await listClusters();
+        if (Array.isArray(data)) {
+          clustersData = data;
         }
       } catch {
-        // 백엔드 연동 불가 시 graceful fallback 유지
+        try {
+          const catalogData = await listClusterCatalog();
+          if (Array.isArray(catalogData)) {
+            clustersData = catalogData;
+          }
+        } catch {
+          // 백엔드 연동 실패 시 graceful fallback 유지
+        }
       }
+
+      if (clustersData !== null) {
+        setLiveClusters(clustersData);
+      }
+
+      const [policiesResult, violationsResult] = await Promise.allSettled([
+        getPolicies(),
+        getViolations(),
+      ]);
+
+      if (
+        policiesResult.status === "fulfilled" &&
+        policiesResult.value.length > 0
+      ) {
+        setLivePolicies(policiesResult.value);
+      }
+      if (
+        violationsResult.status === "fulfilled" &&
+        violationsResult.value.length > 0
+      ) {
+        setLiveViolations(violationsResult.value);
+      }
+    } catch {
+      // 백엔드 연동 불가 시 graceful fallback 유지
     }
+  }, [initializeAuth]);
 
-    void fetchDashboardData();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  useEffect(() => {
+    void loadDashboardData();
+  }, [authStatus, loadDashboardData]);
 
   const activeClusters: ManagedCluster[] = useMemo(() => {
     if (liveClusters && liveClusters.length > 0) {

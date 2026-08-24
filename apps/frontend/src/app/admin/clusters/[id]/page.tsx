@@ -220,7 +220,7 @@ export default async function AdminClusterDetailPage({
               <div>
                 <h3 className="text-sm font-semibold">연결 정보</h3>
                 <p className="mt-1 text-xs text-slate-400">
-                  Kubernetes/EKS API 연결 전 목업 기준 정보입니다.
+                  Kubernetes/EKS 라이브 연동 기준 연결 정보입니다.
                 </p>
               </div>
             </div>
