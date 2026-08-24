@@ -121,7 +121,9 @@ export default async function AdminPolicyDetailPage({
               {policyModeLabel[policy.mode]}
             </Badge>
           </div>
-          <h2 className="text-2xl font-semibold tracking-tight">{policy.name}</h2>
+          <h2 className="text-2xl font-semibold tracking-tight">
+            {policy.name}
+          </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
             {policy.description}
           </p>
@@ -137,7 +139,10 @@ export default async function AdminPolicyDetailPage({
               오류 보기
             </Link>
           </Button>
-          <Button asChild className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]">
+          <Button
+            asChild
+            className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]"
+          >
             <Link href={`/admin/policies/${policy.id}/edit`}>
               <Edit className="size-4" />
               정책 수정
@@ -187,7 +192,7 @@ export default async function AdminPolicyDetailPage({
               <div>
                 <h3 className="text-sm font-semibold">정책 메타데이터</h3>
                 <p className="mt-1 text-xs text-slate-400">
-                  Kyverno 정책 API 연결 전 목업 기준 정보입니다.
+                  Kubernetes/Kyverno 라이브 연동 기준 정보입니다.
                 </p>
               </div>
             </div>
@@ -254,7 +259,9 @@ export default async function AdminPolicyDetailPage({
                           <p className="truncate text-[13px] font-medium">
                             {violation.ruleName}
                           </p>
-                          <Badge className={severityClassName[violation.severity]}>
+                          <Badge
+                            className={severityClassName[violation.severity]}
+                          >
                             {severityLabel[violation.severity]}
                           </Badge>
                           <Badge className={statusClassName[violation.status]}>
@@ -263,7 +270,8 @@ export default async function AdminPolicyDetailPage({
                           </Badge>
                         </div>
                         <p className="mt-1 truncate text-[11px] text-slate-400">
-                          {violation.resourceKind} / {violation.resourceName} · {violation.detectedAt}
+                          {violation.resourceKind} / {violation.resourceName} ·{" "}
+                          {violation.detectedAt}
                         </p>
                       </div>
                     </Link>
@@ -286,7 +294,9 @@ export default async function AdminPolicyDetailPage({
               </div>
               <div>
                 <h3 className="text-sm font-semibold">정책 YAML 미리보기</h3>
-                <p className="mt-1 text-xs text-slate-400">목업 정책 정의</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Kyverno 매니페스트 정의
+                </p>
               </div>
             </div>
             <pre className="max-h-[460px] overflow-auto p-5 text-xs leading-6 text-slate-700">
@@ -313,7 +323,9 @@ export default async function AdminPolicyDetailPage({
                       <p className="truncate text-xs font-semibold text-slate-900">
                         {request.id}
                       </p>
-                      <Badge className={exceptionStatusClassName[request.status]}>
+                      <Badge
+                        className={exceptionStatusClassName[request.status]}
+                      >
                         {exceptionStatusLabel[request.status]}
                       </Badge>
                     </div>
@@ -321,7 +333,9 @@ export default async function AdminPolicyDetailPage({
                       {request.requester} · {request.team}
                     </p>
                     <div className="mt-2 flex items-center justify-between gap-3">
-                      <Badge className={exceptionRiskClassName[request.riskLevel]}>
+                      <Badge
+                        className={exceptionRiskClassName[request.riskLevel]}
+                      >
                         {exceptionRiskLabel[request.riskLevel]}
                       </Badge>
                       <span className="text-[11px] text-slate-400">
@@ -359,7 +373,9 @@ function SummaryCard({
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
       <div className="flex items-start justify-between">
-        <div className={`flex size-10 items-center justify-center rounded-xl ${className}`}>
+        <div
+          className={`flex size-10 items-center justify-center rounded-xl ${className}`}
+        >
           <Icon className="size-5" />
         </div>
       </div>
@@ -373,9 +389,10 @@ function SummaryCard({
 }
 
 function buildPolicyYaml(policy: (typeof kyvernoPolicies)[number]) {
-  const namespace = policy.scope === "Policy" && policy.namespace
-    ? `  namespace: ${policy.namespace}\n`
-    : "";
+  const namespace =
+    policy.scope === "Policy" && policy.namespace
+      ? `  namespace: ${policy.namespace}\n`
+      : "";
 
   return `apiVersion: kyverno.io/v1
 kind: ${policy.scope}
