@@ -150,7 +150,7 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     void loadDashboardData();
-  }, [authStatus, loadDashboardData]);
+  }, [loadDashboardData]);
 
   const isLoading =
     liveClusters === null &&

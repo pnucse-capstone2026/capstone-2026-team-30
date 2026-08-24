@@ -92,7 +92,7 @@ export default function UserDashboardPage() {
 
   useEffect(() => {
     void loadUserData();
-  }, [authStatus, loadUserData]);
+  }, [loadUserData]);
 
   const isLoading =
     liveClusters === null && livePolicies === null && liveViolations === null;

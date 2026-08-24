@@ -25,6 +25,7 @@ type AuthState = {
 };
 
 let initializePromise: Promise<AuthUser | null> | null = null;
+let refreshPromise: Promise<AuthUser | null> | null = null;
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   accessToken: null,
@@ -46,9 +47,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return result.user;
     } catch (error) {
       const message =
-        error instanceof Error
-          ? error.message
-          : "\ub85c\uadf8\uc778\uc5d0 \uc2e4\ud328\ud588\uc2b5\ub2c8\ub2e4.";
+        error instanceof Error ? error.message : "로그인에 실패했습니다.";
       set({
         accessToken: null,
         user: null,
@@ -60,21 +59,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   async initialize() {
+    const { accessToken, user, status } = get();
+
+    // 이미 메모리에 인증 토큰과 유저 정보가 존재하는 경우 0ms 반환 (네트워크 중복 호출 방지)
+    if (status === "authenticated" && accessToken && user) {
+      return user;
+    }
+
     if (initializePromise) {
       return initializePromise;
     }
 
     initializePromise = (async () => {
-      const { accessToken, user } = get();
+      const currentState = get();
 
-      if (accessToken && user) {
-        try {
-          const currentUser = await getMe(accessToken);
-          set({ user: currentUser, status: "authenticated", error: null });
-          return currentUser;
-        } catch {
-          return get().refreshSession();
-        }
+      if (currentState.accessToken && currentState.user) {
+        return currentState.user;
       }
 
       return get().refreshSession();
@@ -86,25 +86,40 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   async refreshSession() {
-    set({ status: "loading", error: null });
-
-    try {
-      const result = await refreshRequest();
-      set({
-        accessToken: result.accessToken,
-        user: result.user,
-        status: "authenticated",
-        error: null,
-      });
-      return result.user;
-    } catch {
-      set({
-        accessToken: null,
-        user: null,
-        status: "unauthenticated",
-      });
-      return null;
+    if (refreshPromise) {
+      return refreshPromise;
     }
+
+    const { status } = get();
+
+    // 상태가 이미 인증된 상태라면 로딩 상태 플리커링 방지
+    if (status !== "authenticated") {
+      set({ status: "loading", error: null });
+    }
+
+    refreshPromise = (async () => {
+      try {
+        const result = await refreshRequest();
+        set({
+          accessToken: result.accessToken,
+          user: result.user,
+          status: "authenticated",
+          error: null,
+        });
+        return result.user;
+      } catch {
+        set({
+          accessToken: null,
+          user: null,
+          status: "unauthenticated",
+        });
+        return null;
+      }
+    })().finally(() => {
+      refreshPromise = null;
+    });
+
+    return refreshPromise;
   },
 
   async logout() {
