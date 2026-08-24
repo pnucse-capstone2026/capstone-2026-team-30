@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useDataStore } from "@/lib/data-store";
 import {
   AlertTriangle,
   Bell,
@@ -72,8 +73,10 @@ const riskOptions: Array<"all" | ExceptionRiskLevel> = [
 ];
 
 export default function AdminExceptionsPage() {
-  const [requests, setRequests] = useState<ExceptionRequest[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const cachedRequests = useDataStore((state) => state.exceptions);
+  const fetchExceptions = useDataStore((state) => state.fetchExceptions);
+  const exceptionsLoading = useDataStore((state) => state.exceptionsLoading);
+
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | ExceptionRequestStatus>("all");
@@ -81,36 +84,38 @@ export default function AdminExceptionsPage() {
   const [cluster, setCluster] = useState("all");
   const [namespace, setNamespace] = useState("all");
 
-  async function loadRequests() {
-    setIsLoading(true);
+  const loadRequests = useCallback(async () => {
     setErrorMessage(null);
     try {
-      const nextRequests = await listExceptionRequests();
-      setRequests(nextRequests);
+      await fetchExceptions();
     } catch (error) {
       setErrorMessage(
         error instanceof Error
           ? error.message
           : "예외 신청 목록을 불러오지 못했습니다.",
       );
-    } finally {
-      setIsLoading(false);
     }
-  }
+  }, [fetchExceptions]);
 
   useEffect(() => {
     void loadRequests();
-  }, []);
+  }, [loadRequests]);
+
+  const requests = cachedRequests ?? [];
+  const isLoading = cachedRequests === null && exceptionsLoading;
 
   const pendingRequests = requests.filter(
     (request) => request.status === "pending" || request.status === "applying",
   );
-  const approvedRequests = requests.filter((request) => request.status === "approved");
+  const approvedRequests = requests.filter(
+    (request) => request.status === "approved",
+  );
   const needsActionRequests = requests.filter((request) =>
     ["applying", "cancelling", "expiring", "failed"].includes(request.status),
   );
   const highRiskRequests = requests.filter(
-    (request) => request.riskLevel === "critical" || request.riskLevel === "high",
+    (request) =>
+      request.riskLevel === "critical" || request.riskLevel === "high",
   );
 
   const summaryCards = [
@@ -225,7 +230,9 @@ export default function AdminExceptionsPage() {
             <Menu className="size-5" />
           </button>
           <div>
-            <h1 className="text-base font-semibold tracking-tight sm:text-lg">예외 관리</h1>
+            <h1 className="text-base font-semibold tracking-tight sm:text-lg">
+              예외 관리
+            </h1>
             <p className="hidden text-xs text-slate-500 sm:block">
               정책 예외 신청을 검토하고 승인, 거절, 만료 상태를 관리합니다.
             </p>
@@ -250,14 +257,19 @@ export default function AdminExceptionsPage() {
           <section className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
             <div>
               <div className="mb-3 flex flex-wrap items-center gap-2">
-                <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50">관리자</Badge>
+                <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50">
+                  관리자
+                </Badge>
                 <span className="text-xs text-slate-400">
                   승인 전 위험도와 보완 통제를 함께 확인합니다.
                 </span>
               </div>
-              <h2 className="text-2xl font-semibold tracking-tight">예외 신청 검토</h2>
+              <h2 className="text-2xl font-semibold tracking-tight">
+                예외 신청 검토
+              </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                운영 영향, 만료일, 보완 통제를 기준으로 예외 신청을 승인하거나 거절합니다.
+                운영 영향, 만료일, 보완 통제를 기준으로 예외 신청을 승인하거나
+                거절합니다.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -277,22 +289,30 @@ export default function AdminExceptionsPage() {
           </section>
 
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {summaryCards.map(({ label, value, detail, icon: Icon, className }) => (
-              <article
-                key={label}
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
-              >
-                <div className="flex items-start justify-between">
-                  <div className={`flex size-10 items-center justify-center rounded-xl ${className}`}>
-                    <Icon className="size-5" />
+            {summaryCards.map(
+              ({ label, value, detail, icon: Icon, className }) => (
+                <article
+                  key={label}
+                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
+                >
+                  <div className="flex items-start justify-between">
+                    <div
+                      className={`flex size-10 items-center justify-center rounded-xl ${className}`}
+                    >
+                      <Icon className="size-5" />
+                    </div>
+                    <span className="text-[11px] font-medium text-slate-400">
+                      live
+                    </span>
                   </div>
-                  <span className="text-[11px] font-medium text-slate-400">live</span>
-                </div>
-                <p className="mt-5 text-[13px] text-slate-500">{label}</p>
-                <p className="mt-1 text-3xl font-semibold tracking-tight">{value}</p>
-                <p className="mt-2 text-[11px] text-slate-400">{detail}</p>
-              </article>
-            ))}
+                  <p className="mt-5 text-[13px] text-slate-500">{label}</p>
+                  <p className="mt-1 text-3xl font-semibold tracking-tight">
+                    {value}
+                  </p>
+                  <p className="mt-2 text-[11px] text-slate-400">{detail}</p>
+                </article>
+              ),
+            )}
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white">
@@ -301,7 +321,8 @@ export default function AdminExceptionsPage() {
                 <div>
                   <h3 className="text-sm font-semibold">신청 목록</h3>
                   <p className="mt-1 text-xs text-slate-400">
-                    총 {requests.length}건 중 {filteredRequests.length}건을 표시합니다.
+                    총 {requests.length}건 중 {filteredRequests.length}건을
+                    표시합니다.
                   </p>
                 </div>
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
@@ -328,35 +349,53 @@ export default function AdminExceptionsPage() {
 
               <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <label className="space-y-1.5">
-                  <span className="text-[11px] font-medium text-slate-500">처리 상태</span>
+                  <span className="text-[11px] font-medium text-slate-500">
+                    처리 상태
+                  </span>
                   <select
                     value={status}
-                    onChange={(event) => setStatus(event.target.value as "all" | ExceptionRequestStatus)}
+                    onChange={(event) =>
+                      setStatus(
+                        event.target.value as "all" | ExceptionRequestStatus,
+                      )
+                    }
                     className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none focus:border-blue-500 focus:ring-3 focus:ring-blue-500/10"
                   >
                     {statusOptions.map((option) => (
                       <option key={option} value={option}>
-                        {option === "all" ? "전체 상태" : exceptionStatusLabel[option]}
+                        {option === "all"
+                          ? "전체 상태"
+                          : exceptionStatusLabel[option]}
                       </option>
                     ))}
                   </select>
                 </label>
                 <label className="space-y-1.5">
-                  <span className="text-[11px] font-medium text-slate-500">위험도</span>
+                  <span className="text-[11px] font-medium text-slate-500">
+                    위험도
+                  </span>
                   <select
                     value={riskLevel}
-                    onChange={(event) => setRiskLevel(event.target.value as "all" | ExceptionRiskLevel)}
+                    onChange={(event) =>
+                      setRiskLevel(
+                        event.target.value as "all" | ExceptionRiskLevel,
+                      )
+                    }
                     className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none focus:border-blue-500 focus:ring-3 focus:ring-blue-500/10"
                   >
                     {riskOptions.map((option) => (
                       <option key={option} value={option}>
-                        {option === "all" ? "전체 위험도" : exceptionRiskLabel[option]}
+                        {option === "all"
+                          ? "전체 위험도"
+                          : exceptionRiskLabel[option]}
                       </option>
                     ))}
                   </select>
                 </label>
                 <label className="space-y-1.5">
-                  <span className="text-[11px] font-medium text-slate-500">클러스터</span>
+                  <span className="text-[11px] font-medium text-slate-500">
+                    클러스터
+                  </span>
                   <select
                     value={cluster}
                     onChange={(event) => setCluster(event.target.value)}
@@ -371,7 +410,9 @@ export default function AdminExceptionsPage() {
                   </select>
                 </label>
                 <label className="space-y-1.5">
-                  <span className="text-[11px] font-medium text-slate-500">네임스페이스</span>
+                  <span className="text-[11px] font-medium text-slate-500">
+                    네임스페이스
+                  </span>
                   <select
                     value={namespace}
                     onChange={(event) => setNamespace(event.target.value)}
@@ -395,12 +436,20 @@ export default function AdminExceptionsPage() {
                     신청 번호
                   </TableHead>
                   <TableHead className="text-xs text-slate-500">대상</TableHead>
-                  <TableHead className="text-xs text-slate-500">신청자</TableHead>
-                  <TableHead className="text-xs text-slate-500">위험도</TableHead>
+                  <TableHead className="text-xs text-slate-500">
+                    신청자
+                  </TableHead>
+                  <TableHead className="text-xs text-slate-500">
+                    위험도
+                  </TableHead>
                   <TableHead className="text-xs text-slate-500">기간</TableHead>
                   <TableHead className="text-xs text-slate-500">상태</TableHead>
-                  <TableHead className="min-w-[260px] text-xs text-slate-500">보완 통제</TableHead>
-                  <TableHead className="w-[120px] text-xs text-slate-500">조치</TableHead>
+                  <TableHead className="min-w-[260px] text-xs text-slate-500">
+                    보완 통제
+                  </TableHead>
+                  <TableHead className="w-[120px] text-xs text-slate-500">
+                    조치
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -441,10 +490,15 @@ export default function AdminExceptionsPage() {
                       const StatusIcon = statusIcon[request.status];
 
                       return (
-                        <TableRow key={request.id} className="hover:bg-slate-50/70">
+                        <TableRow
+                          key={request.id}
+                          className="hover:bg-slate-50/70"
+                        >
                           <TableCell className="px-5 py-4 sm:px-6">
                             <div>
-                              <p className="text-xs font-semibold text-slate-900">{request.id}</p>
+                              <p className="text-xs font-semibold text-slate-900">
+                                {request.id}
+                              </p>
                               <p className="mt-1 text-[11px] text-slate-400">
                                 {request.requestedAt} 신청
                               </p>
@@ -460,28 +514,43 @@ export default function AdminExceptionsPage() {
                                   {request.policyName}
                                 </p>
                                 <p className="mt-1 truncate text-[11px] text-slate-400">
-                                  {request.resourceKind} / {request.resourceName} / {request.namespace}
+                                  {request.resourceKind} /{" "}
+                                  {request.resourceName} / {request.namespace}
                                 </p>
                               </div>
                             </div>
                           </TableCell>
                           <TableCell className="py-4">
-                            <p className="text-xs font-medium text-slate-800">{request.requester}</p>
+                            <p className="text-xs font-medium text-slate-800">
+                              {request.requester}
+                            </p>
                             <p className="mt-1 text-[11px] text-slate-400">
                               {request.team} · {request.clusterName}
                             </p>
                           </TableCell>
                           <TableCell className="py-4">
-                            <Badge className={exceptionRiskClassName[request.riskLevel]}>
+                            <Badge
+                              className={
+                                exceptionRiskClassName[request.riskLevel]
+                              }
+                            >
                               {exceptionRiskLabel[request.riskLevel]}
                             </Badge>
                           </TableCell>
                           <TableCell className="py-4">
-                            <p className="text-xs text-slate-600">{request.requestedAt}</p>
-                            <p className="mt-1 text-[11px] text-slate-400">만료 {request.expiresAt}</p>
+                            <p className="text-xs text-slate-600">
+                              {request.requestedAt}
+                            </p>
+                            <p className="mt-1 text-[11px] text-slate-400">
+                              만료 {request.expiresAt}
+                            </p>
                           </TableCell>
                           <TableCell className="py-4">
-                            <Badge className={exceptionStatusClassName[request.status]}>
+                            <Badge
+                              className={
+                                exceptionStatusClassName[request.status]
+                              }
+                            >
                               <StatusIcon className="size-3" />
                               {exceptionStatusLabel[request.status]}
                             </Badge>
@@ -498,7 +567,9 @@ export default function AdminExceptionsPage() {
                               size="sm"
                               className="rounded-lg border-slate-200 bg-white text-slate-700"
                             >
-                              <Link href={`/admin/exceptions/${request.id}`}>상세 검토</Link>
+                              <Link href={`/admin/exceptions/${request.id}`}>
+                                상세 검토
+                              </Link>
                             </Button>
                           </TableCell>
                         </TableRow>

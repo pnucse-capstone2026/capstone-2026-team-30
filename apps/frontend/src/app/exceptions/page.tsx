@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useDataStore } from "@/lib/data-store";
 import {
   AlertCircle,
   ArrowRight,
@@ -64,34 +65,35 @@ const statusIcon: Record<ExceptionRequestStatus, typeof Clock3> = {
 };
 
 export default function MyExceptionRequestsPage() {
-  const [requests, setRequests] = useState<ExceptionRequest[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const cachedRequests = useDataStore((state) => state.exceptions);
+  const fetchExceptions = useDataStore((state) => state.fetchExceptions);
+  const exceptionsLoading = useDataStore((state) => state.exceptionsLoading);
+
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | ExceptionRequestStatus>("all");
   const [policyName, setPolicyName] = useState("all");
   const [clusterName, setClusterName] = useState("all");
 
-  async function loadRequests() {
-    setIsLoading(true);
+  const loadRequests = useCallback(async () => {
     setErrorMessage(null);
     try {
-      const nextRequests = await listExceptionRequests();
-      setRequests(nextRequests);
+      await fetchExceptions();
     } catch (error) {
       setErrorMessage(
         error instanceof Error
           ? error.message
           : "예외 신청 내역을 불러오지 못했습니다.",
       );
-    } finally {
-      setIsLoading(false);
     }
-  }
+  }, [fetchExceptions]);
 
   useEffect(() => {
     void loadRequests();
-  }, []);
+  }, [loadRequests]);
+
+  const requests = cachedRequests ?? [];
+  const isLoading = cachedRequests === null && exceptionsLoading;
 
   const policies = useMemo(
     () => Array.from(new Set(requests.map((request) => request.policyName))),
@@ -161,7 +163,9 @@ export default function MyExceptionRequestsPage() {
     {
       label: "승인 대기",
       value: requests
-        .filter((item) => item.status === "pending" || item.status === "applying")
+        .filter(
+          (item) => item.status === "pending" || item.status === "applying",
+        )
         .length.toString(),
       detail: "관리자 검토 필요",
       icon: Clock3,
@@ -169,7 +173,9 @@ export default function MyExceptionRequestsPage() {
     },
     {
       label: "승인",
-      value: requests.filter((item) => item.status === "approved").length.toString(),
+      value: requests
+        .filter((item) => item.status === "approved")
+        .length.toString(),
       detail: "현재 적용 중",
       icon: CheckCircle2,
       className: "bg-emerald-50 text-emerald-600",
@@ -251,7 +257,8 @@ export default function MyExceptionRequestsPage() {
                 신청 내역
               </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                승인 대기, 승인, 거절, 만료 상태를 확인하고 필요한 경우 새 예외를 신청합니다.
+                승인 대기, 승인, 거절, 만료 상태를 확인하고 필요한 경우 새
+                예외를 신청합니다.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -268,32 +275,37 @@ export default function MyExceptionRequestsPage() {
                 className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]"
               >
                 <Link href="/exceptions/new">
-                  <FilePlus2 className="size-4" />
-                  새 신청
+                  <FilePlus2 className="size-4" />새 신청
                 </Link>
               </Button>
             </div>
           </section>
 
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {summaryCards.map(({ label, value, detail, icon: Icon, className }) => (
-              <article
-                key={label}
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
-              >
-                <div className="flex items-start justify-between">
-                  <div className={`flex size-10 items-center justify-center rounded-xl ${className}`}>
-                    <Icon className="size-5" />
+            {summaryCards.map(
+              ({ label, value, detail, icon: Icon, className }) => (
+                <article
+                  key={label}
+                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
+                >
+                  <div className="flex items-start justify-between">
+                    <div
+                      className={`flex size-10 items-center justify-center rounded-xl ${className}`}
+                    >
+                      <Icon className="size-5" />
+                    </div>
+                    <span className="text-[11px] font-medium text-slate-400">
+                      mine
+                    </span>
                   </div>
-                  <span className="text-[11px] font-medium text-slate-400">
-                    mine
-                  </span>
-                </div>
-                <p className="mt-5 text-[13px] text-slate-500">{label}</p>
-                <p className="mt-1 text-3xl font-semibold tracking-tight">{value}</p>
-                <p className="mt-2 text-[11px] text-slate-400">{detail}</p>
-              </article>
-            ))}
+                  <p className="mt-5 text-[13px] text-slate-500">{label}</p>
+                  <p className="mt-1 text-3xl font-semibold tracking-tight">
+                    {value}
+                  </p>
+                  <p className="mt-2 text-[11px] text-slate-400">{detail}</p>
+                </article>
+              ),
+            )}
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white">
@@ -302,7 +314,8 @@ export default function MyExceptionRequestsPage() {
                 <div>
                   <h3 className="text-sm font-semibold">신청 내역 검색</h3>
                   <p className="mt-1 text-xs text-slate-400">
-                    총 {requests.length}건 중 {filteredRequests.length}건을 표시합니다.
+                    총 {requests.length}건 중 {filteredRequests.length}건을
+                    표시합니다.
                   </p>
                 </div>
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
@@ -335,13 +348,17 @@ export default function MyExceptionRequestsPage() {
                   <select
                     value={status}
                     onChange={(event) =>
-                      setStatus(event.target.value as "all" | ExceptionRequestStatus)
+                      setStatus(
+                        event.target.value as "all" | ExceptionRequestStatus,
+                      )
                     }
                     className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none focus:border-blue-500 focus:ring-3 focus:ring-blue-500/10"
                   >
                     {statusOptions.map((option) => (
                       <option key={option} value={option}>
-                        {option === "all" ? "전체 상태" : exceptionStatusLabel[option]}
+                        {option === "all"
+                          ? "전체 상태"
+                          : exceptionStatusLabel[option]}
                       </option>
                     ))}
                   </select>
@@ -389,12 +406,24 @@ export default function MyExceptionRequestsPage() {
                   <TableHead className="w-[210px] px-5 text-xs text-slate-500 sm:px-6">
                     신청 번호
                   </TableHead>
-                  <TableHead className="text-xs text-slate-500">정책명</TableHead>
-                  <TableHead className="text-xs text-slate-500">신청 사유</TableHead>
-                  <TableHead className="text-xs text-slate-500">신청일</TableHead>
-                  <TableHead className="text-xs text-slate-500">만료일</TableHead>
-                  <TableHead className="text-xs text-slate-500">처리 상태</TableHead>
-                  <TableHead className="w-20 text-xs text-slate-500">상세</TableHead>
+                  <TableHead className="text-xs text-slate-500">
+                    정책명
+                  </TableHead>
+                  <TableHead className="text-xs text-slate-500">
+                    신청 사유
+                  </TableHead>
+                  <TableHead className="text-xs text-slate-500">
+                    신청일
+                  </TableHead>
+                  <TableHead className="text-xs text-slate-500">
+                    만료일
+                  </TableHead>
+                  <TableHead className="text-xs text-slate-500">
+                    처리 상태
+                  </TableHead>
+                  <TableHead className="w-20 text-xs text-slate-500">
+                    상세
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -430,7 +459,10 @@ export default function MyExceptionRequestsPage() {
                       const StatusIcon = statusIcon[request.status];
 
                       return (
-                        <TableRow key={request.id} className="hover:bg-slate-50/70">
+                        <TableRow
+                          key={request.id}
+                          className="hover:bg-slate-50/70"
+                        >
                           <TableCell className="px-5 py-4 sm:px-6">
                             <div>
                               <p className="text-xs font-semibold text-slate-900">
@@ -451,7 +483,8 @@ export default function MyExceptionRequestsPage() {
                                   {request.policyName}
                                 </p>
                                 <p className="mt-1 truncate text-[11px] text-slate-400">
-                                  {request.resourceKind} / {request.resourceName}
+                                  {request.resourceKind} /{" "}
+                                  {request.resourceName}
                                 </p>
                               </div>
                             </div>
@@ -468,7 +501,11 @@ export default function MyExceptionRequestsPage() {
                             {request.expiresAt}
                           </TableCell>
                           <TableCell className="py-4">
-                            <Badge className={exceptionStatusClassName[request.status]}>
+                            <Badge
+                              className={
+                                exceptionStatusClassName[request.status]
+                              }
+                            >
                               <StatusIcon className="size-3" />
                               {exceptionStatusLabel[request.status]}
                             </Badge>
@@ -520,8 +557,7 @@ export default function MyExceptionRequestsPage() {
                   className="mt-5 h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]"
                 >
                   <Link href="/exceptions/new">
-                    <FilePlus2 className="size-4" />
-                    새 신청
+                    <FilePlus2 className="size-4" />새 신청
                   </Link>
                 </Button>
               </div>
