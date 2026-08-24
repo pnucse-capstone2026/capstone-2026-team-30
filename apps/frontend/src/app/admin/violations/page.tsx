@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -20,6 +19,7 @@ import { DashboardPageShell } from "@/components/dashboard/dashboard-page-shell"
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -28,6 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useAuthStore } from "@/lib/auth-store";
 import {
   exceptionClassName,
   exceptionLabel,
@@ -41,7 +42,7 @@ import {
   type ViolationSeverity,
   type ViolationStatus,
 } from "@/lib/policy-violations";
-import { useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 const severityOptions: Array<"all" | ViolationSeverity> = [
   "all",
@@ -58,7 +59,9 @@ const statusOptions: Array<"all" | ViolationStatus> = [
 ];
 
 export default function AdminViolationsPage() {
-  const [violations, setViolations] = useState<PolicyViolation[]>(policyViolations);
+  const [liveViolations, setLiveViolations] = useState<
+    PolicyViolation[] | null
+  >(null);
   const [query, setQuery] = useState("");
   const [cluster, setCluster] = useState("all");
   const [policy, setPolicy] = useState("all");
@@ -67,17 +70,30 @@ export default function AdminViolationsPage() {
   const [severity, setSeverity] = useState<"all" | ViolationSeverity>("all");
   const [status, setStatus] = useState<"all" | ViolationStatus>("all");
 
-  useEffect(() => {
-    let isMounted = true;
-    getViolations().then((data) => {
-      if (isMounted && data.length > 0) {
-        setViolations(data);
+  const authStatus = useAuthStore((state) => state.status);
+  const initializeAuth = useAuthStore((state) => state.initialize);
+
+  /**
+   * 백엔드 API에서 실시간 정책 위반 목록을 수집합니다.
+   */
+  const loadViolations = useCallback(async () => {
+    try {
+      await initializeAuth();
+      const data = await getViolations();
+      if (Array.isArray(data)) {
+        setLiveViolations(data);
       }
-    });
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    } catch {
+      // 백엔드 연동 실패 시 graceful fallback 유지
+    }
+  }, [initializeAuth]);
+
+  useEffect(() => {
+    void loadViolations();
+  }, [authStatus, loadViolations]);
+
+  const violations = liveViolations ?? policyViolations;
+  const isLive = liveViolations !== null;
 
   const summaryCards = [
     {
@@ -90,7 +106,9 @@ export default function AdminViolationsPage() {
     {
       label: "긴급 처리",
       value: violations
-        .filter((item) => item.severity === "critical" || item.severity === "high")
+        .filter(
+          (item) => item.severity === "critical" || item.severity === "high",
+        )
         .length.toString(),
       detail: "긴급 또는 높음",
       icon: AlertTriangle,
@@ -192,17 +210,20 @@ export default function AdminViolationsPage() {
         <div>
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50">
-              관리자
+              {isLive ? "라이브 API 연동" : "관리자"}
             </Badge>
             <span className="text-xs text-slate-400">
-              ViolationHistory 기준 확장 예정
+              {isLive
+                ? "백엔드 API 및 Kubernetes 라이브 연결"
+                : "백엔드 연동 불가 시 목업 데이터"}
             </span>
           </div>
           <h2 className="text-2xl font-semibold tracking-tight">
             정책 오류 목록
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-            정책명, 규칙명, 발생 시각을 중심으로 위반 이력을 추적하고 조치 대상과 예외 상태를 확인합니다.
+            정책명, 규칙명, 발생 시각을 중심으로 위반 이력을 추적하고 조치
+            대상과 예외 상태를 확인합니다.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -233,11 +254,17 @@ export default function AdminViolationsPage() {
                 <Icon className="size-5" />
               </div>
               <span className="text-[11px] font-medium text-slate-400">
-                mock
+                {isLive ? "live" : "mock"}
               </span>
             </div>
             <p className="mt-5 text-[13px] text-slate-500">{label}</p>
-            <p className="mt-1 text-3xl font-semibold tracking-tight">{value}</p>
+            {liveViolations === null ? (
+              <Skeleton className="mt-1 h-9 w-20 rounded-lg" />
+            ) : (
+              <p className="mt-1 text-3xl font-semibold tracking-tight">
+                {value}
+              </p>
+            )}
             <p className="mt-2 text-[11px] text-slate-400">{detail}</p>
           </article>
         ))}
@@ -249,7 +276,8 @@ export default function AdminViolationsPage() {
             <div>
               <h3 className="text-sm font-semibold">오류 이력</h3>
               <p className="mt-1 text-xs text-slate-400">
-                총 {policyViolations.length}건 중 {filteredViolations.length}건을 표시합니다.
+                총 {violations.length}건 중 {filteredViolations.length}건을
+                표시합니다.
               </p>
             </div>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
@@ -275,7 +303,11 @@ export default function AdminViolationsPage() {
           </div>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-            <FilterSelect label="클러스터" value={cluster} onChange={setCluster}>
+            <FilterSelect
+              label="클러스터"
+              value={cluster}
+              onChange={setCluster}
+            >
               <option value="all">전체 클러스터</option>
               {clusters.map((option) => (
                 <option key={option} value={option}>
@@ -299,7 +331,11 @@ export default function AdminViolationsPage() {
                 </option>
               ))}
             </FilterSelect>
-            <FilterSelect label="Namespace" value={namespace} onChange={setNamespace}>
+            <FilterSelect
+              label="Namespace"
+              value={namespace}
+              onChange={setNamespace}
+            >
               <option value="all">전체 Namespace</option>
               {namespaces.map((option) => (
                 <option key={option} value={option}>
@@ -310,7 +346,9 @@ export default function AdminViolationsPage() {
             <FilterSelect
               label="심각도"
               value={severity}
-              onChange={(value) => setSeverity(value as "all" | ViolationSeverity)}
+              onChange={(value) =>
+                setSeverity(value as "all" | ViolationSeverity)
+              }
             >
               {severityOptions.map((option) => (
                 <option key={option} value={option}>
@@ -339,89 +377,134 @@ export default function AdminViolationsPage() {
                 정책 / 규칙
               </TableHead>
               <TableHead className="text-xs text-slate-500">리소스</TableHead>
-              <TableHead className="text-xs text-slate-500">Namespace</TableHead>
+              <TableHead className="text-xs text-slate-500">
+                Namespace
+              </TableHead>
               <TableHead className="text-xs text-slate-500">심각도</TableHead>
-              <TableHead className="text-xs text-slate-500">처리 상태</TableHead>
+              <TableHead className="text-xs text-slate-500">
+                처리 상태
+              </TableHead>
               <TableHead className="text-xs text-slate-500">예외</TableHead>
-              <TableHead className="text-xs text-slate-500">발생 시간</TableHead>
+              <TableHead className="text-xs text-slate-500">
+                발생 시간
+              </TableHead>
               <TableHead className="w-12" />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredViolations.map((violation) => (
-              <TableRow key={violation.id} className="hover:bg-slate-50/70">
-                <TableCell className="px-5 py-4 sm:px-6">
-                  <div className="flex items-center gap-3">
-                    <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-                      <ShieldAlert className="size-4.5" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-[13px] font-medium text-slate-950">
-                        {violation.policyName}
-                      </p>
-                      <p className="mt-1 truncate text-[11px] text-slate-400">
-                        {violation.ruleName} · {violation.clusterName} · {violation.assignee}
-                      </p>
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell className="py-4">
-                  <div>
-                    <p className="text-xs font-medium text-slate-800">
-                      {violation.resourceKind}
-                    </p>
-                    <p className="mt-1 text-[11px] text-slate-400">
-                      {violation.resourceName}
-                    </p>
-                  </div>
-                </TableCell>
-                <TableCell className="py-4 text-xs text-slate-600">
-                  {violation.namespace}
-                </TableCell>
-                <TableCell className="py-4">
-                  <Badge className={severityClassName[violation.severity]}>
-                    {severityLabel[violation.severity]}
-                  </Badge>
-                </TableCell>
-                <TableCell className="py-4">
-                  <Badge className={statusClassName[violation.status]}>
-                    {violation.status === "resolved" ? (
-                      <CheckCircle2 className="size-3" />
-                    ) : violation.status === "open" ? (
-                      <XCircle className="size-3" />
-                    ) : (
-                      <Clock3 className="size-3" />
-                    )}
-                    {statusLabel[violation.status]}
-                  </Badge>
-                </TableCell>
-                <TableCell className="py-4">
-                  {violation.relatedExceptionId ? (
-                    <Badge asChild className={exceptionClassName[violation.exceptionStatus]}>
-                      <Link href={`/admin/exceptions/${violation.relatedExceptionId}`}>
-                        {exceptionLabel[violation.exceptionStatus]}
+            {liveViolations === null
+              ? [1, 2, 3].map((key) => (
+                  <TableRow key={key}>
+                    <TableCell className="px-5 py-4 sm:px-6">
+                      <Skeleton className="h-5 w-48 rounded-lg" />
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Skeleton className="h-5 w-24 rounded-lg" />
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Skeleton className="h-5 w-16 rounded-lg" />
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Skeleton className="h-5 w-16 rounded-lg" />
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Skeleton className="h-5 w-20 rounded-lg" />
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Skeleton className="h-5 w-16 rounded-lg" />
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Skeleton className="h-5 w-28 rounded-lg" />
+                    </TableCell>
+                    <TableCell className="py-4 pr-5 sm:pr-6" />
+                  </TableRow>
+                ))
+              : filteredViolations.map((violation) => (
+                  <TableRow key={violation.id} className="hover:bg-slate-50/70">
+                    <TableCell className="px-5 py-4 sm:px-6">
+                      <div className="flex items-center gap-3">
+                        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                          <ShieldAlert className="size-4.5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-medium text-slate-950">
+                            {violation.policyName}
+                          </p>
+                          <p className="mt-1 truncate text-[11px] text-slate-400">
+                            {violation.ruleName} · {violation.clusterName} ·{" "}
+                            {violation.assignee}
+                          </p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <div>
+                        <p className="text-xs font-medium text-slate-800">
+                          {violation.resourceKind}
+                        </p>
+                        <p className="mt-1 text-[11px] text-slate-400">
+                          {violation.resourceName}
+                        </p>
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-4 text-xs text-slate-600">
+                      {violation.namespace}
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Badge className={severityClassName[violation.severity]}>
+                        {severityLabel[violation.severity]}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Badge className={statusClassName[violation.status]}>
+                        {violation.status === "resolved" ? (
+                          <CheckCircle2 className="size-3" />
+                        ) : violation.status === "open" ? (
+                          <XCircle className="size-3" />
+                        ) : (
+                          <Clock3 className="size-3" />
+                        )}
+                        {statusLabel[violation.status]}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      {violation.relatedExceptionId ? (
+                        <Badge
+                          asChild
+                          className={
+                            exceptionClassName[violation.exceptionStatus]
+                          }
+                        >
+                          <Link
+                            href={`/admin/exceptions/${violation.relatedExceptionId}`}
+                          >
+                            {exceptionLabel[violation.exceptionStatus]}
+                          </Link>
+                        </Badge>
+                      ) : (
+                        <Badge
+                          className={
+                            exceptionClassName[violation.exceptionStatus]
+                          }
+                        >
+                          {exceptionLabel[violation.exceptionStatus]}
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="py-4 text-xs text-slate-500">
+                      {violation.detectedAt}
+                    </TableCell>
+                    <TableCell className="py-4 pr-5 sm:pr-6">
+                      <Link
+                        href={`/admin/violations/${violation.id}`}
+                        aria-label={`${violation.policyName} 상세 보기`}
+                        className="flex size-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      >
+                        <ChevronRight className="size-4" />
                       </Link>
-                    </Badge>
-                  ) : (
-                    <Badge className={exceptionClassName[violation.exceptionStatus]}>
-                      {exceptionLabel[violation.exceptionStatus]}
-                    </Badge>
-                  )}
-                </TableCell>
-                <TableCell className="py-4 text-xs text-slate-500">
-                  {violation.detectedAt}
-                </TableCell>
-                <TableCell className="py-4 pr-5 sm:pr-6">
-                  <Link
-                    href={`/admin/violations/${violation.id}`}
-                    aria-label={`${violation.policyName} 상세 보기`}
-                    className="flex size-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                  >
-                    <ChevronRight className="size-4" />
-                  </Link>
-                </TableCell>
-              </TableRow>
-            ))}
+                    </TableCell>
+                  </TableRow>
+                ))}
           </TableBody>
         </Table>
 
@@ -435,7 +518,9 @@ export default function AdminViolationsPage() {
           <span>
             {filteredViolations.length} / {policyViolations.length}개 항목
           </span>
-          <span>현재는 목업 데이터이며 이후 ViolationHistory API와 연결합니다.</span>
+          <span>
+            현재는 목업 데이터이며 이후 ViolationHistory API와 연결합니다.
+          </span>
         </div>
       </section>
 
@@ -502,7 +587,9 @@ function StatusNote({
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-5">
       <div className="flex items-center gap-3">
-        <div className={`flex size-9 items-center justify-center rounded-xl ${className}`}>
+        <div
+          className={`flex size-9 items-center justify-center rounded-xl ${className}`}
+        >
           <Icon className="size-4.5" />
         </div>
         <div>

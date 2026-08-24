@@ -18,6 +18,7 @@ import { DashboardPageShell } from "@/components/dashboard/dashboard-page-shell"
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -286,6 +287,7 @@ export default function AdminClustersPage() {
           detail="EKS 기반 환경"
           icon={Server}
           className="bg-blue-50 text-blue-600"
+          loading={liveClusters === null}
         />
         <SummaryCard
           label="정상 상태"
@@ -293,6 +295,7 @@ export default function AdminClustersPage() {
           detail="연결 정상"
           icon={CheckCircle2}
           className="bg-emerald-50 text-emerald-600"
+          loading={liveClusters === null}
         />
         <SummaryCard
           label="적용 정책"
@@ -300,6 +303,7 @@ export default function AdminClustersPage() {
           detail="클러스터별 정책 합계"
           icon={ShieldCheck}
           className="bg-cyan-50 text-cyan-600"
+          loading={liveClusters === null}
         />
         <SummaryCard
           label="정책 오류"
@@ -307,6 +311,7 @@ export default function AdminClustersPage() {
           detail="미해결 포함"
           icon={ShieldAlert}
           className="bg-amber-50 text-amber-600"
+          loading={liveClusters === null}
         />
       </section>
 
@@ -542,12 +547,14 @@ function SummaryCard({
   detail,
   icon: Icon,
   className,
+  loading,
 }: {
   label: string;
   value: string;
   detail: string;
   icon: typeof Server;
   className: string;
+  loading?: boolean;
 }) {
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
@@ -559,7 +566,11 @@ function SummaryCard({
         </div>
       </div>
       <p className="mt-5 text-[13px] text-slate-500">{label}</p>
-      <p className="mt-1 text-3xl font-semibold tracking-tight">{value}</p>
+      {loading ? (
+        <Skeleton className="mt-1 h-9 w-20 rounded-lg" />
+      ) : (
+        <p className="mt-1 text-3xl font-semibold tracking-tight">{value}</p>
+      )}
       <p className="mt-2 text-[11px] text-slate-400">{detail}</p>
     </article>
   );
