@@ -32,8 +32,16 @@ import {
   type KyvernoStatus,
   type ManagedCluster,
 } from "@/lib/clusters";
-import { kyvernoPolicies } from "@/lib/policies";
-import { policyViolations } from "@/lib/policy-violations";
+import {
+  getPolicies,
+  kyvernoPolicies,
+  type KyvernoPolicy,
+} from "@/lib/policies";
+import {
+  getViolations,
+  policyViolations,
+  type PolicyViolation,
+} from "@/lib/policy-violations";
 
 type EnvironmentFilter = "all" | ClusterEnvironment;
 type ClusterStatusFilter = "all" | ClusterStatus;
@@ -61,35 +69,70 @@ export default function ClustersPage() {
   const [kyvernoStatusFilter, setKyvernoStatusFilter] =
     useState<KyvernoStatusFilter>("all");
 
-  const [liveClusters, setLiveClusters] = useState<ClusterMetadata[] | null>(null);
+  const [liveClusters, setLiveClusters] = useState<ClusterMetadata[] | null>(
+    null,
+  );
+  const [livePolicies, setLivePolicies] = useState<KyvernoPolicy[] | null>(
+    null,
+  );
+  const [liveViolations, setLiveViolations] = useState<
+    PolicyViolation[] | null
+  >(null);
 
   useEffect(() => {
     let cancelled = false;
 
     /**
-     * 백엔드 API에서 라이브 클러스터 목록을 가져오고 실패 시 카탈로그 API로 폴백합니다.
+     * 백엔드 API에서 라이브 클러스터, 실시간 정책, 정책 위반 내역을 병렬 조회합니다.
      */
-    async function fetchLiveClusters() {
+    async function fetchDashboardData() {
       try {
-        const data = await listClusters();
-        if (!cancelled && Array.isArray(data) && data.length > 0) {
-          setLiveClusters(data);
-          return;
-        }
-      } catch {
-        // 일반 클러스터 조회 실패 시 권한에 따른 카탈로그 API 조회 재시도
+        let clustersData: ClusterMetadata[] | null = null;
         try {
-          const catalogData = await listClusterCatalog();
-          if (!cancelled && Array.isArray(catalogData) && catalogData.length > 0) {
-            setLiveClusters(catalogData);
+          const data = await listClusters();
+          if (Array.isArray(data)) {
+            clustersData = data;
           }
         } catch {
-          // 백엔드 연동 불가 시 graceful fallback 유지
+          try {
+            const catalogData = await listClusterCatalog();
+            if (Array.isArray(catalogData)) {
+              clustersData = catalogData;
+            }
+          } catch {
+            // 백엔드 연동 실패 시 graceful fallback 유지
+          }
         }
+
+        if (!cancelled && clustersData !== null) {
+          setLiveClusters(clustersData);
+        }
+
+        const [policiesResult, violationsResult] = await Promise.allSettled([
+          getPolicies(),
+          getViolations(),
+        ]);
+
+        if (!cancelled) {
+          if (
+            policiesResult.status === "fulfilled" &&
+            policiesResult.value.length > 0
+          ) {
+            setLivePolicies(policiesResult.value);
+          }
+          if (
+            violationsResult.status === "fulfilled" &&
+            violationsResult.value.length > 0
+          ) {
+            setLiveViolations(violationsResult.value);
+          }
+        }
+      } catch {
+        // 백엔드 연동 불가 시 graceful fallback 유지
       }
     }
 
-    void fetchLiveClusters();
+    void fetchDashboardData();
 
     return () => {
       cancelled = true;
@@ -100,7 +143,10 @@ export default function ClustersPage() {
     if (liveClusters && liveClusters.length > 0) {
       return liveClusters.map((item) => {
         const existing = clusters.find(
-          (c) => c.id === item.id || c.name === item.id || c.name === item.displayName,
+          (c) =>
+            c.id === item.id ||
+            c.name === item.id ||
+            c.name === item.displayName,
         );
         if (existing) {
           return {
@@ -112,14 +158,20 @@ export default function ClustersPage() {
         return {
           id: item.id,
           name: item.displayName || item.id,
-          environment: "production",
+          environment: (item.id.includes("stage")
+            ? "staging"
+            : item.id.includes("dev")
+              ? "development"
+              : item.id.includes("sand")
+                ? "sandbox"
+                : "production") as ClusterEnvironment,
           region: "us-east-1",
           provider: "EKS",
           status: "healthy",
           kyvernoStatus: "ready",
           nodeCount: 3,
           namespaceCount: 8,
-          policyCount: 1,
+          policyCount: 0,
           violationCount: 0,
           lastSyncedAt: new Date().toISOString().slice(0, 16).replace("T", " "),
           owner: "플랫폼팀",
@@ -127,18 +179,32 @@ export default function ClustersPage() {
         };
       });
     }
+    if (liveClusters && liveClusters.length === 0) {
+      return [];
+    }
     return clusters;
   }, [liveClusters]);
+
+  const policyList = livePolicies ?? kyvernoPolicies;
+  const violationList = liveViolations ?? policyViolations;
 
   const clusterRows = useMemo(
     () =>
       activeClusters.map((cluster) => {
-        const policies = kyvernoPolicies.filter(
+        const policies = policyList.filter(
           (policy) =>
-            policy.clusterName === cluster.name && policy.status !== "draft",
+            (policy.clusterId === cluster.id ||
+              policy.clusterName === cluster.name ||
+              policy.clusterDisplayName === cluster.name ||
+              policy.clusterDisplayName === cluster.id) &&
+            policy.status !== "draft",
         );
-        const violations = policyViolations.filter(
-          (violation) => violation.clusterName === cluster.name,
+        const violations = violationList.filter(
+          (violation) =>
+            violation.clusterId === cluster.id ||
+            violation.clusterName === cluster.name ||
+            violation.clusterDisplayName === cluster.name ||
+            violation.clusterDisplayName === cluster.id,
         );
         const unresolvedViolations = violations.filter(
           (violation) => violation.status !== "resolved",
@@ -146,12 +212,14 @@ export default function ClustersPage() {
 
         return {
           ...cluster,
+          policyCount: policies.length,
+          violationCount: violations.length,
           policies,
           violations,
           unresolvedViolations,
         };
       }),
-    [activeClusters],
+    [activeClusters, policyList, violationList],
   );
 
   const filteredClusters = useMemo(() => {
@@ -190,7 +258,8 @@ export default function ClustersPage() {
   ]);
 
   const readyClusters = clusterRows.filter(
-    (cluster) => cluster.status === "healthy" && cluster.kyvernoStatus === "ready",
+    (cluster) =>
+      cluster.status === "healthy" && cluster.kyvernoStatus === "ready",
   ).length;
   const syncingClusters = clusterRows.filter(
     (cluster) =>
@@ -251,10 +320,12 @@ export default function ClustersPage() {
             <div>
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50">
-                  사용자
+                  {liveClusters ? "라이브 API 연동" : "사용자"}
                 </Badge>
                 <span className="text-xs text-slate-400">
-                  운영 설정 변경 없이 클러스터 상태와 정책 조회 중심
+                  {liveClusters
+                    ? "백엔드 API 및 Kubernetes 라이브 연결"
+                    : "운영 설정 변경 없이 클러스터 상태와 정책 조회 중심"}
                 </span>
               </div>
               <h2 className="text-2xl font-semibold tracking-tight">
@@ -349,7 +420,9 @@ export default function ClustersPage() {
                     <Badge className={clusterStatusClassName[cluster.status]}>
                       {clusterStatusLabel[cluster.status]}
                     </Badge>
-                    <Badge className={kyvernoStatusClassName[cluster.kyvernoStatus]}>
+                    <Badge
+                      className={kyvernoStatusClassName[cluster.kyvernoStatus]}
+                    >
                       Kyverno {kyvernoStatusLabel[cluster.kyvernoStatus]}
                     </Badge>
                   </div>
@@ -367,8 +440,14 @@ export default function ClustersPage() {
 
               <dl className="mt-5 grid gap-3 text-xs">
                 <InfoRow label="리전" value={cluster.region} />
-                <InfoRow label="노드/네임스페이스" value={`${cluster.nodeCount} / ${cluster.namespaceCount}`} />
-                <InfoRow label="적용 정책" value={`${cluster.policies.length}개`} />
+                <InfoRow
+                  label="노드/네임스페이스"
+                  value={`${cluster.nodeCount} / ${cluster.namespaceCount}`}
+                />
+                <InfoRow
+                  label="적용 정책"
+                  value={`${cluster.policies.length}개`}
+                />
                 <InfoRow
                   label="미해결 위반"
                   value={`${cluster.unresolvedViolations.length}건`}
@@ -436,7 +515,9 @@ function SummaryCard({
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
       <div className="flex items-start justify-between">
-        <div className={`flex size-10 items-center justify-center rounded-xl ${className}`}>
+        <div
+          className={`flex size-10 items-center justify-center rounded-xl ${className}`}
+        >
           <Icon className="size-5" />
         </div>
         <Layers3 className="size-4 text-slate-300" />

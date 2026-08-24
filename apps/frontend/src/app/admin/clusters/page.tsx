@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
   ChevronRight,
@@ -33,10 +33,24 @@ import {
   clusterStatusLabel,
   kyvernoStatusClassName,
   kyvernoStatusLabel,
+  listClusterCatalog,
+  listClusters,
   type ClusterEnvironment,
+  type ClusterMetadata,
   type ClusterStatus,
   type KyvernoStatus,
+  type ManagedCluster,
 } from "@/lib/clusters";
+import {
+  getPolicies,
+  kyvernoPolicies,
+  type KyvernoPolicy,
+} from "@/lib/policies";
+import {
+  getViolations,
+  policyViolations,
+  type PolicyViolation,
+} from "@/lib/policy-violations";
 
 type EnvironmentFilter = "all" | ClusterEnvironment;
 type StatusFilter = "all" | ClusterStatus;
@@ -57,10 +71,153 @@ export default function AdminClustersPage() {
   const [status, setStatus] = useState<StatusFilter>("all");
   const [kyvernoStatus, setKyvernoStatus] = useState<KyvernoFilter>("all");
 
+  const [liveClusters, setLiveClusters] = useState<ClusterMetadata[] | null>(
+    null,
+  );
+  const [livePolicies, setLivePolicies] = useState<KyvernoPolicy[] | null>(
+    null,
+  );
+  const [liveViolations, setLiveViolations] = useState<
+    PolicyViolation[] | null
+  >(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    /**
+     * 백엔드 API에서 관리자 클러스터 카탈로그, 정책, 위반 내역을 병렬 조회합니다.
+     */
+    async function fetchAdminDashboardData() {
+      try {
+        let catalogData: ClusterMetadata[] | null = null;
+        try {
+          const data = await listClusterCatalog();
+          if (Array.isArray(data)) {
+            catalogData = data;
+          }
+        } catch {
+          try {
+            const data = await listClusters();
+            if (Array.isArray(data)) {
+              catalogData = data;
+            }
+          } catch {
+            // 백엔드 연동 불가 시 graceful fallback 유지
+          }
+        }
+
+        if (!cancelled && catalogData !== null) {
+          setLiveClusters(catalogData);
+        }
+
+        const [policiesResult, violationsResult] = await Promise.allSettled([
+          getPolicies(),
+          getViolations(),
+        ]);
+
+        if (!cancelled) {
+          if (
+            policiesResult.status === "fulfilled" &&
+            policiesResult.value.length > 0
+          ) {
+            setLivePolicies(policiesResult.value);
+          }
+          if (
+            violationsResult.status === "fulfilled" &&
+            violationsResult.value.length > 0
+          ) {
+            setLiveViolations(violationsResult.value);
+          }
+        }
+      } catch {
+        // 백엔드 연동 불가 시 graceful fallback 유지
+      }
+    }
+
+    void fetchAdminDashboardData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const policyList = livePolicies ?? kyvernoPolicies;
+  const violationList = liveViolations ?? policyViolations;
+
+  const activeClusters: ManagedCluster[] = useMemo(() => {
+    const baseList =
+      liveClusters && liveClusters.length > 0
+        ? liveClusters.map((item) => {
+            const existing = clusters.find(
+              (c) =>
+                c.id === item.id ||
+                c.name === item.id ||
+                c.name === item.displayName,
+            );
+            if (existing) {
+              return {
+                ...existing,
+                id: item.id,
+                name: item.displayName || existing.name,
+              };
+            }
+            return {
+              id: item.id,
+              name: item.displayName || item.id,
+              environment: (item.id.includes("stage")
+                ? "staging"
+                : item.id.includes("dev")
+                  ? "development"
+                  : item.id.includes("sand")
+                    ? "sandbox"
+                    : "production") as ClusterEnvironment,
+              region: "us-east-1",
+              provider: "EKS" as const,
+              status: "healthy" as const,
+              kyvernoStatus: "ready" as const,
+              nodeCount: 3,
+              namespaceCount: 8,
+              policyCount: 0,
+              violationCount: 0,
+              lastSyncedAt: new Date()
+                .toISOString()
+                .slice(0, 16)
+                .replace("T", " "),
+              owner: "플랫폼팀",
+              description: `${item.displayName || item.id} 라이브 연동 클러스터입니다.`,
+            };
+          })
+        : liveClusters && liveClusters.length === 0
+          ? []
+          : clusters;
+
+    return baseList.map((cluster) => {
+      const relPolicies = policyList.filter(
+        (p) =>
+          p.clusterId === cluster.id ||
+          p.clusterName === cluster.name ||
+          p.clusterDisplayName === cluster.name ||
+          p.clusterDisplayName === cluster.id,
+      );
+      const relViolations = violationList.filter(
+        (v) =>
+          v.clusterId === cluster.id ||
+          v.clusterName === cluster.name ||
+          v.clusterDisplayName === cluster.name ||
+          v.clusterDisplayName === cluster.id,
+      );
+      return {
+        ...cluster,
+        policyCount: relPolicies.length,
+        violationCount: relViolations.length,
+      };
+    });
+  }, [liveClusters, policyList, violationList]);
+
   const filteredClusters = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
-    return clusters.filter((cluster) => {
+    return activeClusters.filter((cluster) => {
       const matchesQuery =
         normalizedQuery.length === 0 ||
         [
@@ -81,11 +238,19 @@ export default function AdminClustersPage() {
         (kyvernoStatus === "all" || cluster.kyvernoStatus === kyvernoStatus)
       );
     });
-  }, [environment, kyvernoStatus, query, status]);
+  }, [activeClusters, environment, kyvernoStatus, query, status]);
 
-  const healthyClusters = clusters.filter((cluster) => cluster.status === "healthy").length;
-  const totalPolicies = clusters.reduce((sum, cluster) => sum + cluster.policyCount, 0);
-  const totalViolations = clusters.reduce((sum, cluster) => sum + cluster.violationCount, 0);
+  const healthyClusters = activeClusters.filter(
+    (cluster) => cluster.status === "healthy",
+  ).length;
+  const totalPolicies = activeClusters.reduce(
+    (sum, cluster) => sum + cluster.policyCount,
+    0,
+  );
+  const totalViolations = activeClusters.reduce(
+    (sum, cluster) => sum + cluster.violationCount,
+    0,
+  );
 
   function resetFilters() {
     setQuery("");
@@ -147,17 +312,20 @@ export default function AdminClustersPage() {
             <div>
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50">
-                  EKS
+                  {liveClusters ? "라이브 API 연동" : "EKS"}
                 </Badge>
                 <span className="text-xs text-slate-400">
-                  Kubernetes 연동 전 목업 데이터
+                  {liveClusters
+                    ? "백엔드 API 및 Kubernetes 라이브 연결"
+                    : "백엔드 연동 불가 시 목업 데이터"}
                 </span>
               </div>
               <h2 className="text-2xl font-semibold tracking-tight">
                 클러스터 연결 현황
               </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                환경, 연결 상태, Kyverno 상태를 기준으로 정책 적용 대상 클러스터를 확인합니다.
+                환경, 연결 상태, Kyverno 상태를 기준으로 정책 적용 대상
+                클러스터를 확인합니다.
               </p>
             </div>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
@@ -230,11 +398,17 @@ export default function AdminClustersPage() {
                 클러스터
               </TableHead>
               <TableHead className="text-xs text-slate-500">환경</TableHead>
-              <TableHead className="text-xs text-slate-500">연결 상태</TableHead>
+              <TableHead className="text-xs text-slate-500">
+                연결 상태
+              </TableHead>
               <TableHead className="text-xs text-slate-500">Kyverno</TableHead>
               <TableHead className="text-xs text-slate-500">리소스</TableHead>
-              <TableHead className="text-xs text-slate-500">정책/오류</TableHead>
-              <TableHead className="text-xs text-slate-500">최근 동기화</TableHead>
+              <TableHead className="text-xs text-slate-500">
+                정책/오류
+              </TableHead>
+              <TableHead className="text-xs text-slate-500">
+                최근 동기화
+              </TableHead>
               <TableHead className="w-12" />
             </TableRow>
           </TableHeader>
@@ -272,7 +446,9 @@ export default function AdminClustersPage() {
                   </Badge>
                 </TableCell>
                 <TableCell className="py-4">
-                  <Badge className={kyvernoStatusClassName[cluster.kyvernoStatus]}>
+                  <Badge
+                    className={kyvernoStatusClassName[cluster.kyvernoStatus]}
+                  >
                     {kyvernoStatusLabel[cluster.kyvernoStatus]}
                   </Badge>
                 </TableCell>
@@ -293,7 +469,9 @@ export default function AdminClustersPage() {
                   </p>
                 </TableCell>
                 <TableCell className="py-4">
-                  <p className="text-xs text-slate-600">{cluster.lastSyncedAt}</p>
+                  <p className="text-xs text-slate-600">
+                    {cluster.lastSyncedAt}
+                  </p>
                   <p className="mt-1 text-[11px] text-slate-400">
                     {cluster.owner}
                   </p>
@@ -320,9 +498,13 @@ export default function AdminClustersPage() {
 
         <div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-4 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <span>
-            {filteredClusters.length} / {clusters.length}개 클러스터 표시
+            {filteredClusters.length} / {activeClusters.length}개 클러스터 표시
           </span>
-          <span>이후 Kubernetes/EKS API와 Kyverno 상태 API를 연결합니다.</span>
+          <span>
+            {liveClusters
+              ? "Kubernetes/EKS API와 Kyverno 상태 API가 연동되었습니다."
+              : "이후 Kubernetes/EKS API와 Kyverno 상태 API를 연결합니다."}
+          </span>
         </div>
       </section>
 
@@ -366,7 +548,9 @@ function SummaryCard({
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
       <div className="flex items-start justify-between">
-        <div className={`flex size-10 items-center justify-center rounded-xl ${className}`}>
+        <div
+          className={`flex size-10 items-center justify-center rounded-xl ${className}`}
+        >
           <Icon className="size-5" />
         </div>
       </div>

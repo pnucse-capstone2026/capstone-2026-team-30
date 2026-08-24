@@ -15,12 +15,12 @@
   },
   "lint-staged": {
     "apps/backend/src/**/*.ts": [
-      "pnpm --filter @kyverno-platform/backend lint --fix",
-      "pnpm --filter @kyverno-platform/backend format"
+      "bash -c 'pnpm --filter @kyverno-platform/backend lint --fix'",
+      "bash -c 'pnpm --filter @kyverno-platform/backend format'"
     ],
     "apps/frontend/src/**/*.{ts,tsx}": [
-      "pnpm --filter @kyverno-platform/frontend lint --fix",
-      "pnpm --filter @kyverno-platform/frontend format"
+      "bash -c 'pnpm --filter @kyverno-platform/frontend lint --fix'",
+      "bash -c 'pnpm --filter @kyverno-platform/frontend format'"
     ],
     "k8s-manifests/policies/**/*.yaml": [
       "bash -c 'kyverno test k8s-manifests/policies/'"
