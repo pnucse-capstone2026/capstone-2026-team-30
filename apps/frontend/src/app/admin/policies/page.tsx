@@ -19,6 +19,7 @@ import { DashboardPageShell } from "@/components/dashboard/dashboard-page-shell"
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -192,6 +193,7 @@ export default function AdminPoliciesPage() {
           detail={isLive ? "라이브 연동 정책" : "백엔드 연동 전 목업"}
           icon={ShieldCheck}
           className="bg-blue-50 text-blue-600"
+          loading={livePolicies === null}
         />
         <SummaryCard
           label="정상 정책"
@@ -199,6 +201,7 @@ export default function AdminPoliciesPage() {
           detail="주의 없음"
           icon={CheckCircle2}
           className="bg-emerald-50 text-emerald-600"
+          loading={livePolicies === null}
         />
         <SummaryCard
           label="주의 필요"
@@ -206,6 +209,7 @@ export default function AdminPoliciesPage() {
           detail="위반 발생 정책"
           icon={AlertTriangle}
           className="bg-amber-50 text-amber-600"
+          loading={livePolicies === null}
         />
         <SummaryCard
           label="연결된 오류"
@@ -213,6 +217,7 @@ export default function AdminPoliciesPage() {
           detail="정책 위반 합계"
           icon={ShieldAlert}
           className="bg-rose-50 text-rose-600"
+          loading={livePolicies === null}
         />
       </section>
 
@@ -345,73 +350,102 @@ export default function AdminPoliciesPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredPolicies.map((policy) => (
-              <TableRow key={policy.id} className="hover:bg-slate-50/70">
-                <TableCell className="px-5 py-4 sm:px-6">
-                  <div className="flex items-center gap-3">
-                    <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                      <ShieldCheck className="size-4.5" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-[13px] font-medium text-slate-950">
-                        {policy.name}
+            {livePolicies === null
+              ? [1, 2, 3].map((key) => (
+                  <TableRow key={key}>
+                    <TableCell className="px-5 py-4 sm:px-6">
+                      <Skeleton className="h-5 w-48 rounded-lg" />
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Skeleton className="h-5 w-16 rounded-lg" />
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Skeleton className="h-5 w-24 rounded-lg" />
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Skeleton className="h-5 w-16 rounded-lg" />
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Skeleton className="h-5 w-16 rounded-lg" />
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Skeleton className="h-5 w-20 rounded-lg" />
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Skeleton className="h-5 w-28 rounded-lg" />
+                    </TableCell>
+                    <TableCell className="py-4 pr-5 sm:pr-6" />
+                  </TableRow>
+                ))
+              : filteredPolicies.map((policy) => (
+                  <TableRow key={policy.id} className="hover:bg-slate-50/70">
+                    <TableCell className="px-5 py-4 sm:px-6">
+                      <div className="flex items-center gap-3">
+                        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                          <ShieldCheck className="size-4.5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-medium text-slate-950">
+                            {policy.name}
+                          </p>
+                          <p className="mt-1 line-clamp-1 text-[11px] text-slate-400">
+                            {policy.description}
+                          </p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Badge className={policyTypeClassName[policy.type]}>
+                        {policyTypeLabel[policy.type]}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <div>
+                        <p className="text-xs font-medium text-slate-800">
+                          {policy.scope}
+                        </p>
+                        <p className="mt-1 text-[11px] text-slate-400">
+                          {policy.namespace ?? "cluster-wide"}
+                        </p>
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Badge className="bg-slate-100 text-slate-600 ring-1 ring-slate-200">
+                        {policyModeLabel[policy.mode]}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Badge className={policyStatusClassName[policy.status]}>
+                        {policyStatusLabel[policy.status]}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <p className="text-xs font-medium text-slate-800">
+                        규칙 {policy.ruleCount}
                       </p>
-                      <p className="mt-1 line-clamp-1 text-[11px] text-slate-400">
-                        {policy.description}
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        오류 {policy.violationCount}
                       </p>
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell className="py-4">
-                  <Badge className={policyTypeClassName[policy.type]}>
-                    {policyTypeLabel[policy.type]}
-                  </Badge>
-                </TableCell>
-                <TableCell className="py-4">
-                  <div>
-                    <p className="text-xs font-medium text-slate-800">
-                      {policy.scope}
-                    </p>
-                    <p className="mt-1 text-[11px] text-slate-400">
-                      {policy.namespace ?? "cluster-wide"}
-                    </p>
-                  </div>
-                </TableCell>
-                <TableCell className="py-4">
-                  <Badge className="bg-slate-100 text-slate-600 ring-1 ring-slate-200">
-                    {policyModeLabel[policy.mode]}
-                  </Badge>
-                </TableCell>
-                <TableCell className="py-4">
-                  <Badge className={policyStatusClassName[policy.status]}>
-                    {policyStatusLabel[policy.status]}
-                  </Badge>
-                </TableCell>
-                <TableCell className="py-4">
-                  <p className="text-xs font-medium text-slate-800">
-                    규칙 {policy.ruleCount}
-                  </p>
-                  <p className="mt-1 text-[11px] text-slate-400">
-                    오류 {policy.violationCount}
-                  </p>
-                </TableCell>
-                <TableCell className="py-4">
-                  <p className="text-xs text-slate-600">{policy.updatedAt}</p>
-                  <p className="mt-1 text-[11px] text-slate-400">
-                    {policy.owner} · {policy.clusterName}
-                  </p>
-                </TableCell>
-                <TableCell className="py-4 pr-5 sm:pr-6">
-                  <Link
-                    href={`/admin/policies/${policy.id}`}
-                    aria-label={`${policy.name} 상세 보기`}
-                    className="flex size-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                  >
-                    <ChevronRight className="size-4" />
-                  </Link>
-                </TableCell>
-              </TableRow>
-            ))}
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <p className="text-xs text-slate-600">
+                        {policy.updatedAt}
+                      </p>
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        {policy.owner} · {policy.clusterName}
+                      </p>
+                    </TableCell>
+                    <TableCell className="py-4 pr-5 sm:pr-6">
+                      <Link
+                        href={`/admin/policies/${policy.id}`}
+                        aria-label={`${policy.name} 상세 보기`}
+                        className="flex size-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      >
+                        <ChevronRight className="size-4" />
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))}
           </TableBody>
         </Table>
 
@@ -463,12 +497,14 @@ function SummaryCard({
   detail,
   icon: Icon,
   className,
+  loading,
 }: {
   label: string;
   value: string;
   detail: string;
   icon: typeof ShieldCheck;
   className: string;
+  loading?: boolean;
 }) {
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
@@ -480,7 +516,11 @@ function SummaryCard({
         </div>
       </div>
       <p className="mt-5 text-[13px] text-slate-500">{label}</p>
-      <p className="mt-1 text-3xl font-semibold tracking-tight">{value}</p>
+      {loading ? (
+        <Skeleton className="mt-1 h-9 w-20 rounded-lg" />
+      ) : (
+        <p className="mt-1 text-3xl font-semibold tracking-tight">{value}</p>
+      )}
       <p className="mt-2 text-[11px] text-slate-400">{detail}</p>
     </article>
   );
