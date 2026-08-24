@@ -22,6 +22,7 @@ import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/lib/auth-store";
+import { useDataStore } from "@/lib/data-store";
 import {
   listClusterCatalog,
   listClusters,
@@ -42,53 +43,26 @@ export default function UserDashboardPage() {
   const authStatus = useAuthStore((state) => state.status);
   const initializeAuth = useAuthStore((state) => state.initialize);
 
-  const [liveClusters, setLiveClusters] = useState<ClusterMetadata[] | null>(
-    null,
-  );
-  const [livePolicies, setLivePolicies] = useState<KyvernoPolicy[] | null>(
-    null,
-  );
-  const [liveViolations, setLiveViolations] = useState<
-    PolicyViolation[] | null
-  >(null);
+  const liveClusters = useDataStore((state) => state.clusters);
+  const livePolicies = useDataStore((state) => state.policies);
+  const liveViolations = useDataStore((state) => state.violations);
 
-  /**
-   * 사용자 대시보드 라이브 지표 수집
-   */
+  const fetchClusters = useDataStore((state) => state.fetchClusters);
+  const fetchPolicies = useDataStore((state) => state.fetchPolicies);
+  const fetchViolations = useDataStore((state) => state.fetchViolations);
+
   const loadUserData = useCallback(async () => {
     try {
       await initializeAuth();
-
-      const [catalogRes, policiesRes, violationsRes] = await Promise.allSettled(
-        [
-          listClusterCatalog().catch(() => listClusters()),
-          getPolicies(),
-          getViolations(),
-        ],
-      );
-
-      if (
-        catalogRes.status === "fulfilled" &&
-        Array.isArray(catalogRes.value)
-      ) {
-        setLiveClusters(catalogRes.value);
-      }
-      if (
-        policiesRes.status === "fulfilled" &&
-        Array.isArray(policiesRes.value)
-      ) {
-        setLivePolicies(policiesRes.value);
-      }
-      if (
-        violationsRes.status === "fulfilled" &&
-        Array.isArray(violationsRes.value)
-      ) {
-        setLiveViolations(violationsRes.value);
-      }
+      await Promise.allSettled([
+        fetchClusters(),
+        fetchPolicies(),
+        fetchViolations(),
+      ]);
     } catch {
-      // 백엔드 연동 불가 시 graceful fallback 유지
+      // Graceful fallback
     }
-  }, [initializeAuth]);
+  }, [fetchClusters, fetchPolicies, fetchViolations, initializeAuth]);
 
   useEffect(() => {
     void loadUserData();

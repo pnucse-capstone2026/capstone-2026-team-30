@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/lib/auth-store";
+import { useDataStore } from "@/lib/data-store";
 import {
   auditLogs as mockAuditLogs,
   entityTypeClassName,
@@ -92,61 +93,35 @@ export default function AdminDashboardPage() {
   const authStatus = useAuthStore((state) => state.status);
   const initializeAuth = useAuthStore((state) => state.initialize);
 
-  const [liveClusters, setLiveClusters] = useState<ClusterMetadata[] | null>(
-    null,
-  );
-  const [liveViolations, setLiveViolations] = useState<
-    PolicyViolation[] | null
-  >(null);
-  const [liveExceptions, setLiveExceptions] = useState<
-    ExceptionRequest[] | null
-  >(null);
-  const [liveAuditLogs, setLiveAuditLogs] = useState<AuditLog[] | null>(null);
+  const liveClusters = useDataStore((state) => state.clusters);
+  const liveViolations = useDataStore((state) => state.violations);
+  const liveExceptions = useDataStore((state) => state.exceptions);
+  const liveAuditLogs = useDataStore((state) => state.auditLogs);
 
-  /**
-   * 백엔드 API에서 관리자 대시보드 라이브 지표를 수집합니다.
-   */
+  const fetchClusters = useDataStore((state) => state.fetchClusters);
+  const fetchViolations = useDataStore((state) => state.fetchViolations);
+  const fetchExceptions = useDataStore((state) => state.fetchExceptions);
+  const fetchAuditLogs = useDataStore((state) => state.fetchAuditLogs);
+
   const loadDashboardData = useCallback(async () => {
     try {
       await initializeAuth();
-
-      const [catalogRes, violationsRes, exceptionsRes, logsRes] =
-        await Promise.allSettled([
-          listClusterCatalog().catch(() => listClusters()),
-          getViolations(),
-          listExceptionRequests(),
-          getAuditLogs({ limit: 5 }),
-        ]);
-
-      if (
-        catalogRes.status === "fulfilled" &&
-        Array.isArray(catalogRes.value)
-      ) {
-        setLiveClusters(catalogRes.value);
-      }
-      if (
-        violationsRes.status === "fulfilled" &&
-        Array.isArray(violationsRes.value)
-      ) {
-        setLiveViolations(violationsRes.value);
-      }
-      if (
-        exceptionsRes.status === "fulfilled" &&
-        Array.isArray(exceptionsRes.value)
-      ) {
-        setLiveExceptions(exceptionsRes.value);
-      }
-      if (
-        logsRes.status === "fulfilled" &&
-        logsRes.value &&
-        Array.isArray(logsRes.value.items)
-      ) {
-        setLiveAuditLogs(logsRes.value.items);
-      }
+      await Promise.allSettled([
+        fetchClusters(),
+        fetchViolations(),
+        fetchExceptions(),
+        fetchAuditLogs(),
+      ]);
     } catch {
-      // 백엔드 연동 불가 시 graceful fallback 유지
+      // Graceful fallback
     }
-  }, [initializeAuth]);
+  }, [
+    fetchAuditLogs,
+    fetchClusters,
+    fetchExceptions,
+    fetchViolations,
+    initializeAuth,
+  ]);
 
   useEffect(() => {
     void loadDashboardData();

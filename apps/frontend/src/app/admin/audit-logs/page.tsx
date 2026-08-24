@@ -31,6 +31,7 @@ import {
   type AuditLog,
 } from "@/lib/audit-logs";
 import { useAuthStore } from "@/lib/auth-store";
+import { useDataStore } from "@/lib/data-store";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type EntityFilter = "all" | AuditLog["entityType"];
@@ -45,32 +46,27 @@ const roleLabel: Record<AuditLog["actorRole"], string> = {
 };
 
 export default function AdminAuditLogsPage() {
-  const [liveLogs, setLiveLogs] = useState<AuditLog[] | null>(null);
   const [query, setQuery] = useState("");
   const [entityType, setEntityType] = useState<EntityFilter>("all");
   const [actorRole, setActorRole] = useState<ActorRoleFilter>("all");
 
-  const authStatus = useAuthStore((state) => state.status);
+  const liveLogs = useDataStore((state) => state.auditLogs);
+  const fetchAuditLogs = useDataStore((state) => state.fetchAuditLogs);
+
   const initializeAuth = useAuthStore((state) => state.initialize);
 
-  /**
-   * 백엔드 API에서 감사 로그 항목을 수집합니다.
-   */
   const loadLogs = useCallback(async () => {
     try {
       await initializeAuth();
-      const res = await getAuditLogs({ limit: 100 });
-      if (Array.isArray(res.items)) {
-        setLiveLogs(res.items);
-      }
+      await fetchAuditLogs();
     } catch {
-      // 백엔드 연동 실패 시 graceful fallback 유지
+      // Graceful fallback
     }
-  }, [initializeAuth]);
+  }, [fetchAuditLogs, initializeAuth]);
 
   useEffect(() => {
     void loadLogs();
-  }, [authStatus, loadLogs]);
+  }, [loadLogs]);
 
   const logs = liveLogs ?? auditLogs;
   const isLive = liveLogs !== null;

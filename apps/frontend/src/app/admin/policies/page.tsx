@@ -29,6 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuthStore } from "@/lib/auth-store";
+import { useDataStore } from "@/lib/data-store";
 import {
   getPolicies,
   kyvernoPolicies,
@@ -49,16 +50,17 @@ type ScopeFilter = "all" | PolicyScope;
 type ModeFilter = "all" | PolicyMode;
 type StatusFilter = "all" | PolicyStatus;
 
-const typeOptions: PolicyType[] = ["validate", "mutate", "generate"];
+const typeOptions: PolicyType[] = [
+  "validate",
+  "mutate",
+  "generate",
+  "verifyImages",
+];
 const scopeOptions: PolicyScope[] = ["ClusterPolicy", "Policy"];
 const modeOptions: PolicyMode[] = ["enforce", "audit"];
 const statusOptions: PolicyStatus[] = ["active", "warning", "draft"];
 
 export default function AdminPoliciesPage() {
-  const [loading, setLoading] = useState(false);
-  const [livePolicies, setLivePolicies] = useState<KyvernoPolicy[] | null>(
-    null,
-  );
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("all");
@@ -66,30 +68,24 @@ export default function AdminPoliciesPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [clusterFilter, setClusterFilter] = useState("all");
 
-  const authStatus = useAuthStore((state) => state.status);
+  const livePolicies = useDataStore((state) => state.policies);
+  const fetchPolicies = useDataStore((state) => state.fetchPolicies);
+  const policiesLoading = useDataStore((state) => state.policiesLoading);
+
   const initializeAuth = useAuthStore((state) => state.initialize);
 
-  /**
-   * 백엔드 API에서 실시간 Kyverno 정책 목록을 수집합니다.
-   */
   const loadPolicies = useCallback(async () => {
-    setLoading(true);
     try {
       await initializeAuth();
-      const data = await getPolicies();
-      if (Array.isArray(data)) {
-        setLivePolicies(data);
-      }
+      await fetchPolicies();
     } catch {
-      // 백엔드 연동 불가 시 graceful fallback 유지
-    } finally {
-      setLoading(false);
+      // Graceful fallback
     }
-  }, [initializeAuth]);
+  }, [fetchPolicies, initializeAuth]);
 
   useEffect(() => {
     void loadPolicies();
-  }, [authStatus, loadPolicies]);
+  }, [loadPolicies]);
 
   const policies = livePolicies ?? kyvernoPolicies;
   const isLive = livePolicies !== null;
@@ -169,9 +165,11 @@ export default function AdminPoliciesPage() {
             variant="outline"
             className="hidden h-10 rounded-xl border-slate-200 bg-white text-slate-700 sm:inline-flex"
             onClick={() => void loadPolicies()}
-            disabled={loading}
+            disabled={policiesLoading}
           >
-            <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw
+              className={`size-4 ${policiesLoading ? "animate-spin" : ""}`}
+            />
             동기화
           </Button>
           <Button

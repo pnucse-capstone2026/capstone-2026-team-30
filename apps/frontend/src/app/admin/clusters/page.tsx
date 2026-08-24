@@ -28,6 +28,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuthStore } from "@/lib/auth-store";
+import { useDataStore } from "@/lib/data-store";
 import {
   clusters,
   clusterEnvironmentLabel,
@@ -73,72 +74,29 @@ export default function AdminClustersPage() {
   const [status, setStatus] = useState<StatusFilter>("all");
   const [kyvernoStatus, setKyvernoStatus] = useState<KyvernoFilter>("all");
 
-  const [loading, setLoading] = useState(false);
-  const [liveClusters, setLiveClusters] = useState<ClusterMetadata[] | null>(
-    null,
-  );
-  const [livePolicies, setLivePolicies] = useState<KyvernoPolicy[] | null>(
-    null,
-  );
-  const [liveViolations, setLiveViolations] = useState<
-    PolicyViolation[] | null
-  >(null);
+  const liveClusters = useDataStore((state) => state.clusters);
+  const livePolicies = useDataStore((state) => state.policies);
+  const liveViolations = useDataStore((state) => state.violations);
+  const fetchClusters = useDataStore((state) => state.fetchClusters);
+  const fetchPolicies = useDataStore((state) => state.fetchPolicies);
+  const fetchViolations = useDataStore((state) => state.fetchViolations);
+  const clustersLoading = useDataStore((state) => state.clustersLoading);
 
   const authStatus = useAuthStore((state) => state.status);
   const initializeAuth = useAuthStore((state) => state.initialize);
 
-  /**
-   * 백엔드 API에서 관리자 클러스터 카탈로그, 실시간 정책, 위반 내역을 병렬 조회합니다.
-   */
   const loadDashboardData = useCallback(async () => {
-    setLoading(true);
     try {
       await initializeAuth();
-
-      let catalogData: ClusterMetadata[] | null = null;
-      try {
-        const data = await listClusterCatalog();
-        if (Array.isArray(data)) {
-          catalogData = data;
-        }
-      } catch {
-        try {
-          const data = await listClusters();
-          if (Array.isArray(data)) {
-            catalogData = data;
-          }
-        } catch {
-          // 백엔드 연동 불가 시 graceful fallback 유지
-        }
-      }
-
-      if (catalogData !== null) {
-        setLiveClusters(catalogData);
-      }
-
-      const [policiesResult, violationsResult] = await Promise.allSettled([
-        getPolicies(),
-        getViolations(),
+      await Promise.allSettled([
+        fetchClusters(),
+        fetchPolicies(),
+        fetchViolations(),
       ]);
-
-      if (
-        policiesResult.status === "fulfilled" &&
-        policiesResult.value.length > 0
-      ) {
-        setLivePolicies(policiesResult.value);
-      }
-      if (
-        violationsResult.status === "fulfilled" &&
-        violationsResult.value.length > 0
-      ) {
-        setLiveViolations(violationsResult.value);
-      }
     } catch {
-      // 백엔드 연동 불가 시 graceful fallback 유지
-    } finally {
-      setLoading(false);
+      // Graceful fallback
     }
-  }, [initializeAuth]);
+  }, [fetchClusters, fetchPolicies, fetchViolations, initializeAuth]);
 
   useEffect(() => {
     void loadDashboardData();
@@ -273,9 +231,11 @@ export default function AdminClustersPage() {
           variant="outline"
           className="hidden h-10 rounded-xl border-slate-200 bg-white text-slate-700 sm:inline-flex"
           onClick={() => void loadDashboardData()}
-          disabled={loading}
+          disabled={clustersLoading}
         >
-          <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
+          <RefreshCw
+            className={`size-4 ${clustersLoading ? "animate-spin" : ""}`}
+          />
           동기화
         </Button>
       }

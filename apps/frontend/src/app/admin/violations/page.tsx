@@ -29,6 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuthStore } from "@/lib/auth-store";
+import { useDataStore } from "@/lib/data-store";
 import {
   exceptionClassName,
   exceptionLabel,
@@ -59,9 +60,6 @@ const statusOptions: Array<"all" | ViolationStatus> = [
 ];
 
 export default function AdminViolationsPage() {
-  const [liveViolations, setLiveViolations] = useState<
-    PolicyViolation[] | null
-  >(null);
   const [query, setQuery] = useState("");
   const [cluster, setCluster] = useState("all");
   const [policy, setPolicy] = useState("all");
@@ -70,27 +68,23 @@ export default function AdminViolationsPage() {
   const [severity, setSeverity] = useState<"all" | ViolationSeverity>("all");
   const [status, setStatus] = useState<"all" | ViolationStatus>("all");
 
-  const authStatus = useAuthStore((state) => state.status);
+  const liveViolations = useDataStore((state) => state.violations);
+  const fetchViolations = useDataStore((state) => state.fetchViolations);
+
   const initializeAuth = useAuthStore((state) => state.initialize);
 
-  /**
-   * 백엔드 API에서 실시간 정책 위반 목록을 수집합니다.
-   */
   const loadViolations = useCallback(async () => {
     try {
       await initializeAuth();
-      const data = await getViolations();
-      if (Array.isArray(data)) {
-        setLiveViolations(data);
-      }
+      await fetchViolations();
     } catch {
-      // 백엔드 연동 실패 시 graceful fallback 유지
+      // Graceful fallback
     }
-  }, [initializeAuth]);
+  }, [fetchViolations, initializeAuth]);
 
   useEffect(() => {
     void loadViolations();
-  }, [authStatus, loadViolations]);
+  }, [loadViolations]);
 
   const violations = liveViolations ?? policyViolations;
   const isLive = liveViolations !== null;
