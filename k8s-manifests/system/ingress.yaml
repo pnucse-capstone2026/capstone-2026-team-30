@@ -16,10 +16,10 @@ metadata:
     alb.ingress.kubernetes.io/target-type: ip
     # HTTP 80 포트 수신 설정
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
-    # 프론트엔드 UI 헬스체크 경로
-    alb.ingress.kubernetes.io/healthcheck-path: /
+    # 프론트엔드 및 백엔드 헬스체크 경로 지정
+    alb.ingress.kubernetes.io/healthcheck-path: /api/health
     alb.ingress.kubernetes.io/healthcheck-interval-seconds: '15'
-    alb.ingress.kubernetes.io/success-codes: '200'
+    alb.ingress.kubernetes.io/success-codes: '200,404'
 spec:
   rules:
     - http:
