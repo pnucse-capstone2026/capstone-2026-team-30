@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
 import {
   BellRing,
   CheckCircle2,
@@ -15,6 +14,7 @@ import { DashboardPageShell } from "@/components/dashboard/dashboard-page-shell"
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/lib/auth-store";
 import {
   isNotificationVisibleToUser,
@@ -25,6 +25,7 @@ import {
   type NotificationSeverity,
   type NotificationType,
 } from "@/lib/notifications";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type TypeFilter = "all" | NotificationType;
 type SeverityFilter = "all" | NotificationSeverity;
@@ -46,13 +47,37 @@ const severityOptions: NotificationSeverity[] = [
 
 export default function NotificationsPage() {
   const user = useAuthStore((state) => state.user);
+  const authStatus = useAuthStore((state) => state.status);
+  const initializeAuth = useAuthStore((state) => state.initialize);
+
+  const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all");
   const [readFilter, setReadFilter] = useState<ReadFilter>("all");
-  const [readIds, setReadIds] = useState<Set<string>>(() =>
-    new Set(notifications.filter((notification) => notification.read).map((item) => item.id)),
+  const [readIds, setReadIds] = useState<Set<string>>(
+    () =>
+      new Set(
+        notifications
+          .filter((notification) => notification.read)
+          .map((item) => item.id),
+      ),
   );
+
+  const loadNotifications = useCallback(async () => {
+    setLoading(true);
+    try {
+      await initializeAuth();
+    } catch {
+      // Graceful fallback
+    } finally {
+      setLoading(false);
+    }
+  }, [initializeAuth]);
+
+  useEffect(() => {
+    void loadNotifications();
+  }, [authStatus, loadNotifications]);
 
   const sidebarVariant =
     user?.role === "ADMIN" || user?.role === "APPROVER" ? "admin" : "user";
@@ -130,6 +155,7 @@ export default function NotificationsPage() {
           detail="현재 계정 기준"
           icon={BellRing}
           className="bg-blue-50 text-blue-600"
+          loading={loading}
         />
         <SummaryCard
           label="읽지 않음"
@@ -137,6 +163,7 @@ export default function NotificationsPage() {
           detail="확인 필요"
           icon={ShieldAlert}
           className="bg-amber-50 text-amber-600"
+          loading={loading}
         />
         <SummaryCard
           label="긴급"
@@ -148,6 +175,7 @@ export default function NotificationsPage() {
           detail="우선 조치"
           icon={ShieldAlert}
           className="bg-rose-50 text-rose-600"
+          loading={loading}
         />
       </section>
 
@@ -155,9 +183,20 @@ export default function NotificationsPage() {
         <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <h2 className="text-2xl font-semibold tracking-tight">알림 목록</h2>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50">
+                  {user ? "계정 맞춤 알림" : "알림 메인"}
+                </Badge>
+                <span className="text-xs text-slate-400">
+                  {user?.email ?? "계정 권한 기반 실시간 필터링"}
+                </span>
+              </div>
+              <h2 className="text-2xl font-semibold tracking-tight">
+                알림 목록
+              </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                역할 기반 알림과 개인 대상 알림을 현재 로그인 계정 기준으로 표시합니다.
+                역할 기반 알림과 개인 대상 알림을 현재 로그인 계정 기준으로
+                표시합니다.
               </p>
             </div>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
@@ -221,7 +260,17 @@ export default function NotificationsPage() {
         </div>
 
         <div className="divide-y divide-slate-100">
-          {visibleNotifications.length > 0 ? (
+          {loading ? (
+            [1, 2, 3].map((key) => (
+              <div key={key} className="flex gap-4 px-5 py-4 sm:px-6">
+                <Skeleton className="mt-1 size-10 shrink-0 rounded-xl" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Skeleton className="h-5 w-48 rounded-lg" />
+                  <Skeleton className="h-4 w-full rounded-lg" />
+                </div>
+              </div>
+            ))
+          ) : visibleNotifications.length > 0 ? (
             visibleNotifications.map((notification) => {
               const read = readIds.has(notification.id);
 
@@ -231,12 +280,16 @@ export default function NotificationsPage() {
                   href={notification.href}
                   className="flex gap-4 px-5 py-4 hover:bg-slate-50/70 sm:px-6"
                   onClick={() =>
-                    setReadIds((current) => new Set([...current, notification.id]))
+                    setReadIds(
+                      (current) => new Set([...current, notification.id]),
+                    )
                   }
                 >
                   <div
                     className={`mt-1 flex size-10 shrink-0 items-center justify-center rounded-xl ${
-                      read ? "bg-slate-100 text-slate-500" : "bg-blue-50 text-blue-600"
+                      read
+                        ? "bg-slate-100 text-slate-500"
+                        : "bg-blue-50 text-blue-600"
                     }`}
                   >
                     <BellRing className="size-5" />
@@ -249,7 +302,11 @@ export default function NotificationsPage() {
                       {!read ? (
                         <span className="size-2 rounded-full bg-blue-500" />
                       ) : null}
-                      <Badge className={notificationSeverityClassName[notification.severity]}>
+                      <Badge
+                        className={
+                          notificationSeverityClassName[notification.severity]
+                        }
+                      >
                         {notificationSeverityLabel[notification.severity]}
                       </Badge>
                       <Badge className="bg-slate-100 text-slate-600 ring-1 ring-slate-200">
@@ -284,22 +341,30 @@ function SummaryCard({
   detail,
   icon: Icon,
   className,
+  loading,
 }: {
   label: string;
   value: string;
   detail: string;
   icon: typeof BellRing;
   className: string;
+  loading?: boolean;
 }) {
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
       <div className="flex items-start justify-between">
-        <div className={`flex size-10 items-center justify-center rounded-xl ${className}`}>
+        <div
+          className={`flex size-10 items-center justify-center rounded-xl ${className}`}
+        >
           <Icon className="size-5" />
         </div>
       </div>
       <p className="mt-5 text-[13px] text-slate-500">{label}</p>
-      <p className="mt-1 text-3xl font-semibold tracking-tight">{value}</p>
+      {loading ? (
+        <Skeleton className="mt-1 h-9 w-20 rounded-lg" />
+      ) : (
+        <p className="mt-1 text-3xl font-semibold tracking-tight">{value}</p>
+      )}
       <p className="mt-2 text-[11px] text-slate-400">{detail}</p>
     </article>
   );

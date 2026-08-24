@@ -1,6 +1,4 @@
 "use client";
-
-import { useMemo, useState } from "react";
 import {
   Activity,
   Clock3,
@@ -16,6 +14,7 @@ import { DashboardPageShell } from "@/components/dashboard/dashboard-page-shell"
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -31,7 +30,8 @@ import {
   getAuditLogs,
   type AuditLog,
 } from "@/lib/audit-logs";
-import { useEffect } from "react";
+import { useAuthStore } from "@/lib/auth-store";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type EntityFilter = "all" | AuditLog["entityType"];
 type ActorRoleFilter = "all" | AuditLog["actorRole"];
@@ -45,22 +45,35 @@ const roleLabel: Record<AuditLog["actorRole"], string> = {
 };
 
 export default function AdminAuditLogsPage() {
-  const [logs, setLogs] = useState<AuditLog[]>(auditLogs);
+  const [liveLogs, setLiveLogs] = useState<AuditLog[] | null>(null);
   const [query, setQuery] = useState("");
   const [entityType, setEntityType] = useState<EntityFilter>("all");
   const [actorRole, setActorRole] = useState<ActorRoleFilter>("all");
 
-  useEffect(() => {
-    let isMounted = true;
-    getAuditLogs({ limit: 100 }).then((res) => {
-      if (isMounted && res.items.length > 0) {
-        setLogs(res.items);
+  const authStatus = useAuthStore((state) => state.status);
+  const initializeAuth = useAuthStore((state) => state.initialize);
+
+  /**
+   * 백엔드 API에서 감사 로그 항목을 수집합니다.
+   */
+  const loadLogs = useCallback(async () => {
+    try {
+      await initializeAuth();
+      const res = await getAuditLogs({ limit: 100 });
+      if (Array.isArray(res.items)) {
+        setLiveLogs(res.items);
       }
-    });
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    } catch {
+      // 백엔드 연동 실패 시 graceful fallback 유지
+    }
+  }, [initializeAuth]);
+
+  useEffect(() => {
+    void loadLogs();
+  }, [authStatus, loadLogs]);
+
+  const logs = liveLogs ?? auditLogs;
+  const isLive = liveLogs !== null;
 
   const entityOptions = useMemo(
     () => Array.from(new Set(logs.map((log) => log.entityType))),
@@ -122,22 +135,22 @@ export default function AdminAuditLogsPage() {
       <section className="grid gap-4 md:grid-cols-3">
         <SummaryCard
           label="전체 로그"
-          value={String(auditLogs.length)}
-          detail="최근 작업 이력"
+          value={String(logs.length)}
+          detail={isLive ? "라이브 수집 이력" : "최근 작업 이력"}
           icon={History}
+          loading={liveLogs === null}
         />
         <SummaryCard
           label="사용자 작업"
-          value={String(
-            auditLogs.filter((log) => log.entityType === "USER").length,
-          )}
+          value={String(logs.filter((log) => log.entityType === "USER").length)}
           detail="계정 및 권한 변경"
           icon={UserRound}
+          loading={liveLogs === null}
         />
         <SummaryCard
           label="정책 관련"
           value={String(
-            auditLogs.filter(
+            logs.filter(
               (log) =>
                 log.entityType === "POLICY" ||
                 log.entityType === "POLICY_EXCEPTION_REQUEST" ||
@@ -146,6 +159,7 @@ export default function AdminAuditLogsPage() {
           )}
           detail="정책, 예외, 오류"
           icon={ShieldCheck}
+          loading={liveLogs === null}
         />
       </section>
 
@@ -155,10 +169,12 @@ export default function AdminAuditLogsPage() {
             <div>
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50">
-                  AuditLog
+                  {isLive ? "라이브 API 연동" : "AuditLog"}
                 </Badge>
                 <span className="text-xs text-slate-400">
-                  플랫폼 작업 이력 실시간 관리
+                  {isLive
+                    ? "백엔드 AuditLog DB 실시간 연동 중"
+                    : "플랫폼 작업 이력 실시간 관리"}
                 </span>
               </div>
               <h2 className="text-2xl font-semibold tracking-tight">
@@ -246,51 +262,71 @@ export default function AdminAuditLogsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredLogs.map((log) => (
-              <TableRow key={log.id} className="hover:bg-slate-50/70">
-                <TableCell className="px-5 py-4 sm:px-6">
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <Clock3 className="size-4 text-slate-400" />
-                    {log.createdAt}
-                  </div>
-                  <p className="mt-1 font-mono text-[11px] text-slate-400">
-                    {log.id}
-                  </p>
-                </TableCell>
-                <TableCell className="py-4">
-                  <div className="flex items-center gap-2">
-                    <Activity className="size-4 text-slate-400" />
-                    <span className="font-mono text-xs font-medium text-slate-900">
-                      {log.action}
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell className="py-4">
-                  <Badge className={entityTypeClassName[log.entityType]}>
-                    {entityTypeLabel[log.entityType]}
-                  </Badge>
-                  <p className="mt-1 max-w-[220px] truncate font-mono text-[11px] text-slate-400">
-                    {log.entityId}
-                  </p>
-                </TableCell>
-                <TableCell className="py-4">
-                  <p className="text-xs font-medium text-slate-900">
-                    {log.actorEmail}
-                  </p>
-                  <p className="mt-1 text-[11px] text-slate-400">
-                    {roleLabel[log.actorRole]} ({log.actorRole})
-                  </p>
-                </TableCell>
-                <TableCell className="max-w-[420px] py-4 pr-5 sm:pr-6">
-                  <p className="text-xs leading-5 text-slate-700">
-                    {log.summary}
-                  </p>
-                  <p className="mt-1 truncate font-mono text-[11px] text-slate-400">
-                    {log.metadata}
-                  </p>
-                </TableCell>
-              </TableRow>
-            ))}
+            {liveLogs === null
+              ? [1, 2, 3].map((key) => (
+                  <TableRow key={key}>
+                    <TableCell className="px-5 py-4 sm:px-6">
+                      <Skeleton className="h-5 w-32 rounded-lg" />
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Skeleton className="h-5 w-24 rounded-lg" />
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Skeleton className="h-5 w-20 rounded-lg" />
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Skeleton className="h-5 w-28 rounded-lg" />
+                    </TableCell>
+                    <TableCell className="max-w-[420px] py-4 pr-5 sm:pr-6">
+                      <Skeleton className="h-5 w-48 rounded-lg" />
+                    </TableCell>
+                  </TableRow>
+                ))
+              : filteredLogs.map((log) => (
+                  <TableRow key={log.id} className="hover:bg-slate-50/70">
+                    <TableCell className="px-5 py-4 sm:px-6">
+                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <Clock3 className="size-4 text-slate-400" />
+                        {log.createdAt}
+                      </div>
+                      <p className="mt-1 font-mono text-[11px] text-slate-400">
+                        {log.id}
+                      </p>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <div className="flex items-center gap-2">
+                        <Activity className="size-4 text-slate-400" />
+                        <span className="font-mono text-xs font-medium text-slate-900">
+                          {log.action}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Badge className={entityTypeClassName[log.entityType]}>
+                        {entityTypeLabel[log.entityType]}
+                      </Badge>
+                      <p className="mt-1 max-w-[220px] truncate font-mono text-[11px] text-slate-400">
+                        {log.entityId}
+                      </p>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <p className="text-xs font-medium text-slate-900">
+                        {log.actorEmail}
+                      </p>
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        {roleLabel[log.actorRole]} ({log.actorRole})
+                      </p>
+                    </TableCell>
+                    <TableCell className="max-w-[420px] py-4 pr-5 sm:pr-6">
+                      <p className="text-xs leading-5 text-slate-700">
+                        {log.summary}
+                      </p>
+                      <p className="mt-1 truncate font-mono text-[11px] text-slate-400">
+                        {log.metadata}
+                      </p>
+                    </TableCell>
+                  </TableRow>
+                ))}
           </TableBody>
         </Table>
 
@@ -302,10 +338,12 @@ export default function AdminAuditLogsPage() {
 
         <div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-4 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <span>
-            {filteredLogs.length} / {auditLogs.length}개 로그 표시
+            {filteredLogs.length} / {logs.length}개 로그 표시
           </span>
           <span>
-            이후 AuditLog API에서 페이지네이션과 서버 필터를 연결합니다.
+            {isLive
+              ? "백엔드 AuditLog DB와 감사 이력이 성공적으로 연동되었습니다."
+              : "백엔드 연동 불가 시 기본 목업 감사 이력이 표시됩니다."}
           </span>
         </div>
       </section>
@@ -318,11 +356,13 @@ function SummaryCard({
   value,
   detail,
   icon: Icon,
+  loading,
 }: {
   label: string;
   value: string;
   detail: string;
   icon: typeof History;
+  loading?: boolean;
 }) {
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
@@ -332,7 +372,11 @@ function SummaryCard({
         </div>
       </div>
       <p className="mt-5 text-[13px] text-slate-500">{label}</p>
-      <p className="mt-1 text-3xl font-semibold tracking-tight">{value}</p>
+      {loading ? (
+        <Skeleton className="mt-1 h-9 w-20 rounded-lg" />
+      ) : (
+        <p className="mt-1 text-3xl font-semibold tracking-tight">{value}</p>
+      )}
       <p className="mt-2 text-[11px] text-slate-400">{detail}</p>
     </article>
   );

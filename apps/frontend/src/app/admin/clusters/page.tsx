@@ -422,80 +422,109 @@ export default function AdminClustersPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredClusters.map((cluster) => (
-              <TableRow key={cluster.id} className="hover:bg-slate-50/70">
-                <TableCell className="px-5 py-4 sm:px-6">
-                  <div className="flex items-center gap-3">
-                    <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                      <Server className="size-4.5" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-[13px] font-medium text-slate-950">
-                        {cluster.name}
+            {liveClusters === null
+              ? [1, 2].map((key) => (
+                  <TableRow key={key}>
+                    <TableCell className="px-5 py-4 sm:px-6">
+                      <Skeleton className="h-5 w-48 rounded-lg" />
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Skeleton className="h-5 w-24 rounded-lg" />
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Skeleton className="h-5 w-16 rounded-lg" />
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Skeleton className="h-5 w-16 rounded-lg" />
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Skeleton className="h-5 w-20 rounded-lg" />
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Skeleton className="h-5 w-16 rounded-lg" />
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Skeleton className="h-5 w-28 rounded-lg" />
+                    </TableCell>
+                    <TableCell className="py-4 pr-5 sm:pr-6" />
+                  </TableRow>
+                ))
+              : filteredClusters.map((cluster) => (
+                  <TableRow key={cluster.id} className="hover:bg-slate-50/70">
+                    <TableCell className="px-5 py-4 sm:px-6">
+                      <div className="flex items-center gap-3">
+                        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                          <Server className="size-4.5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-medium text-slate-950">
+                            {cluster.name}
+                          </p>
+                          <p className="mt-1 line-clamp-1 text-[11px] text-slate-400">
+                            {cluster.description}
+                          </p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <div>
+                        <p className="text-xs font-medium text-slate-800">
+                          {clusterEnvironmentLabel[cluster.environment]}
+                        </p>
+                        <p className="mt-1 text-[11px] text-slate-400">
+                          {cluster.provider} · {cluster.region}
+                        </p>
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Badge className={clusterStatusClassName[cluster.status]}>
+                        {clusterStatusLabel[cluster.status]}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Badge
+                        className={
+                          kyvernoStatusClassName[cluster.kyvernoStatus]
+                        }
+                      >
+                        {kyvernoStatusLabel[cluster.kyvernoStatus]}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <p className="text-xs font-medium text-slate-800">
+                        노드 {cluster.nodeCount}
                       </p>
-                      <p className="mt-1 line-clamp-1 text-[11px] text-slate-400">
-                        {cluster.description}
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        Namespace {cluster.namespaceCount}
                       </p>
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell className="py-4">
-                  <div>
-                    <p className="text-xs font-medium text-slate-800">
-                      {clusterEnvironmentLabel[cluster.environment]}
-                    </p>
-                    <p className="mt-1 text-[11px] text-slate-400">
-                      {cluster.provider} · {cluster.region}
-                    </p>
-                  </div>
-                </TableCell>
-                <TableCell className="py-4">
-                  <Badge className={clusterStatusClassName[cluster.status]}>
-                    {clusterStatusLabel[cluster.status]}
-                  </Badge>
-                </TableCell>
-                <TableCell className="py-4">
-                  <Badge
-                    className={kyvernoStatusClassName[cluster.kyvernoStatus]}
-                  >
-                    {kyvernoStatusLabel[cluster.kyvernoStatus]}
-                  </Badge>
-                </TableCell>
-                <TableCell className="py-4">
-                  <p className="text-xs font-medium text-slate-800">
-                    노드 {cluster.nodeCount}
-                  </p>
-                  <p className="mt-1 text-[11px] text-slate-400">
-                    Namespace {cluster.namespaceCount}
-                  </p>
-                </TableCell>
-                <TableCell className="py-4">
-                  <p className="text-xs font-medium text-slate-800">
-                    정책 {cluster.policyCount}
-                  </p>
-                  <p className="mt-1 text-[11px] text-slate-400">
-                    오류 {cluster.violationCount}
-                  </p>
-                </TableCell>
-                <TableCell className="py-4">
-                  <p className="text-xs text-slate-600">
-                    {cluster.lastSyncedAt}
-                  </p>
-                  <p className="mt-1 text-[11px] text-slate-400">
-                    {cluster.owner}
-                  </p>
-                </TableCell>
-                <TableCell className="py-4 pr-5 sm:pr-6">
-                  <Link
-                    href={`/admin/clusters/${cluster.id}`}
-                    aria-label={`${cluster.name} 상세 보기`}
-                    className="flex size-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                  >
-                    <ChevronRight className="size-4" />
-                  </Link>
-                </TableCell>
-              </TableRow>
-            ))}
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <p className="text-xs font-medium text-slate-800">
+                        정책 {cluster.policyCount}
+                      </p>
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        오류 {cluster.violationCount}
+                      </p>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <p className="text-xs text-slate-600">
+                        {cluster.lastSyncedAt}
+                      </p>
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        {cluster.owner}
+                      </p>
+                    </TableCell>
+                    <TableCell className="py-4 pr-5 sm:pr-6">
+                      <Link
+                        href={`/admin/clusters/${cluster.id}`}
+                        aria-label={`${cluster.name} 상세 보기`}
+                        className="flex size-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      >
+                        <ChevronRight className="size-4" />
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))}
           </TableBody>
         </Table>
 
@@ -511,8 +540,8 @@ export default function AdminClustersPage() {
           </span>
           <span>
             {liveClusters
-              ? "Kubernetes/EKS API와 Kyverno 상태 API가 연동되었습니다."
-              : "이후 Kubernetes/EKS API와 Kyverno 상태 API를 연결합니다."}
+              ? "Kubernetes/EKS API 및 Kyverno 엔진 상태가 성공적으로 연동되었습니다."
+              : "백엔드 연동 불가 시 기본 목업 클러스터 정보가 표시됩니다."}
           </span>
         </div>
       </section>
