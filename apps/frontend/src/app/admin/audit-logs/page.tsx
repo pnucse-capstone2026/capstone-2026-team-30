@@ -128,7 +128,9 @@ export default function AdminAuditLogsPage() {
         />
         <SummaryCard
           label="사용자 작업"
-          value={String(auditLogs.filter((log) => log.entityType === "USER").length)}
+          value={String(
+            auditLogs.filter((log) => log.entityType === "USER").length,
+          )}
           detail="계정 및 권한 변경"
           icon={UserRound}
         />
@@ -156,12 +158,15 @@ export default function AdminAuditLogsPage() {
                   AuditLog
                 </Badge>
                 <span className="text-xs text-slate-400">
-                  API 연결 전 목업 데이터
+                  플랫폼 작업 이력 실시간 관리
                 </span>
               </div>
-              <h2 className="text-2xl font-semibold tracking-tight">작업 이력</h2>
+              <h2 className="text-2xl font-semibold tracking-tight">
+                작업 이력
+              </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                작업자, 액션, 대상 리소스, 생성 시각을 기준으로 운영 이력을 확인합니다.
+                작업자, 액션, 대상 리소스, 생성 시각을 기준으로 운영 이력을
+                확인합니다.
               </p>
             </div>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
@@ -188,10 +193,14 @@ export default function AdminAuditLogsPage() {
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <label className="space-y-1.5">
-              <span className="text-[11px] font-medium text-slate-500">대상 유형</span>
+              <span className="text-[11px] font-medium text-slate-500">
+                대상 유형
+              </span>
               <select
                 value={entityType}
-                onChange={(event) => setEntityType(event.target.value as EntityFilter)}
+                onChange={(event) =>
+                  setEntityType(event.target.value as EntityFilter)
+                }
                 className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none focus:border-blue-500 focus:ring-3 focus:ring-blue-500/10"
               >
                 <option value="all">전체 대상</option>
@@ -203,7 +212,9 @@ export default function AdminAuditLogsPage() {
               </select>
             </label>
             <label className="space-y-1.5">
-              <span className="text-[11px] font-medium text-slate-500">작업자 역할</span>
+              <span className="text-[11px] font-medium text-slate-500">
+                작업자 역할
+              </span>
               <select
                 value={actorRole}
                 onChange={(event) =>
@@ -271,7 +282,9 @@ export default function AdminAuditLogsPage() {
                   </p>
                 </TableCell>
                 <TableCell className="max-w-[420px] py-4 pr-5 sm:pr-6">
-                  <p className="text-xs leading-5 text-slate-700">{log.summary}</p>
+                  <p className="text-xs leading-5 text-slate-700">
+                    {log.summary}
+                  </p>
                   <p className="mt-1 truncate font-mono text-[11px] text-slate-400">
                     {log.metadata}
                   </p>
@@ -291,7 +304,9 @@ export default function AdminAuditLogsPage() {
           <span>
             {filteredLogs.length} / {auditLogs.length}개 로그 표시
           </span>
-          <span>이후 AuditLog API에서 페이지네이션과 서버 필터를 연결합니다.</span>
+          <span>
+            이후 AuditLog API에서 페이지네이션과 서버 필터를 연결합니다.
+          </span>
         </div>
       </section>
     </DashboardPageShell>

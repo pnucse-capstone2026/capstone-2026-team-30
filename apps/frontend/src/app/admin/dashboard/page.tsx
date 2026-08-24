@@ -159,14 +159,15 @@ export default function AdminDashboardPage() {
               관리자 홈
             </Badge>
             <span className="text-xs text-slate-400">
-              목업 데이터를 조합한 운영 요약
+              플랫폼 주요 지표 운영 요약
             </span>
           </div>
           <h2 className="text-2xl font-semibold tracking-tight">
             오늘 확인할 운영 항목
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-            예외 검토, 정책 오류, 감사 로그, 클러스터 상태를 한 화면에서 확인하고 필요한 관리 화면으로 이동합니다.
+            예외 검토, 정책 오류, 감사 로그, 클러스터 상태를 한 화면에서
+            확인하고 필요한 관리 화면으로 이동합니다.
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -179,25 +180,29 @@ export default function AdminDashboardPage() {
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {summaryCards.map(({ label, value, detail, icon: Icon, className, href }) => (
-          <Link
-            key={label}
-            href={href}
-            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-colors hover:border-blue-200 hover:bg-blue-50/30"
-          >
-            <div className="flex items-start justify-between">
-              <div
-                className={`flex size-10 items-center justify-center rounded-xl ${className}`}
-              >
-                <Icon className="size-5" />
+        {summaryCards.map(
+          ({ label, value, detail, icon: Icon, className, href }) => (
+            <Link
+              key={label}
+              href={href}
+              className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-colors hover:border-blue-200 hover:bg-blue-50/30"
+            >
+              <div className="flex items-start justify-between">
+                <div
+                  className={`flex size-10 items-center justify-center rounded-xl ${className}`}
+                >
+                  <Icon className="size-5" />
+                </div>
+                <ChevronRight className="size-4 text-slate-300" />
               </div>
-              <ChevronRight className="size-4 text-slate-300" />
-            </div>
-            <p className="mt-5 text-[13px] text-slate-500">{label}</p>
-            <p className="mt-1 text-3xl font-semibold tracking-tight">{value}</p>
-            <p className="mt-2 text-[11px] text-slate-400">{detail}</p>
-          </Link>
-        ))}
+              <p className="mt-5 text-[13px] text-slate-500">{label}</p>
+              <p className="mt-1 text-3xl font-semibold tracking-tight">
+                {value}
+              </p>
+              <p className="mt-2 text-[11px] text-slate-400">{detail}</p>
+            </Link>
+          ),
+        )}
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
@@ -227,7 +232,8 @@ export default function AdminDashboardPage() {
                     </Badge>
                   </div>
                   <p className="mt-1 truncate text-[11px] text-slate-400">
-                    {violation.ruleName} · {violation.resourceKind} / {violation.resourceName}
+                    {violation.ruleName} · {violation.resourceKind} /{" "}
+                    {violation.resourceName}
                   </p>
                 </div>
                 <Badge className={statusClassName[violation.status]}>
@@ -260,7 +266,9 @@ export default function AdminDashboardPage() {
                     <p className="truncate text-[13px] font-medium">
                       {request.policyName}
                     </p>
-                    <Badge className={exceptionRiskClassName[request.riskLevel]}>
+                    <Badge
+                      className={exceptionRiskClassName[request.riskLevel]}
+                    >
                       {exceptionRiskLabel[request.riskLevel]}
                     </Badge>
                   </div>
@@ -292,7 +300,9 @@ export default function AdminDashboardPage() {
                   <Icon className="size-5" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-slate-900">{label}</p>
+                  <p className="text-sm font-semibold text-slate-900">
+                    {label}
+                  </p>
                   <p className="mt-1 truncate text-xs text-slate-500">
                     {description}
                   </p>
@@ -310,7 +320,10 @@ export default function AdminDashboardPage() {
           />
           <div className="divide-y divide-slate-100">
             {recentAuditLogs.map((log) => (
-              <div key={log.id} className="flex items-start gap-4 px-5 py-4 sm:px-6">
+              <div
+                key={log.id}
+                className="flex items-start gap-4 px-5 py-4 sm:px-6"
+              >
                 <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
                   <History className="size-4.5" />
                 </div>
