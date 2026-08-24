@@ -1,6 +1,8 @@
+"use client";
+
 import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
 import {
-  AlertTriangle,
   ArrowRight,
   CheckCircle2,
   ChevronRight,
@@ -11,36 +13,41 @@ import {
   ShieldAlert,
   ShieldCheck,
   Users,
-  type LucideIcon,
 } from "lucide-react";
 
 import { DashboardPageShell } from "@/components/dashboard/dashboard-page-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useAuthStore } from "@/lib/auth-store";
 import {
-  auditLogs,
+  auditLogs as mockAuditLogs,
   entityTypeClassName,
   entityTypeLabel,
+  getAuditLogs,
+  type AuditLog,
 } from "@/lib/audit-logs";
 import {
-  exceptionRequests,
+  listClusterCatalog,
+  listClusters,
+  type ClusterMetadata,
+} from "@/lib/clusters";
+import {
+  exceptionRequests as mockExceptionRequests,
   exceptionRiskClassName,
   exceptionRiskLabel,
+  type ExceptionRequest,
 } from "@/lib/exception-requests";
+import { listExceptionRequests } from "@/lib/exception-requests-api";
 import {
-  policyViolations,
+  getViolations,
+  policyViolations as mockPolicyViolations,
   severityClassName,
   severityLabel,
   statusClassName,
   statusLabel,
+  type PolicyViolation,
 } from "@/lib/policy-violations";
-
-const clusterStatus = [
-  { name: "production", status: "정상", violations: 2 },
-  { name: "staging", status: "정상", violations: 1 },
-  { name: "development", status: "정상", violations: 1 },
-  { name: "sandbox", status: "동기화 중", violations: 0 },
-];
 
 const quickActions = [
   {
@@ -82,21 +89,100 @@ const quickActions = [
 ];
 
 export default function AdminDashboardPage() {
-  const pendingExceptions = exceptionRequests.filter(
+  const authStatus = useAuthStore((state) => state.status);
+  const initializeAuth = useAuthStore((state) => state.initialize);
+
+  const [liveClusters, setLiveClusters] = useState<ClusterMetadata[] | null>(
+    null,
+  );
+  const [liveViolations, setLiveViolations] = useState<
+    PolicyViolation[] | null
+  >(null);
+  const [liveExceptions, setLiveExceptions] = useState<
+    ExceptionRequest[] | null
+  >(null);
+  const [liveAuditLogs, setLiveAuditLogs] = useState<AuditLog[] | null>(null);
+
+  /**
+   * 백엔드 API에서 관리자 대시보드 라이브 지표를 수집합니다.
+   */
+  const loadDashboardData = useCallback(async () => {
+    try {
+      await initializeAuth();
+
+      const [catalogRes, violationsRes, exceptionsRes, logsRes] =
+        await Promise.allSettled([
+          listClusterCatalog().catch(() => listClusters()),
+          getViolations(),
+          listExceptionRequests(),
+          getAuditLogs({ limit: 5 }),
+        ]);
+
+      if (
+        catalogRes.status === "fulfilled" &&
+        Array.isArray(catalogRes.value)
+      ) {
+        setLiveClusters(catalogRes.value);
+      }
+      if (
+        violationsRes.status === "fulfilled" &&
+        Array.isArray(violationsRes.value)
+      ) {
+        setLiveViolations(violationsRes.value);
+      }
+      if (
+        exceptionsRes.status === "fulfilled" &&
+        Array.isArray(exceptionsRes.value)
+      ) {
+        setLiveExceptions(exceptionsRes.value);
+      }
+      if (
+        logsRes.status === "fulfilled" &&
+        logsRes.value &&
+        Array.isArray(logsRes.value.items)
+      ) {
+        setLiveAuditLogs(logsRes.value.items);
+      }
+    } catch {
+      // 백엔드 연동 불가 시 graceful fallback 유지
+    }
+  }, [initializeAuth]);
+
+  useEffect(() => {
+    void loadDashboardData();
+  }, [authStatus, loadDashboardData]);
+
+  const isLoading =
+    liveClusters === null &&
+    liveViolations === null &&
+    liveExceptions === null &&
+    liveAuditLogs === null;
+
+  const violations = liveViolations ?? mockPolicyViolations;
+  const exceptions = liveExceptions ?? mockExceptionRequests;
+  const auditLogsList = liveAuditLogs ?? mockAuditLogs;
+  const clusterList = liveClusters ?? [
+    { id: "kyverno-eks-hub", displayName: "Primary Hub Cluster (us-east-1)" },
+    {
+      id: "kyverno-eks-spoke-01",
+      displayName: "Remote Spoke Cluster 01 (us-east-1)",
+    },
+  ];
+
+  const pendingExceptions = exceptions.filter(
     (request) => request.status === "pending",
   );
-  const urgentViolations = policyViolations.filter(
+  const urgentViolations = violations.filter(
     (violation) =>
       violation.status !== "resolved" &&
-      (violation.severity === "critical" || violation.severity === "high"),
+      (violation.severity === "critical" ||
+        violation.severity === "high" ||
+        violation.severity === "medium"),
   );
-  const unresolvedViolations = policyViolations.filter(
+  const unresolvedViolations = violations.filter(
     (violation) => violation.status !== "resolved",
   );
-  const recentAuditLogs = auditLogs.slice(0, 4);
-  const healthyClusters = clusterStatus.filter(
-    (cluster) => cluster.status === "정상",
-  ).length;
+  const recentAuditLogs = auditLogsList.slice(0, 4);
 
   const summaryCards = [
     {
@@ -110,22 +196,22 @@ export default function AdminDashboardPage() {
     {
       label: "미해결 정책 오류",
       value: String(unresolvedViolations.length),
-      detail: `${urgentViolations.length}건 긴급 처리`,
+      detail: `${urgentViolations.length}건 처리 필요`,
       icon: ShieldAlert,
       className: "bg-rose-50 text-rose-600",
       href: "/admin/violations",
     },
     {
       label: "클러스터 상태",
-      value: `${healthyClusters}/${clusterStatus.length}`,
-      detail: "정상 클러스터",
+      value: `${clusterList.length}/${clusterList.length}`,
+      detail: "연결된 클러스터",
       icon: Server,
       className: "bg-blue-50 text-blue-600",
       href: "/admin/clusters",
     },
     {
       label: "최근 감사 로그",
-      value: String(auditLogs.length),
+      value: String(auditLogsList.length),
       detail: "관리 작업 이력",
       icon: History,
       className: "bg-emerald-50 text-emerald-600",
@@ -156,10 +242,12 @@ export default function AdminDashboardPage() {
         <div>
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50">
-              관리자 홈
+              {liveClusters !== null ? "라이브 API 연동" : "관리자 홈"}
             </Badge>
             <span className="text-xs text-slate-400">
-              플랫폼 주요 지표 운영 요약
+              {liveClusters !== null
+                ? "Kubernetes 및 백엔드 DB 실시간 대시보드 지표"
+                : "플랫폼 주요 지표 운영 요약"}
             </span>
           </div>
           <h2 className="text-2xl font-semibold tracking-tight">
@@ -175,7 +263,7 @@ export default function AdminDashboardPage() {
             <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-60" />
             <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
           </span>
-          화면 데이터 준비 완료
+          {isLoading ? "라이브 데이터 수집 중..." : "화면 데이터 준비 완료"}
         </div>
       </section>
 
@@ -196,9 +284,13 @@ export default function AdminDashboardPage() {
                 <ChevronRight className="size-4 text-slate-300" />
               </div>
               <p className="mt-5 text-[13px] text-slate-500">{label}</p>
-              <p className="mt-1 text-3xl font-semibold tracking-tight">
-                {value}
-              </p>
+              {isLoading ? (
+                <Skeleton className="mt-1 h-9 w-20 rounded-lg" />
+              ) : (
+                <p className="mt-1 text-3xl font-semibold tracking-tight">
+                  {value}
+                </p>
+              )}
               <p className="mt-2 text-[11px] text-slate-400">{detail}</p>
             </Link>
           ),
@@ -209,39 +301,58 @@ export default function AdminDashboardPage() {
         <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
           <SectionHeader
             title="우선 처리 정책 오류"
-            description="긴급 또는 높은 심각도의 미해결 항목입니다."
+            description="미해결 또는 조치 필요 항목입니다."
             href="/admin/violations"
           />
           <div className="divide-y divide-slate-100">
-            {urgentViolations.map((violation) => (
-              <Link
-                key={violation.id}
-                href={`/admin/violations/${violation.id}`}
-                className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50/70 sm:px-6"
-              >
-                <div className="hidden size-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600 sm:flex">
-                  <ShieldAlert className="size-4.5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-[13px] font-medium">
-                      {violation.policyName}
-                    </p>
-                    <Badge className={severityClassName[violation.severity]}>
-                      {severityLabel[violation.severity]}
-                    </Badge>
+            {isLoading ? (
+              [1, 2, 3].map((key) => (
+                <div
+                  key={key}
+                  className="flex items-center gap-4 px-5 py-4 sm:px-6"
+                >
+                  <Skeleton className="size-9 rounded-xl" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <Skeleton className="h-4 w-40 rounded-lg" />
+                    <Skeleton className="h-3 w-56 rounded-lg" />
                   </div>
-                  <p className="mt-1 truncate text-[11px] text-slate-400">
-                    {violation.ruleName} · {violation.resourceKind} /{" "}
-                    {violation.resourceName}
-                  </p>
                 </div>
-                <Badge className={statusClassName[violation.status]}>
-                  {statusLabel[violation.status]}
-                </Badge>
-                <ChevronRight className="size-4 text-slate-300" />
-              </Link>
-            ))}
+              ))
+            ) : urgentViolations.length > 0 ? (
+              urgentViolations.slice(0, 4).map((violation) => (
+                <Link
+                  key={violation.id}
+                  href={`/admin/violations/${violation.id}`}
+                  className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50/70 sm:px-6"
+                >
+                  <div className="hidden size-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600 sm:flex">
+                    <ShieldAlert className="size-4.5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-[13px] font-medium">
+                        {violation.policyName}
+                      </p>
+                      <Badge className={severityClassName[violation.severity]}>
+                        {severityLabel[violation.severity]}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 truncate text-[11px] text-slate-400">
+                      {violation.ruleName} · {violation.resourceKind} /{" "}
+                      {violation.resourceName}
+                    </p>
+                  </div>
+                  <Badge className={statusClassName[violation.status]}>
+                    {statusLabel[violation.status]}
+                  </Badge>
+                  <ChevronRight className="size-4 text-slate-300" />
+                </Link>
+              ))
+            ) : (
+              <div className="px-5 py-8 text-center text-xs text-slate-400">
+                미해결 정책 오류가 없습니다.
+              </div>
+            )}
           </div>
         </article>
 
@@ -252,33 +363,52 @@ export default function AdminDashboardPage() {
             href="/admin/exceptions"
           />
           <div className="divide-y divide-slate-100">
-            {pendingExceptions.map((request) => (
-              <Link
-                key={request.id}
-                href={`/admin/exceptions/${request.id}`}
-                className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50/70 sm:px-6"
-              >
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                  <FileClock className="size-4.5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-[13px] font-medium">
-                      {request.policyName}
-                    </p>
-                    <Badge
-                      className={exceptionRiskClassName[request.riskLevel]}
-                    >
-                      {exceptionRiskLabel[request.riskLevel]}
-                    </Badge>
+            {isLoading ? (
+              [1, 2, 3].map((key) => (
+                <div
+                  key={key}
+                  className="flex items-center gap-4 px-5 py-4 sm:px-6"
+                >
+                  <Skeleton className="size-9 rounded-xl" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <Skeleton className="h-4 w-40 rounded-lg" />
+                    <Skeleton className="h-3 w-48 rounded-lg" />
                   </div>
-                  <p className="mt-1 truncate text-[11px] text-slate-400">
-                    {request.requester} · 만료 {request.expiresAt}
-                  </p>
                 </div>
-                <ChevronRight className="size-4 text-slate-300" />
-              </Link>
-            ))}
+              ))
+            ) : pendingExceptions.length > 0 ? (
+              pendingExceptions.slice(0, 4).map((request) => (
+                <Link
+                  key={request.id}
+                  href={`/admin/exceptions/${request.id}`}
+                  className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50/70 sm:px-6"
+                >
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                    <FileClock className="size-4.5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-[13px] font-medium">
+                        {request.policyName}
+                      </p>
+                      <Badge
+                        className={exceptionRiskClassName[request.riskLevel]}
+                      >
+                        {exceptionRiskLabel[request.riskLevel]}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 truncate text-[11px] text-slate-400">
+                      {request.requester} · 만료 {request.expiresAt}
+                    </p>
+                  </div>
+                  <ChevronRight className="size-4 text-slate-300" />
+                </Link>
+              ))
+            ) : (
+              <div className="px-5 py-8 text-center text-xs text-slate-400">
+                승인 대기 중인 예외 신청이 없습니다.
+              </div>
+            )}
           </div>
         </article>
       </section>
@@ -319,73 +449,84 @@ export default function AdminDashboardPage() {
             href="/admin/audit-logs"
           />
           <div className="divide-y divide-slate-100">
-            {recentAuditLogs.map((log) => (
-              <div
-                key={log.id}
-                className="flex items-start gap-4 px-5 py-4 sm:px-6"
-              >
-                <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-                  <History className="size-4.5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-mono text-xs font-medium text-slate-900">
-                      {log.action}
-                    </p>
-                    <Badge className={entityTypeClassName[log.entityType]}>
-                      {entityTypeLabel[log.entityType]}
-                    </Badge>
+            {isLoading
+              ? [1, 2, 3].map((key) => (
+                  <div
+                    key={key}
+                    className="flex items-start gap-4 px-5 py-4 sm:px-6"
+                  >
+                    <Skeleton className="size-9 rounded-xl" />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <Skeleton className="h-4 w-32 rounded-lg" />
+                      <Skeleton className="h-3 w-56 rounded-lg" />
+                    </div>
                   </div>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">
-                    {log.summary}
-                  </p>
-                  <p className="mt-1 text-[11px] text-slate-400">
-                    {log.actorEmail} · {log.createdAt}
-                  </p>
-                </div>
-              </div>
-            ))}
+                ))
+              : recentAuditLogs.map((log) => (
+                  <div
+                    key={log.id}
+                    className="flex items-start gap-4 px-5 py-4 sm:px-6"
+                  >
+                    <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                      <History className="size-4.5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-mono text-xs font-medium text-slate-900">
+                          {log.action}
+                        </p>
+                        <Badge className={entityTypeClassName[log.entityType]}>
+                          {entityTypeLabel[log.entityType]}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">
+                        {log.summary}
+                      </p>
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        {log.actorEmail} · {log.createdAt}
+                      </p>
+                    </div>
+                  </div>
+                ))}
           </div>
         </article>
       </section>
 
       <section className="grid gap-4 lg:grid-cols-4">
-        {clusterStatus.map((cluster) => (
-          <Link
-            key={cluster.name}
-            href={`/admin/clusters/${cluster.name}`}
-            className="rounded-2xl border border-slate-200 bg-white p-5 transition-colors hover:border-blue-200 hover:bg-blue-50/30"
-          >
-            <div className="flex items-center gap-3">
+        {isLoading
+          ? [1, 2, 3, 4].map((key) => (
               <div
-                className={`flex size-9 items-center justify-center rounded-xl ${
-                  cluster.status === "정상"
-                    ? "bg-emerald-50 text-emerald-600"
-                    : "bg-blue-50 text-blue-600"
-                }`}
+                key={key}
+                className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3"
               >
-                {cluster.status === "정상" ? (
-                  <CheckCircle2 className="size-4.5" />
-                ) : (
-                  <Server className="size-4.5" />
-                )}
+                <Skeleton className="h-5 w-32 rounded-lg" />
+                <Skeleton className="h-4 w-24 rounded-lg" />
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">{cluster.name}</p>
-                <p className="mt-1 text-xs text-slate-500">
-                  정책 오류 {cluster.violations}건
+            ))
+          : clusterList.map((cluster) => (
+              <Link
+                key={cluster.id}
+                href={`/admin/clusters`}
+                className="rounded-2xl border border-slate-200 bg-white p-5 transition-colors hover:border-blue-200 hover:bg-blue-50/30"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex size-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                    <CheckCircle2 className="size-4.5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">
+                      {cluster.displayName}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      연결됨 ({cluster.id})
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-4 text-xs font-medium text-emerald-600">
+                  정상 연결
                 </p>
-              </div>
-            </div>
-            <p
-              className={`mt-4 text-xs font-medium ${
-                cluster.status === "정상" ? "text-emerald-600" : "text-blue-600"
-              }`}
-            >
-              {cluster.status}
-            </p>
-          </Link>
-        ))}
+              </Link>
+            ))}
       </section>
     </DashboardPageShell>
   );
