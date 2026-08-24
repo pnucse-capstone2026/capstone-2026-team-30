@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
   ChevronRight,
@@ -26,6 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useAuthStore } from "@/lib/auth-store";
 import {
   clusters,
   clusterEnvironmentLabel,
@@ -71,6 +72,7 @@ export default function AdminClustersPage() {
   const [status, setStatus] = useState<StatusFilter>("all");
   const [kyvernoStatus, setKyvernoStatus] = useState<KyvernoFilter>("all");
 
+  const [loading, setLoading] = useState(false);
   const [liveClusters, setLiveClusters] = useState<ClusterMetadata[] | null>(
     null,
   );
@@ -81,65 +83,65 @@ export default function AdminClustersPage() {
     PolicyViolation[] | null
   >(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  const authStatus = useAuthStore((state) => state.status);
+  const initializeAuth = useAuthStore((state) => state.initialize);
 
-    /**
-     * 백엔드 API에서 관리자 클러스터 카탈로그, 정책, 위반 내역을 병렬 조회합니다.
-     */
-    async function fetchAdminDashboardData() {
+  /**
+   * 백엔드 API에서 관리자 클러스터 카탈로그, 실시간 정책, 위반 내역을 병렬 조회합니다.
+   */
+  const loadDashboardData = useCallback(async () => {
+    setLoading(true);
+    try {
+      await initializeAuth();
+
+      let catalogData: ClusterMetadata[] | null = null;
       try {
-        let catalogData: ClusterMetadata[] | null = null;
+        const data = await listClusterCatalog();
+        if (Array.isArray(data)) {
+          catalogData = data;
+        }
+      } catch {
         try {
-          const data = await listClusterCatalog();
+          const data = await listClusters();
           if (Array.isArray(data)) {
             catalogData = data;
           }
         } catch {
-          try {
-            const data = await listClusters();
-            if (Array.isArray(data)) {
-              catalogData = data;
-            }
-          } catch {
-            // 백엔드 연동 불가 시 graceful fallback 유지
-          }
+          // 백엔드 연동 불가 시 graceful fallback 유지
         }
-
-        if (!cancelled && catalogData !== null) {
-          setLiveClusters(catalogData);
-        }
-
-        const [policiesResult, violationsResult] = await Promise.allSettled([
-          getPolicies(),
-          getViolations(),
-        ]);
-
-        if (!cancelled) {
-          if (
-            policiesResult.status === "fulfilled" &&
-            policiesResult.value.length > 0
-          ) {
-            setLivePolicies(policiesResult.value);
-          }
-          if (
-            violationsResult.status === "fulfilled" &&
-            violationsResult.value.length > 0
-          ) {
-            setLiveViolations(violationsResult.value);
-          }
-        }
-      } catch {
-        // 백엔드 연동 불가 시 graceful fallback 유지
       }
+
+      if (catalogData !== null) {
+        setLiveClusters(catalogData);
+      }
+
+      const [policiesResult, violationsResult] = await Promise.allSettled([
+        getPolicies(),
+        getViolations(),
+      ]);
+
+      if (
+        policiesResult.status === "fulfilled" &&
+        policiesResult.value.length > 0
+      ) {
+        setLivePolicies(policiesResult.value);
+      }
+      if (
+        violationsResult.status === "fulfilled" &&
+        violationsResult.value.length > 0
+      ) {
+        setLiveViolations(violationsResult.value);
+      }
+    } catch {
+      // 백엔드 연동 불가 시 graceful fallback 유지
+    } finally {
+      setLoading(false);
     }
+  }, [initializeAuth]);
 
-    void fetchAdminDashboardData();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  useEffect(() => {
+    void loadDashboardData();
+  }, [authStatus, loadDashboardData]);
 
   const policyList = livePolicies ?? kyvernoPolicies;
   const violationList = liveViolations ?? policyViolations;
@@ -269,8 +271,10 @@ export default function AdminClustersPage() {
         <Button
           variant="outline"
           className="hidden h-10 rounded-xl border-slate-200 bg-white text-slate-700 sm:inline-flex"
+          onClick={() => void loadDashboardData()}
+          disabled={loading}
         >
-          <RefreshCw className="size-4" />
+          <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
           동기화
         </Button>
       }
@@ -278,14 +282,14 @@ export default function AdminClustersPage() {
       <section className="grid gap-4 md:grid-cols-4">
         <SummaryCard
           label="등록 클러스터"
-          value={String(clusters.length)}
+          value={String(activeClusters.length)}
           detail="EKS 기반 환경"
           icon={Server}
           className="bg-blue-50 text-blue-600"
         />
         <SummaryCard
           label="정상 상태"
-          value={`${healthyClusters}/${clusters.length}`}
+          value={`${healthyClusters}/${activeClusters.length}`}
           detail="연결 정상"
           icon={CheckCircle2}
           className="bg-emerald-50 text-emerald-600"
