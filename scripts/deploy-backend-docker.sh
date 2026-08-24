@@ -45,10 +45,16 @@ if [ "${IS_EKS}" = true ]; then
   echo ">>> Logging in to Amazon ECR (${REGION})..."
   aws ecr get-login-password --region "${REGION}" | docker login --username AWS --password-stdin "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
 
-  echo ">>> Tagging and Pushing image to Amazon ECR..."
+  # 고유 이미지 태그 발급으로 EKS 노드의 로컬 이미지 캐시 바이패스 보장
+  TAG="$(git -C "${ROOT_DIR}" rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)"
+  ECR_URI_TAGGED="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/${REPO_NAME}:${TAG}"
+
+  echo ">>> Tagging and Pushing image to Amazon ECR (${TAG} & latest)..."
   docker tag "${REPO_NAME}:latest" "${ECR_URI}"
+  docker tag "${REPO_NAME}:latest" "${ECR_URI_TAGGED}"
   docker push "${ECR_URI}"
-  IMAGE_TARGET="${ECR_URI}"
+  docker push "${ECR_URI_TAGGED}"
+  IMAGE_TARGET="${ECR_URI_TAGGED}"
 else
   # 로컬 Kind 클러스터 존재 시 도커 이미지를 Kind 노드 내부로 자동 로드
   if command -v kind &> /dev/null && kind get clusters 2>/dev/null | grep -q "k8s-lab"; then
@@ -80,6 +86,7 @@ kill $PF_PG_PID 2>/dev/null || true
 echo ">>> Updating deployment 'kyverno-backend' with target image '${IMAGE_TARGET}'..."
 "${KUBECTL}" apply -f "${ROOT_DIR}/k8s-manifests/system/backend.yaml"
 "${KUBECTL}" set image deployment/kyverno-backend backend="${IMAGE_TARGET}" -n kyverno-platform
+"${KUBECTL}" patch deployment kyverno-backend -n kyverno-platform -p '{"spec":{"template":{"spec":{"containers":[{"name":"backend","imagePullPolicy":"Always"}]}}}}'
 "${KUBECTL}" rollout restart deployment/kyverno-backend -n kyverno-platform
 "${KUBECTL}" rollout status deployment/kyverno-backend -n kyverno-platform --timeout=180s
 
