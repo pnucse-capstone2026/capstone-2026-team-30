@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
   ChevronRight,
   FilePlus2,
   Filter,
+  RefreshCw,
   Search,
   ShieldCheck,
   ShieldAlert,
@@ -26,6 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useAuthStore } from "@/lib/auth-store";
 import {
   getPolicies,
   kyvernoPolicies,
@@ -52,7 +54,10 @@ const modeOptions: PolicyMode[] = ["enforce", "audit"];
 const statusOptions: PolicyStatus[] = ["active", "warning", "draft"];
 
 export default function AdminPoliciesPage() {
-  const [policies, setPolicies] = useState<KyvernoPolicy[]>(kyvernoPolicies);
+  const [loading, setLoading] = useState(false);
+  const [livePolicies, setLivePolicies] = useState<KyvernoPolicy[] | null>(
+    null,
+  );
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("all");
@@ -60,17 +65,33 @@ export default function AdminPoliciesPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [clusterFilter, setClusterFilter] = useState("all");
 
-  useEffect(() => {
-    let isMounted = true;
-    getPolicies().then((data) => {
-      if (isMounted && data.length > 0) {
-        setPolicies(data);
+  const authStatus = useAuthStore((state) => state.status);
+  const initializeAuth = useAuthStore((state) => state.initialize);
+
+  /**
+   * 백엔드 API에서 실시간 Kyverno 정책 목록을 수집합니다.
+   */
+  const loadPolicies = useCallback(async () => {
+    setLoading(true);
+    try {
+      await initializeAuth();
+      const data = await getPolicies();
+      if (Array.isArray(data)) {
+        setLivePolicies(data);
       }
-    });
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    } catch {
+      // 백엔드 연동 불가 시 graceful fallback 유지
+    } finally {
+      setLoading(false);
+    }
+  }, [initializeAuth]);
+
+  useEffect(() => {
+    void loadPolicies();
+  }, [authStatus, loadPolicies]);
+
+  const policies = livePolicies ?? kyvernoPolicies;
+  const isLive = livePolicies !== null;
 
   const clusters = useMemo(
     () => Array.from(new Set(policies.map((p) => p.clusterName))),
@@ -105,7 +126,15 @@ export default function AdminPoliciesPage() {
         (clusterFilter === "all" || policy.clusterName === clusterFilter)
       );
     });
-  }, [policies, clusterFilter, modeFilter, query, scopeFilter, statusFilter, typeFilter]);
+  }, [
+    policies,
+    clusterFilter,
+    modeFilter,
+    query,
+    scopeFilter,
+    statusFilter,
+    typeFilter,
+  ]);
 
   const activePolicies = policies.filter(
     (policy) => policy.status === "active",
@@ -134,22 +163,33 @@ export default function AdminPoliciesPage() {
       title="정책 목록"
       description="Kyverno 정책의 적용 범위와 운영 상태를 확인합니다."
       actions={
-        <Button
-          asChild
-          className="hidden h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b] sm:inline-flex"
-        >
-          <Link href="/admin/policies/new">
-            <FilePlus2 className="size-4" />
-            정책 등록
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            className="hidden h-10 rounded-xl border-slate-200 bg-white text-slate-700 sm:inline-flex"
+            onClick={() => void loadPolicies()}
+            disabled={loading}
+          >
+            <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
+            동기화
+          </Button>
+          <Button
+            asChild
+            className="hidden h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b] sm:inline-flex"
+          >
+            <Link href="/admin/policies/new">
+              <FilePlus2 className="size-4" />
+              정책 등록
+            </Link>
+          </Button>
+        </div>
       }
     >
       <section className="grid gap-4 md:grid-cols-4">
         <SummaryCard
           label="전체 정책"
-          value={String(kyvernoPolicies.length)}
-          detail="목업 정책"
+          value={String(policies.length)}
+          detail={isLive ? "라이브 연동 정책" : "백엔드 연동 전 목업"}
           icon={ShieldCheck}
           className="bg-blue-50 text-blue-600"
         />
@@ -182,17 +222,20 @@ export default function AdminPoliciesPage() {
             <div>
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50">
-                  Kyverno
+                  {isLive ? "라이브 API 연동" : "Kyverno"}
                 </Badge>
                 <span className="text-xs text-slate-400">
-                  Kubernetes API 연동 전 목업 데이터
+                  {isLive
+                    ? "백엔드 API 및 Kubernetes 라이브 연결"
+                    : "백엔드 연동 불가 시 목업 데이터"}
                 </span>
               </div>
               <h2 className="text-2xl font-semibold tracking-tight">
                 정책 운영 현황
               </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                정책 유형, 적용 범위, 모드, 상태, 클러스터 기준으로 운영 중인 정책을 확인합니다.
+                정책 유형, 적용 범위, 모드, 상태, 클러스터 기준으로 운영 중인
+                정책을 확인합니다.
               </p>
             </div>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
@@ -267,7 +310,11 @@ export default function AdminPoliciesPage() {
                 </option>
               ))}
             </FilterSelect>
-            <FilterSelect label="클러스터" value={clusterFilter} onChange={setClusterFilter}>
+            <FilterSelect
+              label="클러스터"
+              value={clusterFilter}
+              onChange={setClusterFilter}
+            >
               <option value="all">전체 클러스터</option>
               {clusters.map((option) => (
                 <option key={option} value={option}>
@@ -288,8 +335,12 @@ export default function AdminPoliciesPage() {
               <TableHead className="text-xs text-slate-500">범위</TableHead>
               <TableHead className="text-xs text-slate-500">모드</TableHead>
               <TableHead className="text-xs text-slate-500">상태</TableHead>
-              <TableHead className="text-xs text-slate-500">규칙/오류</TableHead>
-              <TableHead className="text-xs text-slate-500">최근 수정</TableHead>
+              <TableHead className="text-xs text-slate-500">
+                규칙/오류
+              </TableHead>
+              <TableHead className="text-xs text-slate-500">
+                최근 수정
+              </TableHead>
               <TableHead className="w-12" />
             </TableRow>
           </TableHeader>
@@ -372,9 +423,13 @@ export default function AdminPoliciesPage() {
 
         <div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-4 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <span>
-            {filteredPolicies.length} / {kyvernoPolicies.length}개 정책 표시
+            {filteredPolicies.length} / {policies.length}개 정책 표시
           </span>
-          <span>이후 Kyverno 정책 API 응답으로 목록 데이터를 교체합니다.</span>
+          <span>
+            {isLive
+              ? "Kubernetes/Kyverno API와 정책 상태가 연동되었습니다."
+              : "백엔드 연동 불가 시 목업 데이터로 기본 제공됩니다."}
+          </span>
         </div>
       </section>
 
@@ -418,7 +473,9 @@ function SummaryCard({
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
       <div className="flex items-start justify-between">
-        <div className={`flex size-10 items-center justify-center rounded-xl ${className}`}>
+        <div
+          className={`flex size-10 items-center justify-center rounded-xl ${className}`}
+        >
           <Icon className="size-5" />
         </div>
       </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -15,6 +15,7 @@ import { DashboardPageShell } from "@/components/dashboard/dashboard-page-shell"
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAuthStore } from "@/lib/auth-store";
 import {
   exceptionRequests,
   exceptionStatusClassName,
@@ -43,29 +44,47 @@ const modeOptions: PolicyMode[] = ["enforce", "audit"];
 const statusOptions: PolicyStatus[] = ["active", "warning"];
 
 export default function PoliciesPage() {
-  const [policies, setPolicies] = useState<KyvernoPolicy[]>(kyvernoPolicies);
+  const [livePolicies, setLivePolicies] = useState<KyvernoPolicy[] | null>(
+    null,
+  );
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [modeFilter, setModeFilter] = useState<ModeFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [clusterFilter, setClusterFilter] = useState("all");
 
-  useEffect(() => {
-    let isMounted = true;
-    getPolicies().then((data) => {
-      if (isMounted && data.length > 0) {
-        setPolicies(data);
-      }
-    });
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  const authStatus = useAuthStore((state) => state.status);
+  const initializeAuth = useAuthStore((state) => state.initialize);
 
-  const visiblePolicies = policies.filter((policy) => policy.status !== "draft");
+  /**
+   * 백엔드 API에서 실시간 정책 목록을 조회합니다.
+   */
+  const loadPolicies = useCallback(async () => {
+    try {
+      await initializeAuth();
+      const data = await getPolicies();
+      if (Array.isArray(data)) {
+        setLivePolicies(data);
+      }
+    } catch {
+      // 백엔드 연동 실패 시 graceful fallback 유지
+    }
+  }, [initializeAuth]);
+
+  useEffect(() => {
+    void loadPolicies();
+  }, [authStatus, loadPolicies]);
+
+  const policies = livePolicies ?? kyvernoPolicies;
+  const isLive = livePolicies !== null;
+
+  const visiblePolicies = policies.filter(
+    (policy) => policy.status !== "draft",
+  );
 
   const clusters = useMemo(
-    () => Array.from(new Set(visiblePolicies.map((policy) => policy.clusterName))),
+    () =>
+      Array.from(new Set(visiblePolicies.map((policy) => policy.clusterName))),
     [visiblePolicies],
   );
   const filteredPolicies = useMemo(() => {
@@ -97,7 +116,14 @@ export default function PoliciesPage() {
         (clusterFilter === "all" || policy.clusterName === clusterFilter)
       );
     });
-  }, [clusterFilter, modeFilter, query, statusFilter, typeFilter, visiblePolicies]);
+  }, [
+    clusterFilter,
+    modeFilter,
+    query,
+    statusFilter,
+    typeFilter,
+    visiblePolicies,
+  ]);
 
   const warningPolicies = visiblePolicies.filter(
     (policy) => policy.status === "warning",
@@ -127,7 +153,7 @@ export default function PoliciesPage() {
         <SummaryCard
           label="적용 정책"
           value={String(visiblePolicies.length)}
-          detail="조회 가능 정책"
+          detail={isLive ? "라이브 연동 정책" : "조회 가능 정책"}
           icon={ShieldCheck}
           className="bg-blue-50 text-blue-600"
         />
@@ -160,17 +186,20 @@ export default function PoliciesPage() {
             <div>
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50">
-                  사용자
+                  {isLive ? "라이브 API 연동" : "사용자"}
                 </Badge>
                 <span className="text-xs text-slate-400">
-                  등록/수정 없이 조회와 예외 신청 중심
+                  {isLive
+                    ? "백엔드 API 및 Kubernetes 라이브 연결"
+                    : "등록/수정 없이 조회와 예외 신청 중심"}
                 </span>
               </div>
               <h2 className="text-2xl font-semibold tracking-tight">
                 정책 적용 기준
               </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                배포 리소스가 어떤 정책을 따라야 하는지 확인하고, 관련 위반과 예외 신청 내역으로 이동합니다.
+                배포 리소스가 어떤 정책을 따라야 하는지 확인하고, 관련 위반과
+                예외 신청 내역으로 이동합니다.
               </p>
             </div>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
@@ -233,7 +262,11 @@ export default function PoliciesPage() {
                 </option>
               ))}
             </FilterSelect>
-            <FilterSelect label="클러스터" value={clusterFilter} onChange={setClusterFilter}>
+            <FilterSelect
+              label="클러스터"
+              value={clusterFilter}
+              onChange={setClusterFilter}
+            >
               <option value="all">전체 클러스터</option>
               {clusters.map((option) => (
                 <option key={option} value={option}>
@@ -275,10 +308,19 @@ export default function PoliciesPage() {
                 </div>
 
                 <dl className="mt-5 grid gap-3 text-xs">
-                  <InfoRow label="적용 범위" value={`${policy.scope} · ${policy.namespace ?? "cluster-wide"}`} />
+                  <InfoRow
+                    label="적용 범위"
+                    value={`${policy.scope} · ${policy.namespace ?? "cluster-wide"}`}
+                  />
                   <InfoRow label="클러스터" value={policy.clusterName} />
-                  <InfoRow label="적용 모드" value={policyModeLabel[policy.mode]} />
-                  <InfoRow label="관련 오류" value={`${policy.violationCount}건`} />
+                  <InfoRow
+                    label="적용 모드"
+                    value={policyModeLabel[policy.mode]}
+                  />
+                  <InfoRow
+                    label="관련 오류"
+                    value={`${policy.violationCount}건`}
+                  />
                 </dl>
 
                 {relatedExceptions.length > 0 ? (
@@ -288,7 +330,10 @@ export default function PoliciesPage() {
                     </p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {relatedExceptions.slice(0, 2).map((request) => (
-                        <Badge key={request.id} className={exceptionStatusClassName[request.status]}>
+                        <Badge
+                          key={request.id}
+                          className={exceptionStatusClassName[request.status]}
+                        >
                           {request.id} · {exceptionStatusLabel[request.status]}
                         </Badge>
                       ))}
@@ -343,7 +388,9 @@ function SummaryCard({
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
       <div className="flex items-start justify-between">
-        <div className={`flex size-10 items-center justify-center rounded-xl ${className}`}>
+        <div
+          className={`flex size-10 items-center justify-center rounded-xl ${className}`}
+        >
           <Icon className="size-5" />
         </div>
       </div>
