@@ -147,14 +147,19 @@ export function PolicyForm({
           variant="outline"
           className="hidden h-10 rounded-xl border-slate-200 bg-white text-slate-700 sm:inline-flex"
         >
-          <Link href={policy ? `/admin/policies/${policy.id}` : "/admin/policies"}>
+          <Link
+            href={policy ? `/admin/policies/${policy.id}` : "/admin/policies"}
+          >
             <ArrowLeft className="size-4" />
             {policy ? "상세" : "목록"}
           </Link>
         </Button>
       }
     >
-      <form onSubmit={handleSubmit} className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_440px]">
+      <form
+        onSubmit={handleSubmit}
+        className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_440px]"
+      >
         <div className="space-y-6">
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] sm:p-6">
             <div className="flex items-center gap-3">
@@ -192,35 +197,45 @@ export function PolicyForm({
                 <select
                   id="policy-type"
                   value={form.type}
-                  onChange={(event) => updateForm("type", event.target.value as PolicyType)}
+                  onChange={(event) =>
+                    updateForm("type", event.target.value as PolicyType)
+                  }
                   className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus-visible:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/15"
                 >
-                  {(["validate", "mutate", "generate"] as PolicyType[]).map((type) => (
-                    <option key={type} value={type}>
-                      {policyTypeLabel[type]} ({type})
-                    </option>
-                  ))}
+                  {(["validate", "mutate", "generate"] as PolicyType[]).map(
+                    (type) => (
+                      <option key={type} value={type}>
+                        {policyTypeLabel[type]} ({type})
+                      </option>
+                    ),
+                  )}
                 </select>
               </Field>
               <Field label="정책 범위" htmlFor="policy-scope">
                 <select
                   id="policy-scope"
                   value={form.scope}
-                  onChange={(event) => updateForm("scope", event.target.value as PolicyScope)}
+                  onChange={(event) =>
+                    updateForm("scope", event.target.value as PolicyScope)
+                  }
                   className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus-visible:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/15"
                 >
-                  {(["ClusterPolicy", "Policy"] as PolicyScope[]).map((scope) => (
-                    <option key={scope} value={scope}>
-                      {scope}
-                    </option>
-                  ))}
+                  {(["ClusterPolicy", "Policy"] as PolicyScope[]).map(
+                    (scope) => (
+                      <option key={scope} value={scope}>
+                        {scope}
+                      </option>
+                    ),
+                  )}
                 </select>
               </Field>
               <Field label="적용 모드" htmlFor="policy-mode">
                 <select
                   id="policy-mode"
                   value={form.mode}
-                  onChange={(event) => updateForm("mode", event.target.value as PolicyMode)}
+                  onChange={(event) =>
+                    updateForm("mode", event.target.value as PolicyMode)
+                  }
                   className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus-visible:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/15"
                 >
                   {(["audit", "enforce"] as PolicyMode[]).map((modeOption) => (
@@ -234,21 +249,27 @@ export function PolicyForm({
                 <select
                   id="policy-status"
                   value={form.status}
-                  onChange={(event) => updateForm("status", event.target.value as PolicyStatus)}
+                  onChange={(event) =>
+                    updateForm("status", event.target.value as PolicyStatus)
+                  }
                   className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus-visible:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/15"
                 >
-                  {(["draft", "active", "warning"] as PolicyStatus[]).map((status) => (
-                    <option key={status} value={status}>
-                      {policyStatusLabel[status]} ({status})
-                    </option>
-                  ))}
+                  {(["draft", "active", "warning"] as PolicyStatus[]).map(
+                    (status) => (
+                      <option key={status} value={status}>
+                        {policyStatusLabel[status]} ({status})
+                      </option>
+                    ),
+                  )}
                 </select>
               </Field>
               <Field label="클러스터" htmlFor="policy-cluster">
                 <Input
                   id="policy-cluster"
                   value={form.clusterName}
-                  onChange={(event) => updateForm("clusterName", event.target.value)}
+                  onChange={(event) =>
+                    updateForm("clusterName", event.target.value)
+                  }
                   placeholder="production"
                   className="h-11"
                 />
@@ -257,7 +278,9 @@ export function PolicyForm({
                 <Input
                   id="policy-namespace"
                   value={form.namespace}
-                  onChange={(event) => updateForm("namespace", event.target.value)}
+                  onChange={(event) =>
+                    updateForm("namespace", event.target.value)
+                  }
                   placeholder="Policy 범위에서만 필요"
                   className="h-11"
                   disabled={form.scope === "ClusterPolicy"}
@@ -265,11 +288,17 @@ export function PolicyForm({
               </Field>
             </div>
 
-            <Field label="정책 설명" htmlFor="policy-description" className="mt-4">
+            <Field
+              label="정책 설명"
+              htmlFor="policy-description"
+              className="mt-4"
+            >
               <textarea
                 id="policy-description"
                 value={form.description}
-                onChange={(event) => updateForm("description", event.target.value)}
+                onChange={(event) =>
+                  updateForm("description", event.target.value)
+                }
                 rows={3}
                 placeholder="정책 목적과 운영 기준을 입력하세요."
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm outline-none focus-visible:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/15"
@@ -295,7 +324,9 @@ export function PolicyForm({
                 <Input
                   id="policy-rule-name"
                   value={form.ruleName}
-                  onChange={(event) => updateForm("ruleName", event.target.value)}
+                  onChange={(event) =>
+                    updateForm("ruleName", event.target.value)
+                  }
                   placeholder="validate-resource-limits"
                   className="h-11"
                 />
@@ -304,14 +335,20 @@ export function PolicyForm({
                 <Input
                   id="policy-match-kinds"
                   value={form.matchKinds}
-                  onChange={(event) => updateForm("matchKinds", event.target.value)}
+                  onChange={(event) =>
+                    updateForm("matchKinds", event.target.value)
+                  }
                   placeholder="Pod, Deployment"
                   className="h-11"
                 />
               </Field>
             </div>
 
-            <Field label="위반 메시지" htmlFor="policy-message" className="mt-4">
+            <Field
+              label="위반 메시지"
+              htmlFor="policy-message"
+              className="mt-4"
+            >
               <textarea
                 id="policy-message"
                 value={form.message}
@@ -328,7 +365,8 @@ export function PolicyForm({
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
             <h2 className="text-sm font-semibold">저장 준비</h2>
             <p className="mt-1 text-xs leading-5 text-slate-500">
-              현재는 API 연결 전 단계라 입력값 검증과 저장 요청 준비 메시지만 표시합니다.
+              현재는 API 연결 전 단계라 입력값 검증과 저장 요청 준비 메시지만
+              표시합니다.
             </p>
 
             <div className="mt-5 space-y-3">
@@ -376,7 +414,9 @@ export function PolicyForm({
               </div>
               <div>
                 <h2 className="text-sm font-semibold">YAML 미리보기</h2>
-                <p className="mt-1 text-xs text-slate-400">입력값 기반 생성 결과</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  입력값 기반 생성 결과
+                </p>
               </div>
             </div>
             <pre className="max-h-[620px] overflow-auto p-5 text-xs leading-6 text-slate-700">

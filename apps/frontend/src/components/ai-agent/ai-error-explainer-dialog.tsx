@@ -48,7 +48,9 @@ export function AiErrorExplainerDialog({
 }: AiErrorExplainerDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [result, setResult] = useState<ExplainKyvernoErrorResponse | null>(null);
+  const [result, setResult] = useState<ExplainKyvernoErrorResponse | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -111,14 +113,22 @@ export function AiErrorExplainerDialog({
               <DialogTitle className="flex items-center gap-2 text-xl">
                 Bedrock AI 거버넌스 분석 가이드
                 {result?.provider === "RULE_ENGINE_FALLBACK" ? (
-                  <Badge variant="outline" className="gap-1 text-xs font-normal border-amber-300 bg-amber-50 text-amber-800">
+                  <Badge
+                    variant="outline"
+                    className="gap-1 text-xs font-normal border-amber-300 bg-amber-50 text-amber-800"
+                  >
                     <Sparkles className="h-3 w-3 text-amber-600" />
-                    규칙 기반 고속 가이드 {result.latencyMs ? `(${result.latencyMs}ms)` : ""}
+                    규칙 기반 고속 가이드{" "}
+                    {result.latencyMs ? `(${result.latencyMs}ms)` : ""}
                   </Badge>
                 ) : (
-                  <Badge variant="secondary" className="gap-1 text-xs font-normal">
+                  <Badge
+                    variant="secondary"
+                    className="gap-1 text-xs font-normal"
+                  >
                     <Sparkles className="h-3 w-3 text-indigo-500" />
-                    Claude 3.5 Sonnet {result?.latencyMs ? `(${result.latencyMs}ms)` : ""}
+                    Claude 3.5 Sonnet{" "}
+                    {result?.latencyMs ? `(${result.latencyMs}ms)` : ""}
                   </Badge>
                 )}
               </DialogTitle>

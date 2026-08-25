@@ -26,8 +26,11 @@ export type ExplainKyvernoErrorResponse = {
 export async function explainKyvernoError(
   payload: ExplainKyvernoErrorRequest,
 ): Promise<ExplainKyvernoErrorResponse> {
-  return requestWithAuth<ExplainKyvernoErrorResponse>("/ai-agent/explain-kyverno-error", {
-    method: "POST",
-    body: payload,
-  });
+  return requestWithAuth<ExplainKyvernoErrorResponse>(
+    "/ai-agent/explain-kyverno-error",
+    {
+      method: "POST",
+      body: payload,
+    },
+  );
 }

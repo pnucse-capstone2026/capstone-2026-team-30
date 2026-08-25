@@ -58,24 +58,32 @@ const violationCopy: Record<
   }
 > = {
   "vio-001": {
-    message: "payment-api 컨테이너에 CPU와 memory limits가 설정되어 있지 않습니다.",
-    recommendation: "컨테이너 resources.limits에 cpu와 memory 값을 추가한 뒤 다시 배포하세요.",
+    message:
+      "payment-api 컨테이너에 CPU와 memory limits가 설정되어 있지 않습니다.",
+    recommendation:
+      "컨테이너 resources.limits에 cpu와 memory 값을 추가한 뒤 다시 배포하세요.",
   },
   "vio-002": {
-    message: "batch-sync-worker 컨테이너가 latest 이미지 태그를 참조하고 있습니다.",
-    recommendation: "고정된 이미지 태그나 digest를 지정해 항상 동일한 이미지가 실행되도록 변경하세요.",
+    message:
+      "batch-sync-worker 컨테이너가 latest 이미지 태그를 참조하고 있습니다.",
+    recommendation:
+      "고정된 이미지 태그나 digest를 지정해 항상 동일한 이미지가 실행되도록 변경하세요.",
   },
   "vio-003": {
     message: "payments 네임스페이스 리소스에 team 라벨이 누락되었습니다.",
     recommendation: "metadata.labels에 team: payments 라벨을 추가하세요.",
   },
   "vio-004": {
-    message: "crypto-wallet-cron 컨테이너가 privileged 모드로 실행되고 있습니다.",
-    recommendation: "보안 취약점 방지를 위해 securityContext.privileged 설정을 제거하거나 false로 변경하세요.",
+    message:
+      "crypto-wallet-cron 컨테이너가 privileged 모드로 실행되고 있습니다.",
+    recommendation:
+      "보안 취약점 방지를 위해 securityContext.privileged 설정을 제거하거나 false로 변경하세요.",
   },
   "vio-005": {
-    message: "허용된 이미지 레지스트리 접두어가 누락되어 정책 보정이 필요합니다.",
-    recommendation: "이미지 경로가 승인된 레지스트리 기준을 따르도록 수정하세요.",
+    message:
+      "허용된 이미지 레지스트리 접두어가 누락되어 정책 보정이 필요합니다.",
+    recommendation:
+      "이미지 경로가 승인된 레지스트리 기준을 따르도록 수정하세요.",
   },
 };
 
@@ -102,14 +110,17 @@ const exceptionOptions: Array<"all" | ExceptionStatus> = [
 ];
 
 export default function MyViolationsPage() {
-  const [violations, setViolations] = useState<PolicyViolation[]>(policyViolations);
+  const [violations, setViolations] =
+    useState<PolicyViolation[]>(policyViolations);
   const [query, setQuery] = useState("");
   const [cluster, setCluster] = useState("all");
   const [policy, setPolicy] = useState("all");
   const [namespace, setNamespace] = useState("all");
   const [severity, setSeverity] = useState<"all" | ViolationSeverity>("all");
   const [status, setStatus] = useState<"all" | ViolationStatus>("all");
-  const [exceptionStatus, setExceptionStatus] = useState<"all" | ExceptionStatus>("all");
+  const [exceptionStatus, setExceptionStatus] = useState<
+    "all" | ExceptionStatus
+  >("all");
 
   useEffect(() => {
     let isMounted = true;
@@ -164,10 +175,20 @@ export default function MyViolationsPage() {
         (namespace === "all" || violation.namespace === namespace) &&
         (severity === "all" || violation.severity === severity) &&
         (status === "all" || violation.status === status) &&
-        (exceptionStatus === "all" || violation.exceptionStatus === exceptionStatus)
+        (exceptionStatus === "all" ||
+          violation.exceptionStatus === exceptionStatus)
       );
     });
-  }, [violations, cluster, exceptionStatus, namespace, policy, query, severity, status]);
+  }, [
+    violations,
+    cluster,
+    exceptionStatus,
+    namespace,
+    policy,
+    query,
+    severity,
+    status,
+  ]);
 
   const openCount = violations.filter((item) => item.status === "open").length;
   const urgentCount = violations.filter(
@@ -176,7 +197,9 @@ export default function MyViolationsPage() {
   const exceptionRequestedCount = violations.filter(
     (item) => item.exceptionStatus !== "none",
   ).length;
-  const resolvedCount = violations.filter((item) => item.status === "resolved").length;
+  const resolvedCount = violations.filter(
+    (item) => item.status === "resolved",
+  ).length;
 
   function resetFilters() {
     setQuery("");
@@ -252,7 +275,8 @@ export default function MyViolationsPage() {
                 위반 리소스 목록
               </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                위반한 정책, 대상 리소스, 문제 위치, 권장 조치를 확인하고 필요한 경우 예외 신청으로 이동합니다.
+                위반한 정책, 대상 리소스, 문제 위치, 권장 조치를 확인하고 필요한
+                경우 예외 신청으로 이동합니다.
               </p>
             </div>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
@@ -279,7 +303,11 @@ export default function MyViolationsPage() {
           </div>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-            <FilterSelect label="클러스터" value={cluster} onChange={setCluster}>
+            <FilterSelect
+              label="클러스터"
+              value={cluster}
+              onChange={setCluster}
+            >
               <option value="all">전체 클러스터</option>
               {clusters.map((option) => (
                 <option key={option} value={option}>
@@ -295,7 +323,11 @@ export default function MyViolationsPage() {
                 </option>
               ))}
             </FilterSelect>
-            <FilterSelect label="Namespace" value={namespace} onChange={setNamespace}>
+            <FilterSelect
+              label="Namespace"
+              value={namespace}
+              onChange={setNamespace}
+            >
               <option value="all">전체 Namespace</option>
               {namespaces.map((option) => (
                 <option key={option} value={option}>
@@ -306,7 +338,9 @@ export default function MyViolationsPage() {
             <FilterSelect
               label="심각도"
               value={severity}
-              onChange={(value) => setSeverity(value as "all" | ViolationSeverity)}
+              onChange={(value) =>
+                setSeverity(value as "all" | ViolationSeverity)
+              }
             >
               {severityOptions.map((option) => (
                 <option key={option} value={option}>
@@ -328,7 +362,9 @@ export default function MyViolationsPage() {
             <FilterSelect
               label="예외 상태"
               value={exceptionStatus}
-              onChange={(value) => setExceptionStatus(value as "all" | ExceptionStatus)}
+              onChange={(value) =>
+                setExceptionStatus(value as "all" | ExceptionStatus)
+              }
             >
               {exceptionOptions.map((option) => (
                 <option key={option} value={option}>
@@ -363,7 +399,9 @@ export default function MyViolationsPage() {
                       )}
                       {statusLabel[violation.status]}
                     </Badge>
-                    <Badge className={exceptionClassName[violation.exceptionStatus]}>
+                    <Badge
+                      className={exceptionClassName[violation.exceptionStatus]}
+                    >
                       {exceptionLabel[violation.exceptionStatus]}
                     </Badge>
                   </div>
@@ -413,7 +451,9 @@ export default function MyViolationsPage() {
                       variant="outline"
                       className="h-9 rounded-xl border-slate-200 bg-white"
                     >
-                      <Link href={`/exceptions/${violation.relatedExceptionId}`}>
+                      <Link
+                        href={`/exceptions/${violation.relatedExceptionId}`}
+                      >
                         내 신청 보기
                       </Link>
                     </Button>
@@ -460,7 +500,9 @@ function SummaryCard({
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
       <div className="flex items-start justify-between">
-        <div className={`flex size-10 items-center justify-center rounded-xl ${className}`}>
+        <div
+          className={`flex size-10 items-center justify-center rounded-xl ${className}`}
+        >
           <Icon className="size-5" />
         </div>
       </div>
@@ -500,7 +542,9 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-4 rounded-xl bg-slate-50 px-3 py-2">
       <dt className="shrink-0 text-slate-500">{label}</dt>
-      <dd className="truncate text-right font-medium text-slate-800">{value}</dd>
+      <dd className="truncate text-right font-medium text-slate-800">
+        {value}
+      </dd>
     </div>
   );
 }

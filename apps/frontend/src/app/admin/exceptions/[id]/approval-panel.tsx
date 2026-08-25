@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, Clock3, FileClock, RotateCcw, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  Clock3,
+  FileClock,
+  RotateCcw,
+  XCircle,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -87,7 +93,12 @@ export function ExceptionApprovalPanel({
 
     if (decisionAt) {
       baseEvents.push({
-        label: status === "approved" ? "예외 승인" : status === "rejected" ? "예외 거절" : "상태 변경",
+        label:
+          status === "approved"
+            ? "예외 승인"
+            : status === "rejected"
+              ? "예외 거절"
+              : "상태 변경",
         at: decisionAt,
         description: decisionNote,
       });
@@ -106,7 +117,10 @@ export function ExceptionApprovalPanel({
           : undefined;
       const response =
         nextStatus === "approved"
-          ? await approveExceptionRequest(request.id, { decisionNote, ruleNames })
+          ? await approveExceptionRequest(request.id, {
+              decisionNote,
+              ruleNames,
+            })
           : await rejectExceptionRequest(request.id, { decisionNote });
       const updatedRequest = toExceptionRequest(response);
       setStatus(updatedRequest.status);
@@ -211,11 +225,15 @@ export function ExceptionApprovalPanel({
         <div className="mt-4 grid gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4 text-xs text-slate-500">
           <div className="flex items-center justify-between gap-3">
             <span>승인 조건</span>
-            <span className="text-right font-medium text-slate-800">만료일 {request.expiresAt}</span>
+            <span className="text-right font-medium text-slate-800">
+              만료일 {request.expiresAt}
+            </span>
           </div>
           <div className="flex items-center justify-between gap-3">
             <span>검토자</span>
-            <span className="text-right font-medium text-slate-800">{request.reviewer}</span>
+            <span className="text-right font-medium text-slate-800">
+              {request.reviewer}
+            </span>
           </div>
           <div className="flex items-center justify-between gap-3">
             <span>처리 가능 여부</span>
@@ -236,7 +254,9 @@ export function ExceptionApprovalPanel({
             className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]"
             disabled={
               !canDecide ||
-              Boolean(request.ruleNames?.length && selectedRuleNames.length === 0)
+              Boolean(
+                request.ruleNames?.length && selectedRuleNames.length === 0,
+              )
             }
             onClick={() => decide("approved")}
           >
@@ -270,14 +290,21 @@ export function ExceptionApprovalPanel({
         <h3 className="text-sm font-semibold">처리 이력</h3>
         <div className="mt-5 space-y-5">
           {events.map((event, index) => (
-            <div key={`${event.label}-${event.at}-${index}`} className="relative pl-6">
+            <div
+              key={`${event.label}-${event.at}-${index}`}
+              className="relative pl-6"
+            >
               <span className="absolute top-1.5 left-0 size-2 rounded-full bg-blue-500" />
               {index < events.length - 1 ? (
                 <div className="absolute top-4 bottom-[-22px] left-[3px] w-px bg-slate-200" />
               ) : null}
-              <p className="text-xs font-semibold text-slate-900">{event.label}</p>
+              <p className="text-xs font-semibold text-slate-900">
+                {event.label}
+              </p>
               <p className="mt-1 text-[11px] text-slate-400">{event.at}</p>
-              <p className="mt-2 break-all text-xs leading-5 text-slate-500">{event.description}</p>
+              <p className="mt-2 break-all text-xs leading-5 text-slate-500">
+                {event.description}
+              </p>
             </div>
           ))}
         </div>

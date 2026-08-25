@@ -151,17 +151,18 @@ export const exceptionStatusLabel: Record<ExceptionRequestStatus, string> = {
   failed: "적용 실패",
 };
 
-export const exceptionStatusClassName: Record<ExceptionRequestStatus, string> = {
-  pending: "bg-amber-50 text-amber-700 ring-1 ring-amber-100",
-  applying: "bg-blue-50 text-blue-700 ring-1 ring-blue-100",
-  approved: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100",
-  rejected: "bg-rose-50 text-rose-700 ring-1 ring-rose-100",
-  cancelling: "bg-violet-50 text-violet-700 ring-1 ring-violet-100",
-  expiring: "bg-orange-50 text-orange-700 ring-1 ring-orange-100",
-  expired: "bg-slate-100 text-slate-600 ring-1 ring-slate-200",
-  cancelled: "bg-slate-100 text-slate-600 ring-1 ring-slate-200",
-  failed: "bg-red-50 text-red-700 ring-1 ring-red-100",
-};
+export const exceptionStatusClassName: Record<ExceptionRequestStatus, string> =
+  {
+    pending: "bg-amber-50 text-amber-700 ring-1 ring-amber-100",
+    applying: "bg-blue-50 text-blue-700 ring-1 ring-blue-100",
+    approved: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100",
+    rejected: "bg-rose-50 text-rose-700 ring-1 ring-rose-100",
+    cancelling: "bg-violet-50 text-violet-700 ring-1 ring-violet-100",
+    expiring: "bg-orange-50 text-orange-700 ring-1 ring-orange-100",
+    expired: "bg-slate-100 text-slate-600 ring-1 ring-slate-200",
+    cancelled: "bg-slate-100 text-slate-600 ring-1 ring-slate-200",
+    failed: "bg-red-50 text-red-700 ring-1 ring-red-100",
+  };
 
 export const exceptionRiskLabel: Record<ExceptionRiskLevel, string> = {
   critical: "긴급",

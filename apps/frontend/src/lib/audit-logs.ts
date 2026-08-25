@@ -89,9 +89,13 @@ export async function getAuditLogs(
         entityType: item.entityType,
         entityId: item.entityId,
         actorType: item.actorType,
-        actorEmail: item.actorEmail ?? (item.actorType === "SYSTEM" ? "시스템" : "알 수 없음"),
+        actorEmail:
+          item.actorEmail ??
+          (item.actorType === "SYSTEM" ? "시스템" : "알 수 없음"),
         actorRole: (item.actorRole as any) ?? "SYSTEM",
-        createdAt: item.createdAt ? new Date(item.createdAt).toLocaleString("ko-KR") : "최근",
+        createdAt: item.createdAt
+          ? new Date(item.createdAt).toLocaleString("ko-KR")
+          : "최근",
         summary: item.summary,
         metadata: item.metadata ? JSON.stringify(item.metadata) : "-",
         rawMetadata: item.metadata,
@@ -187,7 +191,8 @@ export const entityTypeLabel: Record<AuditLog["entityType"], string> = {
 
 export const entityTypeClassName: Record<AuditLog["entityType"], string> = {
   USER: "bg-blue-50 text-blue-700 ring-1 ring-blue-100",
-  POLICY_EXCEPTION_REQUEST: "bg-violet-50 text-violet-700 ring-1 ring-violet-100",
+  POLICY_EXCEPTION_REQUEST:
+    "bg-violet-50 text-violet-700 ring-1 ring-violet-100",
   VIOLATION_HISTORY: "bg-amber-50 text-amber-700 ring-1 ring-amber-100",
   POLICY: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100",
   CLUSTER: "bg-cyan-50 text-cyan-700 ring-1 ring-cyan-100",

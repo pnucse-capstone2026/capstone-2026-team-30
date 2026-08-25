@@ -136,7 +136,9 @@ export default function AdminExceptionDetailPage({
                     <Badge className={exceptionStatusClassName[request.status]}>
                       {exceptionStatusLabel[request.status]}
                     </Badge>
-                    <Badge className={exceptionRiskClassName[request.riskLevel]}>
+                    <Badge
+                      className={exceptionRiskClassName[request.riskLevel]}
+                    >
                       <AlertTriangle className="size-3" />
                       {exceptionRiskLabel[request.riskLevel]}
                     </Badge>
@@ -158,7 +160,9 @@ export default function AdminExceptionDetailPage({
                       variant="outline"
                       className="h-10 rounded-xl border-slate-200 bg-white text-slate-700"
                     >
-                      <Link href={`/admin/violations/${request.relatedViolationId}`}>
+                      <Link
+                        href={`/admin/violations/${request.relatedViolationId}`}
+                      >
                         관련 위반 보기
                       </Link>
                     </Button>
@@ -195,7 +199,10 @@ export default function AdminExceptionDetailPage({
                       {[
                         ["신청 번호", request.id],
                         ["정책", request.policyName],
-                        ["리소스", `${request.resourceKind} / ${request.resourceName}`],
+                        [
+                          "리소스",
+                          `${request.resourceKind} / ${request.resourceName}`,
+                        ],
                         ["네임스페이스", request.namespace],
                         ["클러스터", request.clusterName],
                         ["신청자", `${request.requester} / ${request.team}`],
@@ -206,9 +213,16 @@ export default function AdminExceptionDetailPage({
                         ["재시도 횟수", `${request.applyAttempts ?? 0}회`],
                         ["다음 재시도", request.nextAttemptAt ?? "-"],
                       ].map(([label, value]) => (
-                        <div key={label} className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
-                          <dt className="text-[11px] font-medium text-slate-400">{label}</dt>
-                          <dd className="mt-1 break-words text-sm font-medium text-slate-800">{value}</dd>
+                        <div
+                          key={label}
+                          className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3"
+                        >
+                          <dt className="text-[11px] font-medium text-slate-400">
+                            {label}
+                          </dt>
+                          <dd className="mt-1 break-words text-sm font-medium text-slate-800">
+                            {value}
+                          </dd>
                         </div>
                       ))}
                     </dl>
@@ -244,7 +258,10 @@ export default function AdminExceptionDetailPage({
                       </div>
                     </div>
                     <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                      <RuleGroup label="요청 규칙" values={request.ruleNames ?? []} />
+                      <RuleGroup
+                        label="요청 규칙"
+                        values={request.ruleNames ?? []}
+                      />
                       <RuleGroup
                         label="적용 규칙"
                         values={request.appliedRuleNames ?? []}
@@ -268,7 +285,9 @@ export default function AdminExceptionDetailPage({
                         <CalendarClock className="size-5" />
                       </div>
                       <div>
-                        <h3 className="text-sm font-semibold">승인 체크리스트</h3>
+                        <h3 className="text-sm font-semibold">
+                          승인 체크리스트
+                        </h3>
                         <p className="mt-1 text-xs text-slate-400">
                           운영 예외 승인 전 확인해야 할 항목입니다.
                         </p>
@@ -281,7 +300,10 @@ export default function AdminExceptionDetailPage({
                         "운영 클러스터 예외는 신청자와 검토자가 분리되어 있습니다.",
                         "만료 후 정책 기준으로 복구할 계획이 있습니다.",
                       ].map((item) => (
-                        <li key={item} className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                        <li
+                          key={item}
+                          className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3"
+                        >
                           <span className="mt-1 size-1.5 shrink-0 rounded-full bg-blue-500" />
                           <span>{item}</span>
                         </li>
@@ -312,7 +334,10 @@ function RuleGroup({ label, values }: { label: string; values: string[] }) {
       {values.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-2">
           {values.map((value) => (
-            <Badge key={value} className="bg-white text-slate-700 ring-1 ring-slate-200">
+            <Badge
+              key={value}
+              className="bg-white text-slate-700 ring-1 ring-slate-200"
+            >
               {value}
             </Badge>
           ))}

@@ -62,8 +62,9 @@ export default function ExceptionRequestPage() {
   );
 
   const selectedViolation =
-    policyViolations.find((violation) => violation.id === selectedViolationId) ??
-    policyViolations[0];
+    policyViolations.find(
+      (violation) => violation.id === selectedViolationId,
+    ) ?? policyViolations[0];
   const defaultEndDate = useMemo(() => dateInputValue(7), []);
 
   useEffect(() => {
@@ -151,7 +152,9 @@ export default function ExceptionRequestPage() {
     const resourceNamespace = String(
       formData.get("resourceNamespace") ?? "",
     ).trim();
-    const targetClusterId = String(formData.get("targetClusterId") ?? "").trim();
+    const targetClusterId = String(
+      formData.get("targetClusterId") ?? "",
+    ).trim();
     const endDate = String(formData.get("endDate") ?? "").trim();
 
     if (
@@ -261,7 +264,8 @@ export default function ExceptionRequestPage() {
                 일시 예외 신청서
               </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                승인된 예외는 지정한 기간에만 적용됩니다. 운영 리소스는 사유와 종료일을 명확히 입력해야 합니다.
+                승인된 예외는 지정한 기간에만 적용됩니다. 운영 리소스는 사유와
+                종료일을 명확히 입력해야 합니다.
               </p>
             </div>
             <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs text-emerald-700">
@@ -508,26 +512,38 @@ export default function ExceptionRequestPage() {
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold">대상 위반</h3>
-                    <p className="mt-1 text-xs text-slate-400">신청 대상 리소스</p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      신청 대상 리소스
+                    </p>
                   </div>
                 </div>
                 <dl className="mt-5 space-y-3 text-sm">
                   <div className="flex justify-between gap-3">
                     <dt className="text-slate-500">정책</dt>
-                    <dd className="text-right font-medium text-slate-900">{selectedViolation.policyName}</dd>
+                    <dd className="text-right font-medium text-slate-900">
+                      {selectedViolation.policyName}
+                    </dd>
                   </div>
                   <div className="flex justify-between gap-3">
                     <dt className="text-slate-500">규칙</dt>
-                    <dd className="text-right font-medium text-slate-900">{selectedViolation.ruleName}</dd>
+                    <dd className="text-right font-medium text-slate-900">
+                      {selectedViolation.ruleName}
+                    </dd>
                   </div>
                   <div className="flex justify-between gap-3">
                     <dt className="text-slate-500">리소스</dt>
-                    <dd className="text-right font-medium text-slate-900">{selectedViolation.resourceName}</dd>
+                    <dd className="text-right font-medium text-slate-900">
+                      {selectedViolation.resourceName}
+                    </dd>
                   </div>
                   <div className="flex justify-between gap-3">
                     <dt className="text-slate-500">심각도</dt>
                     <dd>
-                      <Badge className={severityClassName[selectedViolation.severity]}>
+                      <Badge
+                        className={
+                          severityClassName[selectedViolation.severity]
+                        }
+                      >
                         {severityLabel[selectedViolation.severity]}
                       </Badge>
                     </dd>
@@ -538,17 +554,25 @@ export default function ExceptionRequestPage() {
               <article className="rounded-2xl border border-slate-200 bg-white p-5">
                 <h3 className="text-sm font-semibold">진행 기준</h3>
                 <div className="mt-5 space-y-4">
-                  {requestChecklist.map(({ label, detail, icon: Icon, className }) => (
-                    <div key={label} className="flex items-start gap-3">
-                      <div className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${className}`}>
-                        <Icon className="size-4.5" />
+                  {requestChecklist.map(
+                    ({ label, detail, icon: Icon, className }) => (
+                      <div key={label} className="flex items-start gap-3">
+                        <div
+                          className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${className}`}
+                        >
+                          <Icon className="size-4.5" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-slate-900">
+                            {label}
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-slate-500">
+                            {detail}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-xs font-semibold text-slate-900">{label}</p>
-                        <p className="mt-1 text-xs leading-5 text-slate-500">{detail}</p>
-                      </div>
-                    </div>
-                  ))}
+                    ),
+                  )}
                 </div>
               </article>
 
@@ -559,12 +583,15 @@ export default function ExceptionRequestPage() {
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold">첨부 안내</h3>
-                    <p className="mt-1 text-xs text-slate-400">현재는 설명 입력으로 대체</p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      현재는 설명 입력으로 대체
+                    </p>
                   </div>
                 </div>
                 <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-xs leading-5 text-slate-500">
                   <FileText className="mb-2 size-4 text-slate-400" />
-                  변경 요청 번호, 이슈 링크, 배포 승인 문서 위치를 첨부 설명에 남겨주세요.
+                  변경 요청 번호, 이슈 링크, 배포 승인 문서 위치를 첨부 설명에
+                  남겨주세요.
                 </div>
               </article>
             </aside>

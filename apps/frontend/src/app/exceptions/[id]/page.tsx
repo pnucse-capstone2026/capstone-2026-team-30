@@ -182,7 +182,9 @@ export default function MyExceptionRequestDetailPage({ params }: PageProps) {
                     <Badge className={exceptionStatusClassName[request.status]}>
                       {exceptionStatusLabel[request.status]}
                     </Badge>
-                    <Badge className={exceptionRiskClassName[request.riskLevel]}>
+                    <Badge
+                      className={exceptionRiskClassName[request.riskLevel]}
+                    >
                       위험도 {exceptionRiskLabel[request.riskLevel]}
                     </Badge>
                   </div>
@@ -260,7 +262,9 @@ export default function MyExceptionRequestDetailPage({ params }: PageProps) {
                   </div>
                 </section>
                 <section>
-                  <h4 className="text-xs font-semibold text-slate-500">보완 통제</h4>
+                  <h4 className="text-xs font-semibold text-slate-500">
+                    보완 통제
+                  </h4>
                   <p className="mt-2 whitespace-pre-wrap break-all rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-700">
                     {request.compensatingControl}
                   </p>
@@ -280,10 +284,16 @@ export default function MyExceptionRequestDetailPage({ params }: PageProps) {
                   <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Badge className={severityClassName[relatedViolation.severity]}>
+                        <Badge
+                          className={
+                            severityClassName[relatedViolation.severity]
+                          }
+                        >
                           {severityLabel[relatedViolation.severity]}
                         </Badge>
-                        <Badge className={statusClassName[relatedViolation.status]}>
+                        <Badge
+                          className={statusClassName[relatedViolation.status]}
+                        >
                           {statusLabel[relatedViolation.status]}
                         </Badge>
                       </div>
@@ -318,11 +328,16 @@ export default function MyExceptionRequestDetailPage({ params }: PageProps) {
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold">검토 상태</h3>
-                  <p className="text-xs text-slate-400">현재 신청 기준 정보입니다.</p>
+                  <p className="text-xs text-slate-400">
+                    현재 신청 기준 정보입니다.
+                  </p>
                 </div>
               </div>
               <dl className="mt-5 space-y-3 text-sm">
-                <StatusRow label="상태" value={exceptionStatusLabel[request.status]} />
+                <StatusRow
+                  label="상태"
+                  value={exceptionStatusLabel[request.status]}
+                />
                 <StatusRow label="검토자" value={request.reviewer} />
                 <StatusRow label="만료일" value={request.expiresAt} />
                 <StatusRow
@@ -333,7 +348,10 @@ export default function MyExceptionRequestDetailPage({ params }: PageProps) {
                   label="재시도"
                   value={`${request.applyAttempts ?? 0}회`}
                 />
-                <StatusRow label="위험도" value={exceptionRiskLabel[request.riskLevel]} />
+                <StatusRow
+                  label="위험도"
+                  value={exceptionRiskLabel[request.riskLevel]}
+                />
               </dl>
             </article>
 
@@ -397,7 +415,9 @@ function InfoCard({
         <Icon className="size-4 text-slate-400" />
         {label}
       </div>
-      <p className="mt-3 truncate text-sm font-semibold text-slate-900">{value}</p>
+      <p className="mt-3 truncate text-sm font-semibold text-slate-900">
+        {value}
+      </p>
       <p className="mt-1 truncate text-xs text-slate-400">{detail}</p>
     </div>
   );
@@ -419,7 +439,10 @@ function RuleSummary({ label, values }: { label: string; values: string[] }) {
       {values.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-2">
           {values.map((value) => (
-            <Badge key={value} className="bg-white text-slate-700 ring-1 ring-slate-200">
+            <Badge
+              key={value}
+              className="bg-white text-slate-700 ring-1 ring-slate-200"
+            >
               {value}
             </Badge>
           ))}

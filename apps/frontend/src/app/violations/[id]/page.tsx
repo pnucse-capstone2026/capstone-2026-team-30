@@ -62,24 +62,31 @@ const violationCopy: Record<
   }
 > = {
   "vio-001": {
-    message: "payment-api 컨테이너에 CPU와 memory limits가 설정되어 있지 않습니다.",
-    recommendation: "컨테이너 resources.limits에 cpu와 memory 값을 추가한 뒤 다시 배포하세요.",
+    message:
+      "payment-api 컨테이너에 CPU와 memory limits가 설정되어 있지 않습니다.",
+    recommendation:
+      "컨테이너 resources.limits에 cpu와 memory 값을 추가한 뒤 다시 배포하세요.",
   },
   "vio-002": {
     message: "worker Pod가 latest 이미지 태그를 사용하고 있습니다.",
-    recommendation: "재현 가능한 배포를 위해 빌드 번호나 SemVer 기반의 고정 태그를 사용하세요.",
+    recommendation:
+      "재현 가능한 배포를 위해 빌드 번호나 SemVer 기반의 고정 태그를 사용하세요.",
   },
   "vio-003": {
     message: "user-service 리소스에 team 라벨이 없습니다.",
-    recommendation: "metadata.labels.team 값을 추가해 소유 팀을 추적할 수 있게 하세요.",
+    recommendation:
+      "metadata.labels.team 값을 추가해 소유 팀을 추적할 수 있게 하세요.",
   },
   "vio-004": {
     message: "node-exporter가 제한된 hostPath 볼륨을 사용하고 있습니다.",
-    recommendation: "승인된 모니터링 목적의 예외인지 확인하고 만료 전 대체 구성을 검토하세요.",
+    recommendation:
+      "승인된 모니터링 목적의 예외인지 확인하고 만료 전 대체 구성을 검토하세요.",
   },
   "vio-005": {
-    message: "허용된 이미지 레지스트리 접두어가 누락되어 정책 보정이 필요합니다.",
-    recommendation: "이미지 경로가 승인된 레지스트리 기준을 따르도록 수정하세요.",
+    message:
+      "허용된 이미지 레지스트리 접두어가 누락되어 정책 보정이 필요합니다.",
+    recommendation:
+      "이미지 경로가 승인된 레지스트리 기준을 따르도록 수정하세요.",
   },
 };
 
@@ -150,11 +157,19 @@ export default async function MyViolationDetailPage({
             clusterContext={violation.clusterName}
           />
           {violation.relatedExceptionId ? (
-            <Button asChild className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]">
-              <Link href={`/exceptions/${violation.relatedExceptionId}`}>내 신청 보기</Link>
+            <Button
+              asChild
+              className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]"
+            >
+              <Link href={`/exceptions/${violation.relatedExceptionId}`}>
+                내 신청 보기
+              </Link>
             </Button>
           ) : (
-            <Button asChild className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]">
+            <Button
+              asChild
+              className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]"
+            >
               <Link href="/exceptions/new">
                 <FilePlus2 className="size-4" />
                 예외 신청 작성
@@ -179,14 +194,26 @@ export default async function MyViolationDetailPage({
               </div>
             </div>
             <dl className="mt-5 grid gap-4 md:grid-cols-2">
-              <InfoCard label="정책" value={violation.policyName} detail={violation.ruleName} />
+              <InfoCard
+                label="정책"
+                value={violation.policyName}
+                detail={violation.ruleName}
+              />
               <InfoCard
                 label="대상 리소스"
                 value={`${violation.resourceKind} / ${violation.resourceName}`}
                 detail={`${violation.clusterName} / ${violation.namespace}`}
               />
-              <InfoCard label="문제 경로" value={violation.resourcePath} detail="YAML 기준 위치" />
-              <InfoCard label="발생 시간" value={violation.detectedAt} detail={violation.admissionReviewId} />
+              <InfoCard
+                label="문제 경로"
+                value={violation.resourcePath}
+                detail="YAML 기준 위치"
+              />
+              <InfoCard
+                label="발생 시간"
+                value={violation.detectedAt}
+                detail={violation.admissionReviewId}
+              />
             </dl>
           </article>
 
@@ -207,7 +234,9 @@ export default async function MyViolationDetailPage({
               </div>
               <div>
                 <h3 className="text-sm font-semibold">리소스 매니페스트</h3>
-                <p className="mt-1 text-xs text-slate-400">검사 시점의 YAML 일부</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  검사 시점의 YAML 일부
+                </p>
               </div>
             </div>
             <pre className="overflow-x-auto p-6 text-xs leading-6 text-slate-700">
@@ -220,9 +249,15 @@ export default async function MyViolationDetailPage({
           <article className="rounded-2xl border border-slate-200 bg-white p-5">
             <h3 className="text-sm font-semibold">처리 상태</h3>
             <dl className="mt-5 space-y-3 text-sm">
-              <StatusRow label="심각도" value={severityLabel[violation.severity]} />
+              <StatusRow
+                label="심각도"
+                value={severityLabel[violation.severity]}
+              />
               <StatusRow label="상태" value={statusLabel[violation.status]} />
-              <StatusRow label="예외" value={exceptionLabel[violation.exceptionStatus]} />
+              <StatusRow
+                label="예외"
+                value={exceptionLabel[violation.exceptionStatus]}
+              />
               <StatusRow label="엔진 응답" value={violation.engineResponse} />
             </dl>
           </article>
@@ -231,8 +266,13 @@ export default async function MyViolationDetailPage({
             <h3 className="text-sm font-semibold">진행 이력</h3>
             <div className="mt-5 space-y-4">
               {violation.events.map((event) => (
-                <div key={`${event.label}-${event.at}`} className="border-l-2 border-slate-200 pl-4">
-                  <p className="text-xs font-semibold text-slate-900">{event.label}</p>
+                <div
+                  key={`${event.label}-${event.at}`}
+                  className="border-l-2 border-slate-200 pl-4"
+                >
+                  <p className="text-xs font-semibold text-slate-900">
+                    {event.label}
+                  </p>
                   <p className="mt-1 text-[11px] text-slate-400">{event.at}</p>
                   <p className="mt-2 text-xs leading-5 text-slate-500">
                     {event.description}
@@ -259,7 +299,9 @@ function InfoCard({
   return (
     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
       <dt className="text-xs font-medium text-slate-500">{label}</dt>
-      <dd className="mt-3 break-words text-sm font-semibold text-slate-900">{value}</dd>
+      <dd className="mt-3 break-words text-sm font-semibold text-slate-900">
+        {value}
+      </dd>
       <dd className="mt-1 break-words text-xs text-slate-400">{detail}</dd>
     </div>
   );

@@ -40,7 +40,9 @@ export type PolicyListFilter = {
 /**
  * 백엔드에서 실시간 Kyverno 정책 목록을 조회합니다.
  */
-export async function getPolicies(filter: PolicyListFilter = {}): Promise<KyvernoPolicy[]> {
+export async function getPolicies(
+  filter: PolicyListFilter = {},
+): Promise<KyvernoPolicy[]> {
   const params = new URLSearchParams();
   if (filter.clusterId) params.append("clusterId", filter.clusterId);
   if (filter.namespace) params.append("namespace", filter.namespace);
@@ -57,7 +59,9 @@ export async function getPolicies(filter: PolicyListFilter = {}): Promise<Kyvern
     return data.map((item) => ({
       ...item,
       clusterName: item.clusterDisplayName ?? item.clusterId ?? "default",
-      updatedAt: item.createdAt ? new Date(item.createdAt).toLocaleString("ko-KR") : "최근",
+      updatedAt: item.createdAt
+        ? new Date(item.createdAt).toLocaleString("ko-KR")
+        : "최근",
       violationCount: 0,
     }));
   } catch (error) {
@@ -85,7 +89,9 @@ export async function getPolicyDetail(
     return {
       ...data,
       clusterName: data.clusterDisplayName ?? data.clusterId ?? clusterId,
-      updatedAt: data.createdAt ? new Date(data.createdAt).toLocaleString("ko-KR") : "최근",
+      updatedAt: data.createdAt
+        ? new Date(data.createdAt).toLocaleString("ko-KR")
+        : "최근",
       violationCount: 0,
     };
   } catch {
@@ -107,7 +113,8 @@ export const kyvernoPolicies: KyvernoPolicy[] = [
     violationCount: 4,
     owner: "플랫폼팀",
     updatedAt: "2026-07-08 10:42",
-    description: "운영 워크로드에 CPU와 memory requests/limits 설정을 강제합니다.",
+    description:
+      "운영 워크로드에 CPU와 memory requests/limits 설정을 강제합니다.",
   },
   {
     id: "disallow-latest-tag",
@@ -122,7 +129,8 @@ export const kyvernoPolicies: KyvernoPolicy[] = [
     violationCount: 2,
     owner: "배치서비스팀",
     updatedAt: "2026-07-08 10:17",
-    description: "재현 가능한 배포를 위해 latest 이미지 태그 사용을 제한합니다.",
+    description:
+      "재현 가능한 배포를 위해 latest 이미지 태그 사용을 제한합니다.",
   },
   {
     id: "require-team-label",

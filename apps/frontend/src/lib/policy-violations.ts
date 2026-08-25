@@ -48,7 +48,9 @@ export type ViolationListFilter = {
 /**
  * 백엔드에서 실시간 PolicyReport 기반 정책 위반 목록을 조회합니다.
  */
-export async function getViolations(filter: ViolationListFilter = {}): Promise<PolicyViolation[]> {
+export async function getViolations(
+  filter: ViolationListFilter = {},
+): Promise<PolicyViolation[]> {
   const params = new URLSearchParams();
   if (filter.clusterId) params.append("clusterId", filter.clusterId);
   if (filter.namespace) params.append("namespace", filter.namespace);
@@ -61,21 +63,23 @@ export async function getViolations(filter: ViolationListFilter = {}): Promise<P
   const path = `/violations${queryStr ? `?${queryStr}` : ""}`;
 
   try {
-    const data = await requestWithAuth<Array<{
-      id: string;
-      clusterId: string;
-      clusterDisplayName: string;
-      namespace: string;
-      policyName: string;
-      ruleName: string;
-      resourceKind: string;
-      resourceName: string;
-      severity: ViolationSeverity;
-      status: ViolationStatus;
-      message: string;
-      detectedAt: string;
-      reportName: string;
-    }>>(path);
+    const data = await requestWithAuth<
+      Array<{
+        id: string;
+        clusterId: string;
+        clusterDisplayName: string;
+        namespace: string;
+        policyName: string;
+        ruleName: string;
+        resourceKind: string;
+        resourceName: string;
+        severity: ViolationSeverity;
+        status: ViolationStatus;
+        message: string;
+        detectedAt: string;
+        reportName: string;
+      }>
+    >(path);
 
     return data.map((item) => ({
       id: item.id,
@@ -90,7 +94,9 @@ export async function getViolations(filter: ViolationListFilter = {}): Promise<P
       severity: item.severity,
       status: item.status,
       exceptionStatus: "none",
-      detectedAt: item.detectedAt ? new Date(item.detectedAt).toLocaleString("ko-KR") : "최근",
+      detectedAt: item.detectedAt
+        ? new Date(item.detectedAt).toLocaleString("ko-KR")
+        : "최근",
       assignee: "담당 보안팀",
       message: item.message,
       ruleName: item.ruleName,
@@ -102,7 +108,9 @@ export async function getViolations(filter: ViolationListFilter = {}): Promise<P
       events: [
         {
           label: "탐지됨",
-          at: item.detectedAt ? new Date(item.detectedAt).toLocaleString("ko-KR") : "최근",
+          at: item.detectedAt
+            ? new Date(item.detectedAt).toLocaleString("ko-KR")
+            : "최근",
           description: item.message,
         },
       ],
@@ -152,7 +160,9 @@ export async function getViolationDetail(
       severity: item.severity,
       status: item.status,
       exceptionStatus: "none",
-      detectedAt: item.detectedAt ? new Date(item.detectedAt).toLocaleString("ko-KR") : "최근",
+      detectedAt: item.detectedAt
+        ? new Date(item.detectedAt).toLocaleString("ko-KR")
+        : "최근",
       assignee: "담당 보안팀",
       message: item.message,
       ruleName: item.ruleName,
@@ -164,7 +174,9 @@ export async function getViolationDetail(
       events: [
         {
           label: "탐지됨",
-          at: item.detectedAt ? new Date(item.detectedAt).toLocaleString("ko-KR") : "최근",
+          at: item.detectedAt
+            ? new Date(item.detectedAt).toLocaleString("ko-KR")
+            : "최근",
           description: item.message,
         },
       ],

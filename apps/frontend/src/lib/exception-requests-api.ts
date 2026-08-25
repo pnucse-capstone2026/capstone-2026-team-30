@@ -103,8 +103,9 @@ export function toExceptionRequest(
 }
 
 export async function listExceptionRequests() {
-  const requests =
-    await requestWithAuth<BackendExceptionRequest[]>("/exception-requests");
+  const requests = await requestWithAuth<BackendExceptionRequest[]>(
+    "/exception-requests",
+  );
 
   return requests.map(toExceptionRequest);
 }

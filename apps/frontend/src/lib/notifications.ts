@@ -1,6 +1,11 @@
 import { type UserRole } from "@/lib/auth-api";
 
-export type NotificationType = "exception" | "violation" | "cluster" | "audit" | "policy";
+export type NotificationType =
+  | "exception"
+  | "violation"
+  | "cluster"
+  | "audit"
+  | "policy";
 export type NotificationSeverity = "info" | "warning" | "critical" | "success";
 
 export type AppNotification = {
@@ -31,7 +36,8 @@ export const notifications: AppNotification[] = [
   {
     id: "noti-002",
     title: "긴급 정책 오류가 발생했습니다",
-    message: "production 클러스터에서 require-resource-limits 정책 오류가 감지되었습니다.",
+    message:
+      "production 클러스터에서 require-resource-limits 정책 오류가 감지되었습니다.",
     type: "violation",
     severity: "critical",
     read: false,
@@ -101,7 +107,10 @@ export const notificationSeverityLabel: Record<NotificationSeverity, string> = {
   success: "완료",
 };
 
-export const notificationSeverityClassName: Record<NotificationSeverity, string> = {
+export const notificationSeverityClassName: Record<
+  NotificationSeverity,
+  string
+> = {
   info: "bg-blue-50 text-blue-700 ring-1 ring-blue-100",
   warning: "bg-amber-50 text-amber-700 ring-1 ring-amber-100",
   critical: "bg-rose-50 text-rose-700 ring-1 ring-rose-100",

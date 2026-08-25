@@ -26,7 +26,8 @@ const roleLabel: Record<UserRole, string> = {
 };
 
 const roleDescription: Record<UserRole, string> = {
-  ADMIN: "사용자, 정책, 예외, 감사 로그를 포함한 운영 기능을 관리할 수 있습니다.",
+  ADMIN:
+    "사용자, 정책, 예외, 감사 로그를 포함한 운영 기능을 관리할 수 있습니다.",
   APPROVER: "정책 예외 신청을 검토하고 승인 또는 거절할 수 있습니다.",
   REQUESTER: "정책 상태를 확인하고 필요한 정책 예외를 신청할 수 있습니다.",
   VIEWER: "정책, 클러스터, 위반 현황을 조회할 수 있습니다.",
@@ -59,7 +60,9 @@ export default function MyProfilePage() {
           onClick={() => void initialize()}
           disabled={isRefreshing}
         >
-          <RefreshCw className={`size-4 ${isRefreshing ? "animate-spin" : ""}`} />
+          <RefreshCw
+            className={`size-4 ${isRefreshing ? "animate-spin" : ""}`}
+          />
           새로고침
         </Button>
       }
@@ -72,7 +75,13 @@ export default function MyProfilePage() {
                 {user?.email.slice(0, 1).toUpperCase() ?? "U"}
               </div>
               <div>
-                <Badge className={user ? roleBadgeClass[user.role] : "bg-slate-100 text-slate-600"}>
+                <Badge
+                  className={
+                    user
+                      ? roleBadgeClass[user.role]
+                      : "bg-slate-100 text-slate-600"
+                  }
+                >
                   {user ? roleLabel[user.role] : "확인 중"}
                 </Badge>
                 <h2 className="mt-3 text-2xl font-semibold tracking-tight">
@@ -151,8 +160,7 @@ export default function MyProfilePage() {
                 className="h-10 justify-start rounded-xl border-slate-200 bg-white"
               >
                 <Link href="/exceptions">
-                  <ShieldCheck className="size-4" />
-                  내 예외 신청 보기
+                  <ShieldCheck className="size-4" />내 예외 신청 보기
                 </Link>
               </Button>
               <Button
@@ -161,8 +169,7 @@ export default function MyProfilePage() {
                 className="h-10 justify-start rounded-xl border-slate-200 bg-white"
               >
                 <Link href="/exceptions/new">
-                  <KeyRound className="size-4" />
-                  새 예외 신청
+                  <KeyRound className="size-4" />새 예외 신청
                 </Link>
               </Button>
               {user?.role === "ADMIN" ? (

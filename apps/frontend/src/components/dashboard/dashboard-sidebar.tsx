@@ -41,7 +41,11 @@ const navigation: Record<"user" | "admin", NavigationItem[]> = {
     { label: "알림", href: "/notifications", icon: BellRing },
   ],
   admin: [
-    { label: "관리자 대시보드", href: "/admin/dashboard", icon: LayoutDashboard },
+    {
+      label: "관리자 대시보드",
+      href: "/admin/dashboard",
+      icon: LayoutDashboard,
+    },
     { label: "클러스터 관리", href: "/admin/clusters", icon: Server },
     { label: "정책 관리", href: "/admin/policies", icon: ShieldCheck },
     { label: "사용자 관리", href: "/admin/users", icon: Users },
