@@ -7,7 +7,7 @@ import { HealthService } from "./health.service";
  * 플랫폼 시스템 헬스 체크 및 K8s Liveness/Readiness Probe 응답 컨트롤러
  */
 @ApiTags("health")
-@Controller(["api/health", "health"])
+@Controller("health")
 export class HealthController {
   constructor(private readonly healthService: HealthService) {}
 

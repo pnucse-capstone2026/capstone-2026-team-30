@@ -35,6 +35,9 @@ fi
 echo ">>> Phase 1: Provisioning Primary Hub Cluster '${HUB_CLUSTER_NAME}' in ${HUB_REGION}..."
 bash "${SCRIPT_DIR}/setup-eks-cluster.sh" "${HUB_CLUSTER_NAME}" "${HUB_REGION}" "hub"
 
+echo ">>> Phase 1.5: Setting up AWS Load Balancer Controller on Hub Cluster '${HUB_CLUSTER_NAME}'..."
+bash "${SCRIPT_DIR}/setup-alb-controller.sh" "${HUB_CLUSTER_NAME}" "${HUB_REGION}" || echo "[WARNING] ALB Controller setup skipped or failed."
+
 # Hub 클러스터의 API Server 엔드포인트와 CA 증명서를 추출하여 멀티 클러스터 연동 정보 수집
 HUB_SERVER=$(aws eks describe-cluster --name "${HUB_CLUSTER_NAME}" --region "${HUB_REGION}" --query "cluster.endpoint" --output text)
 HUB_CA=$(aws eks describe-cluster --name "${HUB_CLUSTER_NAME}" --region "${HUB_REGION}" --query "cluster.certificateAuthority.data" --output text)

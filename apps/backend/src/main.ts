@@ -19,6 +19,9 @@ async function bootstrap() {
     }),
   );
 
+  // 전역 API 프리픽스 지정 (/api/*)
+  app.setGlobalPrefix("api");
+
   // Swagger API 문서
   const config = new DocumentBuilder()
     .setTitle("Kyverno Governance API")
@@ -27,11 +30,11 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup("api", app, document);
+  SwaggerModule.setup("api/docs", app, document);
 
-  // CORS (개발 환경)
+  // CORS (ALB 및 다양한 Origin 허용)
   app.enableCors({
-    origin: process.env.FRONTEND_ORIGIN ?? "http://localhost:3000",
+    origin: true,
     credentials: true,
   });
 
