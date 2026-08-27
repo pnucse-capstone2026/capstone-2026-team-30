@@ -23,6 +23,13 @@ spec:
               kinds:
                 - Job
                 - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+                - kyverno-platform
       mutate:
         patchStrategicMerge:
           spec:

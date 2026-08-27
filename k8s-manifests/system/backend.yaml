@@ -27,8 +27,8 @@ spec:
       containers:
         - name: backend
           image: kyverno-backend:latest
-          # EKS 및 ECR 최신 이미지 반영을 보장하도록 Always 설정
-          imagePullPolicy: Always
+          # Kind 로컬 이미지 활용을 위해 IfNotPresent 설정
+          imagePullPolicy: IfNotPresent
           env:
             - name: NODE_ENV
               value: "production"

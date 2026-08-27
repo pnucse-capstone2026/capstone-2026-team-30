@@ -26,8 +26,8 @@ spec:
       containers:
         - name: frontend
           image: kyverno-frontend:latest
-          # EKS 및 ECR 최신 이미지 반영을 보장하도록 Always 설정
-          imagePullPolicy: Always
+          # Kind 로컬 이미지 활용을 위해 IfNotPresent 설정
+          imagePullPolicy: IfNotPresent
           env:
             - name: NODE_ENV
               value: "production"
@@ -35,8 +35,12 @@ spec:
               value: "3000"
             - name: HOSTNAME
               value: "0.0.0.0"
-            - name: NEXT_PUBLIC_API_URL
+            - name: INTERNAL_BACKEND_URL
               value: "http://kyverno-backend.kyverno-platform.svc.cluster.local:3001"
+            - name: NEXT_PUBLIC_API_URL
+              value: ""
+            - name: NEXT_PUBLIC_API_BASE_URL
+              value: ""
           ports:
             - containerPort: 3000
           resources:
