@@ -1,4 +1,4 @@
-import { Test } from "@nestjs/testing";
+import { Test, TestingModule } from "@nestjs/testing";
 import { Prisma } from "@prisma/client";
 import { PrismaModule } from "./prisma.module";
 import { PRISMA_ERROR_CODE, PrismaErrorCode } from "./prisma-error";
@@ -14,16 +14,21 @@ function createPrismaError(code: PrismaErrorCode) {
 describe("PrismaService", () => {
   let service: PrismaService;
 
+  let moduleRef: TestingModule;
+
   beforeEach(async () => {
-    const moduleRef = await Test.createTestingModule({
+    moduleRef = await Test.createTestingModule({
       imports: [PrismaModule],
     }).compile();
 
     service = moduleRef.get(PrismaService);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     jest.restoreAllMocks();
+    if (moduleRef) {
+      await moduleRef.close();
+    }
   });
 
   it("is provided by PrismaModule", () => {

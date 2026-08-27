@@ -101,7 +101,7 @@ export default function AdminExceptionsPage() {
     void loadRequests();
   }, [loadRequests]);
 
-  const requests = cachedRequests ?? [];
+  const requests = useMemo(() => cachedRequests ?? [], [cachedRequests]);
   const isLoading = cachedRequests === null && exceptionsLoading;
 
   const pendingRequests = requests.filter(

@@ -92,7 +92,7 @@ export default function MyExceptionRequestsPage() {
     void loadRequests();
   }, [loadRequests]);
 
-  const requests = cachedRequests ?? [];
+  const requests = useMemo(() => cachedRequests ?? [], [cachedRequests]);
   const isLoading = cachedRequests === null && exceptionsLoading;
 
   const policies = useMemo(

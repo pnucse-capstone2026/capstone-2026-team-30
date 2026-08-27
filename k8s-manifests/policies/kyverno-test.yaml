@@ -1,4 +1,4 @@
-# Production Kyverno Policies 검증용 CLI 자동화 스위트
+# Kyverno CLI 1.12+ 최신 스키마를 사용하여 v1.13 호환성 확보
 apiVersion: cli.kyverno.io/v1alpha1
 kind: Test
 metadata:
