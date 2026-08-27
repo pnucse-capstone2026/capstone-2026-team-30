@@ -195,11 +195,13 @@ export class ExceptionRequestsService {
       dto.decisionNote?.trim(),
     );
 
-    // 승인 완료 후 GitOps 매니페스트 게시 (오류 발생 시 런타임 적용 유지를 위해 안전하게 처리)
-    try {
-      await this.gitOpsPublisher.publishManifest(approvedRequest);
-    } catch {
-      // GitOps 게시 실패가 승인 프로세스를 중단시키지 않도록 예외 처리
+    // 경쟁 취소나 적용 실패로 아직 APPROVED 가 아니면 게시하지 않는다.
+    if (approvedRequest.status === ExceptionStatus.APPROVED) {
+      try {
+        await this.gitOpsPublisher.publishManifest(approvedRequest);
+      } catch {
+        // GitOps 게시 실패가 승인 프로세스를 중단시키지 않도록 예외 처리
+      }
     }
 
     return approvedRequest;

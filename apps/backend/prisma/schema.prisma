@@ -120,6 +120,8 @@ model PolicyExceptionRequest {
   applyAttempts            Int             @default(0)
   lastError                String?         @db.VarChar(1000)
   nextAttemptAt            DateTime?
+  reconcileClaimId         String?         @db.Uuid
+  reconcileLeaseUntil      DateTime?
   createdAt                DateTime        @default(now())
   updatedAt                DateTime        @updatedAt
   requestUserId            String

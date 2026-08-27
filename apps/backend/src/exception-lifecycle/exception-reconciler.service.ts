@@ -1,16 +1,25 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
 import { ExceptionStatus, Prisma } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 import { PrismaService } from "../prisma/prisma.service";
+import { ExceptionReconcileSettings } from "./exception-reconcile.settings";
 import {
+  ClaimedReconcileCandidate,
   ExceptionLifecycleService,
   ReconcileCandidate,
 } from "./exception-lifecycle.service";
 
 const RECONCILE_INTERVAL_MS = 10_000;
 const RECONCILE_BATCH_LIMIT = 50;
-const RECONCILE_CLAIM_TTL_SECONDS = 60;
-const APPROVED_RECHECK_INTERVAL_SECONDS = 5 * 60;
+
+type CandidateSelection = Omit<
+  ReconcileCandidate,
+  "reconcileClaimId" | "reconcileLeaseUntil"
+> & {
+  priority: number;
+  dueAt: Date;
+};
 
 @Injectable()
 export class ExceptionReconcilerService {
@@ -20,6 +29,7 @@ export class ExceptionReconcilerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly lifecycle: ExceptionLifecycleService,
+    private readonly settings: ExceptionReconcileSettings,
   ) {}
 
   @Interval(RECONCILE_INTERVAL_MS)
@@ -28,7 +38,7 @@ export class ExceptionReconcilerService {
     this.running = true;
     try {
       const requests = await this.selectReconcileCandidates();
-      const requestsByCluster = new Map<string, ReconcileCandidate[]>();
+      const requestsByCluster = new Map<string, ClaimedReconcileCandidate[]>();
       for (const request of requests) {
         const group = requestsByCluster.get(request.targetClusterId);
         if (group) group.push(request);
@@ -46,11 +56,14 @@ export class ExceptionReconcilerService {
   }
 
   private async reconcileCluster(
-    requests: ReconcileCandidate[],
+    requests: ClaimedReconcileCandidate[],
   ): Promise<void> {
     for (const request of requests) {
+      const renewed = await this.renewClaim(request);
+      if (!renewed) continue;
+
       try {
-        await this.lifecycle.reconcile(request);
+        await this.lifecycle.reconcile(renewed);
       } catch (error) {
         this.logger.error(
           `Exception reconciliation failed for ${request.id} in cluster ${request.targetClusterId}`,
@@ -61,38 +74,52 @@ export class ExceptionReconcilerService {
   }
 
   /**
-   * 후보를 잠근 채 `nextAttemptAt` 을 짧은 lease 로 갱신한다. 조회 transaction 이
-   * 끝난 뒤에도 다른 인스턴스는 lease 가 만료되기 전까지 같은 작업을 선택하지 않는다.
-   * 정상 APPROVED 는 `updatedAt` 기준으로 주기 점검하고, 실패 건은 기존 backoff 를
-   * 그대로 따른다.
+   * 후보 행을 잠근 transaction 안에서 실행 전용 claim을 기록한다. `nextAttemptAt`은
+   * retry 일정으로만 사용하고, lease 획득·갱신은 도메인 `updatedAt`을 건드리지 않는다.
    */
-  private selectReconcileCandidates(): Promise<ReconcileCandidate[]> {
+  private selectReconcileCandidates(): Promise<ClaimedReconcileCandidate[]> {
     return this.prisma.$transaction(async (tx) => {
-      return tx.$queryRaw<ReconcileCandidate[]>(Prisma.sql`
-        WITH candidates AS (
-          SELECT
-            "id",
-            CASE
-              WHEN "status" IN (
-                ${ExceptionStatus.APPLYING}::"ExceptionStatus",
-                ${ExceptionStatus.APPROVED}::"ExceptionStatus"
-              ) AND "expiresAt" <= NOW() THEN 0
-              WHEN "status" IN (
-                ${ExceptionStatus.EXPIRING}::"ExceptionStatus",
-                ${ExceptionStatus.CANCELLING}::"ExceptionStatus"
-              ) THEN 1
-              WHEN "status" = ${ExceptionStatus.APPLYING}::"ExceptionStatus" THEN 2
-              ELSE 3
-            END AS priority,
-            CASE
-              WHEN "status" IN (
-                ${ExceptionStatus.APPLYING}::"ExceptionStatus",
-                ${ExceptionStatus.APPROVED}::"ExceptionStatus"
-              ) AND "expiresAt" <= NOW() THEN "expiresAt"
-              ELSE COALESCE("nextAttemptAt", "updatedAt")
-            END AS "dueAt"
-          FROM "PolicyExceptionRequest"
-          WHERE
+      const candidates = await tx.$queryRaw<CandidateSelection[]>(Prisma.sql`
+        SELECT
+          "id",
+          "status",
+          "expiresAt",
+          "targetClusterId",
+          "k8sExceptionName",
+          "policyName",
+          "appliedRuleNames",
+          "resourceKind",
+          "resourceName",
+          "resourceNamespace",
+          "applyAttempts",
+          "lastError",
+          "nextAttemptAt",
+          CASE
+            WHEN "status" IN (
+              ${ExceptionStatus.APPLYING}::"ExceptionStatus",
+              ${ExceptionStatus.APPROVED}::"ExceptionStatus"
+            ) AND "expiresAt" <= NOW() THEN 0
+            WHEN "status" IN (
+              ${ExceptionStatus.EXPIRING}::"ExceptionStatus",
+              ${ExceptionStatus.CANCELLING}::"ExceptionStatus"
+            ) THEN 1
+            WHEN "status" = ${ExceptionStatus.APPLYING}::"ExceptionStatus" THEN 2
+            ELSE 3
+          END AS "priority",
+          CASE
+            WHEN "status" IN (
+              ${ExceptionStatus.APPLYING}::"ExceptionStatus",
+              ${ExceptionStatus.APPROVED}::"ExceptionStatus"
+            ) AND "expiresAt" <= NOW() THEN "expiresAt"
+            ELSE COALESCE("nextAttemptAt", "updatedAt")
+          END AS "dueAt"
+        FROM "PolicyExceptionRequest"
+        WHERE
+          (
+            "reconcileLeaseUntil" IS NULL
+            OR "reconcileLeaseUntil" <= NOW()
+          )
+          AND (
             (
               "status" IN (
                 ${ExceptionStatus.APPLYING}::"ExceptionStatus",
@@ -107,7 +134,7 @@ export class ExceptionReconcilerService {
                 OR (
                   "nextAttemptAt" IS NULL
                   AND "updatedAt" <= NOW() - (
-                    ${APPROVED_RECHECK_INTERVAL_SECONDS} * INTERVAL '1 second'
+                    ${this.settings.approvedRecheckIntervalSeconds} * INTERVAL '1 second'
                   )
                 )
               )
@@ -123,36 +150,77 @@ export class ExceptionReconcilerService {
                 OR "nextAttemptAt" <= NOW()
               )
             )
-          ORDER BY priority, "dueAt", "updatedAt"
-          LIMIT ${RECONCILE_BATCH_LIMIT}
-          FOR UPDATE SKIP LOCKED
-        ), claimed AS (
-          UPDATE "PolicyExceptionRequest" AS request
-          SET "nextAttemptAt" = NOW() + (
-            ${RECONCILE_CLAIM_TTL_SECONDS} * INTERVAL '1 second'
           )
-          FROM candidates
-          WHERE request."id" = candidates."id"
-          RETURNING request.*
-        )
-        SELECT
-          claimed."id",
-          claimed."status",
-          claimed."expiresAt",
-          claimed."targetClusterId",
-          claimed."k8sExceptionName",
-          claimed."policyName",
-          claimed."appliedRuleNames",
-          claimed."resourceKind",
-          claimed."resourceName",
-          claimed."resourceNamespace",
-          claimed."applyAttempts",
-          claimed."lastError",
-          claimed."nextAttemptAt"
-        FROM claimed
-        JOIN candidates ON candidates."id" = claimed."id"
-        ORDER BY candidates.priority, candidates."dueAt"
+        ORDER BY "priority", "dueAt", "updatedAt"
+        LIMIT ${RECONCILE_BATCH_LIMIT}
+        FOR UPDATE SKIP LOCKED
       `);
+      if (candidates.length === 0) return [];
+
+      const claims = candidates.map((candidate) => ({
+        id: candidate.id,
+        claimId: randomUUID(),
+      }));
+      const values = Prisma.join(
+        claims.map(
+          (claim) => Prisma.sql`(${claim.id}, ${claim.claimId}::uuid)`,
+        ),
+      );
+      const claimed = await tx.$queryRaw<ClaimedReconcileCandidate[]>(
+        Prisma.sql`
+          UPDATE "PolicyExceptionRequest" AS request
+          SET
+            "reconcileClaimId" = claims."claimId",
+            "reconcileLeaseUntil" = NOW() + (
+              ${this.settings.claimTtlSeconds} * INTERVAL '1 second'
+            )
+          FROM (VALUES ${values}) AS claims("id", "claimId")
+          WHERE request."id" = claims."id"
+          RETURNING
+            request."id",
+            request."status",
+            request."expiresAt",
+            request."targetClusterId",
+            request."k8sExceptionName",
+            request."policyName",
+            request."appliedRuleNames",
+            request."resourceKind",
+            request."resourceName",
+            request."resourceNamespace",
+            request."applyAttempts",
+            request."lastError",
+            request."nextAttemptAt",
+            request."reconcileClaimId",
+            request."reconcileLeaseUntil"
+        `,
+      );
+      const claimedById = new Map(
+        claimed.map((request) => [request.id, request]),
+      );
+      return candidates.flatMap((candidate) => {
+        const request = claimedById.get(candidate.id);
+        return request ? [request] : [];
+      });
     });
+  }
+
+  private async renewClaim(
+    request: ClaimedReconcileCandidate,
+  ): Promise<ClaimedReconcileCandidate | null> {
+    const renewed = await this.prisma.$queryRaw<
+      Array<{ reconcileLeaseUntil: Date }>
+    >(Prisma.sql`
+      UPDATE "PolicyExceptionRequest"
+      SET "reconcileLeaseUntil" = NOW() + (
+        ${this.settings.claimTtlSeconds} * INTERVAL '1 second'
+      )
+      WHERE "id" = ${request.id}
+        AND "status" = ${request.status}::"ExceptionStatus"
+        AND "reconcileClaimId" = ${request.reconcileClaimId}::uuid
+        AND "reconcileLeaseUntil" > NOW()
+      RETURNING "reconcileLeaseUntil"
+    `);
+    if (!renewed[0]) return null;
+    return { ...request, reconcileLeaseUntil: renewed[0].reconcileLeaseUntil };
   }
 }

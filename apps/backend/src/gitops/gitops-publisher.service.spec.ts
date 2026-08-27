@@ -32,6 +32,8 @@ function createMockRequest(
     applyAttempts: 0,
     lastError: null,
     nextAttemptAt: null,
+    reconcileClaimId: null,
+    reconcileLeaseUntil: null,
     createdAt: now,
     updatedAt: now,
     requestUserId: "user-1",

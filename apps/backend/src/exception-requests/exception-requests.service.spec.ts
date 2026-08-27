@@ -62,6 +62,8 @@ function record(
     applyAttempts: 0,
     lastError: null,
     nextAttemptAt: null,
+    reconcileClaimId: null,
+    reconcileLeaseUntil: null,
     createdAt: now,
     updatedAt: now,
     requestUserId: requester.id,
@@ -429,6 +431,9 @@ describe("ExceptionRequestsService access control", () => {
 
   it("triggers GitOps publishManifest when an exception request is approved", async () => {
     const context = harness();
+    context.lifecycle.approve.mockResolvedValue(
+      record({ status: ExceptionStatus.APPROVED }),
+    );
     await context.service.approve("request-1", {}, approver);
 
     expect(context.lifecycle.approve).toHaveBeenCalledWith(
@@ -438,5 +443,16 @@ describe("ExceptionRequestsService access control", () => {
       undefined,
     );
     expect(context.gitOpsPublisher.publishManifest).toHaveBeenCalled();
+  });
+
+  it("does not publish GitOps while approval is still being reconciled", async () => {
+    const context = harness();
+    context.lifecycle.approve.mockResolvedValue(
+      record({ status: ExceptionStatus.CANCELLING }),
+    );
+
+    await context.service.approve("request-1", {}, approver);
+
+    expect(context.gitOpsPublisher.publishManifest).not.toHaveBeenCalled();
   });
 });

@@ -5,9 +5,11 @@ import {
   PolicyExceptionRequest,
   Prisma,
 } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 import { BusinessException } from "../common/errors/business.exception";
 import { KyvernoAdapter } from "../kubernetes/kyverno.adapter";
 import { PrismaService } from "../prisma/prisma.service";
+import { ExceptionReconcileSettings } from "./exception-reconcile.settings";
 import { EXCEPTION_LIFECYCLE_ERROR } from "./exception-lifecycle.errors";
 
 const ENTITY_TYPE = "PolicyExceptionRequest";
@@ -28,6 +30,11 @@ type FailureRecord = {
   transitionedToFailed: boolean;
 };
 
+export type ExecutionClaim = {
+  reconcileClaimId: string;
+  reconcileLeaseUntil: Date;
+};
+
 export type ReconcileCandidate = Pick<
   PolicyExceptionRequest,
   | "id"
@@ -43,7 +50,11 @@ export type ReconcileCandidate = Pick<
   | "applyAttempts"
   | "lastError"
   | "nextAttemptAt"
+  | "reconcileClaimId"
+  | "reconcileLeaseUntil"
 >;
+
+export type ClaimedReconcileCandidate = ReconcileCandidate & ExecutionClaim;
 
 @Injectable()
 export class ExceptionLifecycleService {
@@ -52,6 +63,7 @@ export class ExceptionLifecycleService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly kyverno: KyvernoAdapter,
+    private readonly settings: ExceptionReconcileSettings,
   ) {}
 
   async approve(
@@ -62,6 +74,7 @@ export class ExceptionLifecycleService {
   ): Promise<PolicyExceptionRequest> {
     const decidedAt = new Date();
     const request = await this.prisma.runSerializableTransaction(async (tx) => {
+      const claim = await this.createClaim(tx);
       const changed = await tx.policyExceptionRequest.updateMany({
         where: {
           id: requestId,
@@ -74,6 +87,7 @@ export class ExceptionLifecycleService {
           approverUserId,
           decisionNote,
           decidedAt,
+          ...claim,
         },
       });
       if (changed.count !== 1) return null;
@@ -93,7 +107,7 @@ export class ExceptionLifecycleService {
     });
 
     if (!request) await this.throwTransitionError(requestId, "approved");
-    return this.tryApply(request as PolicyExceptionRequest);
+    return this.tryApply(this.requireClaim(request as PolicyExceptionRequest));
   }
 
   async reject(
@@ -140,6 +154,7 @@ export class ExceptionLifecycleService {
     actorUserId: string,
   ): Promise<PolicyExceptionRequest> {
     const request = await this.prisma.runSerializableTransaction(async (tx) => {
+      const claim = await this.createClaim(tx);
       const changed = await tx.policyExceptionRequest.updateMany({
         where: { id: requestId, status: ExceptionStatus.FAILED },
         data: {
@@ -147,6 +162,7 @@ export class ExceptionLifecycleService {
           applyAttempts: 0,
           lastError: null,
           nextAttemptAt: null,
+          ...claim,
         },
       });
       if (changed.count !== 1) return null;
@@ -172,14 +188,14 @@ export class ExceptionLifecycleService {
       );
     }
 
-    return this.tryApply(request);
+    return this.tryApply(this.requireClaim(request));
   }
 
   async cancel(
     requestId: string,
     actorUserId: string,
   ): Promise<PolicyExceptionRequest> {
-    const request = await this.prisma.runSerializableTransaction(async (tx) => {
+    const outcome = await this.prisma.runSerializableTransaction(async (tx) => {
       const current = await tx.policyExceptionRequest.findUnique({
         where: { id: requestId },
       });
@@ -193,11 +209,29 @@ export class ExceptionLifecycleService {
               current.status === ExceptionStatus.FAILED
             ? ExceptionStatus.CANCELLING
             : null;
-      if (!afterStatus) return current;
+      if (!afterStatus) return { request: current, shouldDelete: false };
+
+      const databaseNow = await this.databaseNow(tx);
+      const hasActiveClaim =
+        current.reconcileClaimId !== null &&
+        current.reconcileLeaseUntil !== null &&
+        current.reconcileLeaseUntil > databaseNow;
+      const claim =
+        afterStatus === ExceptionStatus.CANCELLING && !hasActiveClaim
+          ? await this.createClaim(tx, databaseNow)
+          : null;
 
       const changed = await tx.policyExceptionRequest.updateMany({
-        where: { id: requestId, status: current.status },
-        data: { status: afterStatus, nextAttemptAt: null },
+        where: {
+          id: requestId,
+          status: current.status,
+          reconcileClaimId: current.reconcileClaimId,
+        },
+        data: {
+          status: afterStatus,
+          nextAttemptAt: null,
+          ...(claim ?? {}),
+        },
       });
       if (changed.count !== 1) return null;
 
@@ -209,10 +243,19 @@ export class ExceptionLifecycleService {
         beforeStatus: current.status,
         afterStatus,
       });
-      return tx.policyExceptionRequest.findUnique({ where: { id: requestId } });
+      return {
+        request: await tx.policyExceptionRequest.findUnique({
+          where: { id: requestId },
+        }),
+        shouldDelete:
+          afterStatus === ExceptionStatus.CANCELLING && claim !== null,
+      };
     });
 
-    if (!request) await this.throwTransitionError(requestId, "cancelled");
+    if (!outcome?.request) {
+      await this.throwTransitionError(requestId, "cancelled");
+    }
+    const request = outcome?.request as PolicyExceptionRequest;
     if (request?.status !== ExceptionStatus.CANCELLING) {
       if (request?.status !== ExceptionStatus.CANCELLED) {
         throw new BusinessException(
@@ -229,10 +272,14 @@ export class ExceptionLifecycleService {
       }
       return request;
     }
-    return this.tryDelete(request, ExceptionStatus.CANCELLED);
+    if (!outcome?.shouldDelete) return request;
+    return this.tryDelete(
+      this.requireClaim(request),
+      ExceptionStatus.CANCELLED,
+    );
   }
 
-  async reconcile(request: ReconcileCandidate): Promise<void> {
+  async reconcile(request: ClaimedReconcileCandidate): Promise<void> {
     const now = new Date();
     if (
       request.expiresAt <= now &&
@@ -240,7 +287,12 @@ export class ExceptionLifecycleService {
         request.status === ExceptionStatus.APPROVED)
     ) {
       const expiring = await this.markExpiring(request);
-      if (expiring) await this.tryDelete(expiring, ExceptionStatus.EXPIRED);
+      if (expiring) {
+        await this.tryDelete(
+          this.requireClaim(expiring),
+          ExceptionStatus.EXPIRED,
+        );
+      }
       return;
     }
 
@@ -261,18 +313,21 @@ export class ExceptionLifecycleService {
   }
 
   private async tryApply(
-    request: ReconcileCandidate,
+    request: ClaimedReconcileCandidate,
   ): Promise<PolicyExceptionRequest> {
     if (request.expiresAt <= new Date()) {
       const expiring = await this.markExpiring(request);
       if (!expiring) return this.getRequired(request.id);
-      return this.tryDelete(expiring, ExceptionStatus.EXPIRED);
+      return this.tryDelete(
+        this.requireClaim(expiring),
+        ExceptionStatus.EXPIRED,
+      );
     }
 
     try {
       await this.ensure(request);
       return await this.completeTransition(
-        request.id,
+        request,
         ExceptionStatus.APPLYING,
         ExceptionStatus.APPROVED,
         "EXCEPTION_ACTIVATED",
@@ -293,7 +348,9 @@ export class ExceptionLifecycleService {
     }
   }
 
-  private async tryEnsureApproved(request: ReconcileCandidate): Promise<void> {
+  private async tryEnsureApproved(
+    request: ClaimedReconcileCandidate,
+  ): Promise<void> {
     try {
       await this.ensure(request);
       await this.clearFailure(request);
@@ -308,7 +365,7 @@ export class ExceptionLifecycleService {
   }
 
   private async tryDelete(
-    request: ReconcileCandidate,
+    request: ClaimedReconcileCandidate,
     target: ExceptionStatus,
   ): Promise<PolicyExceptionRequest> {
     const expected =
@@ -321,7 +378,7 @@ export class ExceptionLifecycleService {
         request.k8sExceptionName,
       );
       return await this.completeTransition(
-        request.id,
+        request,
         expected,
         target,
         target === ExceptionStatus.CANCELLED
@@ -340,7 +397,7 @@ export class ExceptionLifecycleService {
   }
 
   private async recordFailure(
-    request: ReconcileCandidate,
+    request: ClaimedReconcileCandidate,
     error: unknown,
   ): Promise<FailureRecord> {
     const failureMessage = this.errorMessage(error);
@@ -352,7 +409,11 @@ export class ExceptionLifecycleService {
       const current = await tx.policyExceptionRequest.findUnique({
         where: { id: request.id },
       });
-      if (!current || current.status !== request.status) {
+      if (
+        !current ||
+        current.status !== request.status ||
+        current.reconcileClaimId !== request.reconcileClaimId
+      ) {
         return { request: current, transitionedToFailed: false };
       }
 
@@ -370,6 +431,7 @@ export class ExceptionLifecycleService {
           id: current.id,
           status: current.status,
           applyAttempts: current.applyAttempts,
+          reconcileClaimId: request.reconcileClaimId,
         },
         data: {
           status: afterStatus,
@@ -378,6 +440,8 @@ export class ExceptionLifecycleService {
           nextAttemptAt: exhausted
             ? null
             : new Date(failedAt.getTime() + backoffMs),
+          reconcileClaimId: null,
+          reconcileLeaseUntil: null,
         },
       });
       if (changed.count !== 1) {
@@ -407,91 +471,120 @@ export class ExceptionLifecycleService {
       };
     });
 
+    if (!updated.request || updated.request.status !== request.status) {
+      await this.releaseClaim(request);
+    }
+
     return {
       request: updated.request ?? (await this.getRequired(request.id)),
       transitionedToFailed: updated.transitionedToFailed,
     };
   }
 
-  private async clearFailure(request: ReconcileCandidate): Promise<void> {
-    await this.prisma.policyExceptionRequest.updateMany({
+  private async clearFailure(
+    request: ClaimedReconcileCandidate,
+  ): Promise<void> {
+    const changed = await this.prisma.policyExceptionRequest.updateMany({
       where: {
         id: request.id,
         status: request.status,
         applyAttempts: request.applyAttempts,
+        reconcileClaimId: request.reconcileClaimId,
       },
       data: {
         applyAttempts: 0,
         lastError: null,
         nextAttemptAt: null,
+        reconcileClaimId: null,
+        reconcileLeaseUntil: null,
       },
     });
+    if (changed.count !== 1) await this.releaseClaim(request);
   }
 
   private async markExpiring(
-    request: ReconcileCandidate,
+    request: ClaimedReconcileCandidate,
   ): Promise<PolicyExceptionRequest | null> {
-    return this.prisma.runSerializableTransaction(async (tx) => {
-      const changed = await tx.policyExceptionRequest.updateMany({
-        where: {
-          id: request.id,
-          status: request.status,
-          expiresAt: { lte: new Date() },
-        },
-        data: {
-          status: ExceptionStatus.EXPIRING,
-          nextAttemptAt: null,
-        },
-      });
-      if (changed.count !== 1) return null;
+    return this.prisma
+      .runSerializableTransaction(async (tx) => {
+        const changed = await tx.policyExceptionRequest.updateMany({
+          where: {
+            id: request.id,
+            status: request.status,
+            expiresAt: { lte: new Date() },
+            reconcileClaimId: request.reconcileClaimId,
+          },
+          data: {
+            status: ExceptionStatus.EXPIRING,
+            nextAttemptAt: null,
+          },
+        });
+        if (changed.count !== 1) return null;
 
-      await this.audit(tx, {
-        action: "EXCEPTION_EXPIRATION_STARTED",
-        entityId: request.id,
-        actorType: AuditActorType.SYSTEM,
-        beforeStatus: request.status,
-        afterStatus: ExceptionStatus.EXPIRING,
+        await this.audit(tx, {
+          action: "EXCEPTION_EXPIRATION_STARTED",
+          entityId: request.id,
+          actorType: AuditActorType.SYSTEM,
+          beforeStatus: request.status,
+          afterStatus: ExceptionStatus.EXPIRING,
+        });
+        return tx.policyExceptionRequest.findUnique({
+          where: { id: request.id },
+        });
+      })
+      .then(async (result) => {
+        if (!result) await this.releaseClaim(request);
+        return result;
       });
-      return tx.policyExceptionRequest.findUnique({
-        where: { id: request.id },
-      });
-    });
   }
 
   private async completeTransition(
-    requestId: string,
+    candidate: ClaimedReconcileCandidate,
     beforeStatus: ExceptionStatus,
     afterStatus: ExceptionStatus,
     action: string,
     data: Prisma.PolicyExceptionRequestUpdateManyMutationInput = {},
   ): Promise<PolicyExceptionRequest> {
-    const request = await this.prisma.runSerializableTransaction(async (tx) => {
-      const changed = await tx.policyExceptionRequest.updateMany({
-        where: { id: requestId, status: beforeStatus },
-        data: {
-          ...data,
-          status: afterStatus,
-          applyAttempts: 0,
-          lastError: null,
-          nextAttemptAt: null,
-        },
-      });
-      if (changed.count !== 1) return null;
+    const completed = await this.prisma.runSerializableTransaction(
+      async (tx) => {
+        const changed = await tx.policyExceptionRequest.updateMany({
+          where: {
+            id: candidate.id,
+            status: beforeStatus,
+            reconcileClaimId: candidate.reconcileClaimId,
+          },
+          data: {
+            ...data,
+            status: afterStatus,
+            applyAttempts: 0,
+            lastError: null,
+            nextAttemptAt: null,
+            reconcileClaimId: null,
+            reconcileLeaseUntil: null,
+          },
+        });
+        if (changed.count !== 1) return null;
 
-      await this.audit(tx, {
-        action,
-        entityId: requestId,
-        actorType: AuditActorType.SYSTEM,
-        beforeStatus,
-        afterStatus,
-      });
-      return tx.policyExceptionRequest.findUnique({ where: { id: requestId } });
-    });
+        await this.audit(tx, {
+          action,
+          entityId: candidate.id,
+          actorType: AuditActorType.SYSTEM,
+          beforeStatus,
+          afterStatus,
+        });
+        return tx.policyExceptionRequest.findUnique({
+          where: { id: candidate.id },
+        });
+      },
+    );
 
-    return request ?? this.getRequired(requestId);
+    if (!completed) {
+      await this.releaseClaim(candidate);
+    }
+    return completed ?? this.getRequired(candidate.id);
   }
 
-  private ensure(request: ReconcileCandidate): Promise<void> {
+  private ensure(request: ClaimedReconcileCandidate): Promise<void> {
     return this.kyverno.ensurePolicyException(request.targetClusterId, {
       name: request.k8sExceptionName,
       requestId: request.id,
@@ -501,6 +594,46 @@ export class ExceptionLifecycleService {
       resourceName: request.resourceName,
       resourceNamespace: request.resourceNamespace,
     });
+  }
+
+  private requireClaim(request: ReconcileCandidate): ClaimedReconcileCandidate {
+    if (!request.reconcileClaimId || !request.reconcileLeaseUntil) {
+      throw new Error(
+        `Reconciliation claim is missing for request ${request.id}.`,
+      );
+    }
+    return request as ClaimedReconcileCandidate;
+  }
+
+  private async databaseNow(tx: TransactionClient): Promise<Date> {
+    const [clock] = await tx.$queryRaw<{ now: Date }[]>(Prisma.sql`
+      SELECT NOW() AS "now"
+    `);
+    return clock.now;
+  }
+
+  private async createClaim(
+    tx: TransactionClient,
+    now?: Date,
+  ): Promise<ExecutionClaim> {
+    const claimedAt = now ?? (await this.databaseNow(tx));
+    return {
+      reconcileClaimId: randomUUID(),
+      reconcileLeaseUntil: new Date(
+        claimedAt.getTime() + this.settings.claimTtlSeconds * 1_000,
+      ),
+    };
+  }
+
+  private async releaseClaim(request: ExecutionClaim & { id: string }) {
+    await this.prisma.$executeRaw(Prisma.sql`
+      UPDATE "PolicyExceptionRequest"
+      SET
+        "reconcileClaimId" = NULL,
+        "reconcileLeaseUntil" = NULL
+      WHERE "id" = ${request.id}
+        AND "reconcileClaimId" = ${request.reconcileClaimId}::uuid
+    `);
   }
 
   private async getRequired(id: string): Promise<PolicyExceptionRequest> {

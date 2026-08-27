@@ -5,8 +5,12 @@ import {
 } from "@prisma/client";
 import { KyvernoAdapter } from "../kubernetes/kyverno.adapter";
 import { PrismaService } from "../prisma/prisma.service";
+import { ExceptionReconcileSettings } from "./exception-reconcile.settings";
 import { EXCEPTION_LIFECYCLE_ERROR } from "./exception-lifecycle.errors";
-import { ExceptionLifecycleService } from "./exception-lifecycle.service";
+import {
+  ClaimedReconcileCandidate,
+  ExceptionLifecycleService,
+} from "./exception-lifecycle.service";
 
 function request(
   overrides: Partial<PolicyExceptionRequest> = {},
@@ -32,6 +36,8 @@ function request(
     applyAttempts: 0,
     lastError: null,
     nextAttemptAt: null,
+    reconcileClaimId: null,
+    reconcileLeaseUntil: null,
     createdAt: now,
     updatedAt: now,
     requestUserId: "requester-1",
@@ -54,6 +60,12 @@ function harness(initial = request()) {
       ) {
         return { count: 0 };
       }
+      if (
+        where.reconcileClaimId !== undefined &&
+        where.reconcileClaimId !== current.reconcileClaimId
+      ) {
+        return { count: 0 };
+      }
       if (where.expiresAt?.gt && current.expiresAt <= where.expiresAt.gt) {
         return { count: 0 };
       }
@@ -69,6 +81,7 @@ function harness(initial = request()) {
   };
   const tx = {
     policyExceptionRequest,
+    $queryRaw: jest.fn().mockImplementation(async () => [{ now: new Date() }]),
     auditLog: {
       create: jest.fn(async ({ data }) => {
         audits.push(data);
@@ -79,21 +92,50 @@ function harness(initial = request()) {
   const prisma = {
     policyExceptionRequest,
     runSerializableTransaction: jest.fn(async (operation) => operation(tx)),
+    $executeRaw: jest.fn(async () => {
+      current = {
+        ...current,
+        reconcileClaimId: null,
+        reconcileLeaseUntil: null,
+      };
+      return 1;
+    }),
   } as unknown as PrismaService;
   const kyverno = {
     ensurePolicyException: jest.fn().mockResolvedValue(undefined),
     deletePolicyException: jest.fn().mockResolvedValue(undefined),
   } as unknown as KyvernoAdapter;
 
+  const settings = {
+    claimTtlSeconds: 60,
+    approvedRecheckIntervalSeconds: 300,
+  } as ExceptionReconcileSettings;
+
   return {
-    service: new ExceptionLifecycleService(prisma, kyverno),
+    service: new ExceptionLifecycleService(prisma, kyverno, settings),
     kyverno: kyverno as unknown as {
       ensurePolicyException: jest.Mock;
       deletePolicyException: jest.Mock;
     },
     audits,
     current: () => current,
+    claim: (): ClaimedReconcileCandidate => {
+      current = {
+        ...current,
+        reconcileClaimId: "00000000-0000-4000-8000-000000000001",
+        reconcileLeaseUntil: new Date(Date.now() + 60_000),
+      };
+      return current as ClaimedReconcileCandidate;
+    },
   };
+}
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
 }
 
 describe("ExceptionLifecycleService", () => {
@@ -146,7 +188,7 @@ describe("ExceptionLifecycleService", () => {
     );
     expect(context.audits).toHaveLength(1);
 
-    await context.service.reconcile(context.current());
+    await context.service.reconcile(context.claim());
     expect(context.current().status).toBe(ExceptionStatus.APPROVED);
     expect(context.current()).toMatchObject({
       applyAttempts: 0,
@@ -170,7 +212,7 @@ describe("ExceptionLifecycleService", () => {
       new Error("permanent failure"),
     );
 
-    await context.service.reconcile(context.current());
+    await context.service.reconcile(context.claim());
 
     expect(context.current()).toMatchObject({
       status: ExceptionStatus.FAILED,
@@ -241,7 +283,7 @@ describe("ExceptionLifecycleService", () => {
       new Error("repair failed"),
     );
 
-    await context.service.reconcile(context.current());
+    await context.service.reconcile(context.claim());
 
     expect(context.current()).toMatchObject({
       status: ExceptionStatus.APPROVED,
@@ -268,7 +310,7 @@ describe("ExceptionLifecycleService", () => {
       new Error("x".repeat(1_200)),
     );
 
-    await context.service.reconcile(context.current());
+    await context.service.reconcile(context.claim());
 
     expect(context.current().lastError).toHaveLength(1_000);
   });
@@ -284,7 +326,7 @@ describe("ExceptionLifecycleService", () => {
       }),
     );
 
-    await context.service.reconcile(context.current());
+    await context.service.reconcile(context.claim());
 
     expect(context.current()).toMatchObject({
       status: ExceptionStatus.APPROVED,
@@ -305,7 +347,7 @@ describe("ExceptionLifecycleService", () => {
       }),
     );
 
-    await context.service.reconcile(context.current());
+    await context.service.reconcile(context.claim());
 
     expect(context.current()).toMatchObject({
       status: ExceptionStatus.APPROVED,
@@ -339,7 +381,7 @@ describe("ExceptionLifecycleService", () => {
       lastError: "timeout",
     });
 
-    await context.service.reconcile(context.current());
+    await context.service.reconcile(context.claim());
     expect(context.current().status).toBe(ExceptionStatus.CANCELLED);
     expect(context.audits.at(-1)).toEqual(
       expect.objectContaining({
@@ -347,6 +389,41 @@ describe("ExceptionLifecycleService", () => {
         actorType: AuditActorType.SYSTEM,
       }),
     );
+  });
+
+  it("defers cancellation while another owner is applying and then cleans up", async () => {
+    const context = harness(
+      request({
+        status: ExceptionStatus.APPLYING,
+        appliedRuleNames: ["require-team"],
+      }),
+    );
+    const active = context.claim();
+    const started = deferred();
+    const release = deferred();
+    context.kyverno.ensurePolicyException.mockImplementationOnce(async () => {
+      started.resolve();
+      await release.promise;
+    });
+
+    const applying = context.service.reconcile(active);
+    await started.promise;
+    const cancelling = await context.service.cancel("request-1", "requester-1");
+
+    expect(cancelling.status).toBe(ExceptionStatus.CANCELLING);
+    expect(context.kyverno.deletePolicyException).not.toHaveBeenCalled();
+
+    release.resolve();
+    await applying;
+    expect(context.current()).toMatchObject({
+      status: ExceptionStatus.CANCELLING,
+      reconcileClaimId: null,
+      reconcileLeaseUntil: null,
+    });
+
+    await context.service.reconcile(context.claim());
+    expect(context.current().status).toBe(ExceptionStatus.CANCELLED);
+    expect(context.kyverno.deletePolicyException).toHaveBeenCalledTimes(1);
   });
 
   it("allows a FAILED request to be cancelled and cleaned up", async () => {
@@ -379,7 +456,7 @@ describe("ExceptionLifecycleService", () => {
       }),
     );
 
-    await context.service.reconcile(context.current());
+    await context.service.reconcile(context.claim());
 
     expect(context.current().status).toBe(ExceptionStatus.EXPIRED);
     expect(context.kyverno.ensurePolicyException).not.toHaveBeenCalled();
