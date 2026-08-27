@@ -8,3 +8,7 @@ dist
 .github
 .devcontainer
 .husky
+.pnpm-store
+**/.pnpm-store
+scripts/bin
+*.log
