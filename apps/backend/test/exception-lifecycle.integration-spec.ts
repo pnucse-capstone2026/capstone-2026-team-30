@@ -7,6 +7,14 @@ import { ExceptionReconcilerService } from "../src/exception-lifecycle/exception
 import { KyvernoAdapter } from "../src/kubernetes/kyverno.adapter";
 import { PrismaService } from "../src/prisma/prisma.service";
 
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 describe("policy exception lifecycle transactions", () => {
   let prisma: PrismaService;
   let lifecycle: ExceptionLifecycleService;
@@ -222,6 +230,103 @@ describe("policy exception lifecycle transactions", () => {
     );
   });
 
+  it("claims a non-expired request once across concurrent reconcilers", async () => {
+    const { request } = await createPendingRequest("reconcile-claim", {
+      status: ExceptionStatus.APPLYING,
+      appliedRuleNames: ["rule"],
+    });
+    const started = deferred();
+    const release = deferred();
+    kyverno.ensurePolicyException.mockImplementationOnce(async () => {
+      started.resolve();
+      await release.promise;
+    });
+    const otherReconciler = new ExceptionReconcilerService(prisma, lifecycle);
+
+    const firstBatch = reconciler.reconcileBatch();
+    await started.promise;
+    await otherReconciler.reconcileBatch();
+
+    expect(kyverno.ensurePolicyException).toHaveBeenCalledTimes(1);
+    release.resolve();
+    await firstBatch;
+    await expect(
+      prisma.policyExceptionRequest.findUnique({ where: { id: request.id } }),
+    ).resolves.toMatchObject({ status: ExceptionStatus.APPROVED });
+  });
+
+  it("rechecks a healthy APPROVED request every five minutes", async () => {
+    const staleUpdatedAt = new Date(Date.now() - 6 * 60_000);
+    const { request } = await createPendingRequest("approved-recheck", {
+      status: ExceptionStatus.APPROVED,
+      appliedRuleNames: ["rule"],
+      activatedAt: staleUpdatedAt,
+      updatedAt: staleUpdatedAt,
+    });
+
+    await reconciler.reconcileBatch();
+    expect(kyverno.ensurePolicyException).toHaveBeenCalledTimes(1);
+    const reconciled = await prisma.policyExceptionRequest.findUniqueOrThrow({
+      where: { id: request.id },
+    });
+    expect(reconciled.nextAttemptAt).toBeNull();
+    expect(reconciled.updatedAt.getTime()).toBeGreaterThan(
+      staleUpdatedAt.getTime(),
+    );
+
+    await reconciler.reconcileBatch();
+    expect(kyverno.ensurePolicyException).toHaveBeenCalledTimes(1);
+
+    await prisma.policyExceptionRequest.update({
+      where: { id: request.id },
+      data: { updatedAt: staleUpdatedAt },
+    });
+    await reconciler.reconcileBatch();
+    expect(kyverno.ensurePolicyException).toHaveBeenCalledTimes(2);
+  });
+
+  it("prioritizes APPLYING work over a full batch of APPROVED checks", async () => {
+    const staleUpdatedAt = new Date(Date.now() - 6 * 60_000);
+    const { request, requester } = await createPendingRequest(
+      "priority-applying",
+      {
+        status: ExceptionStatus.APPLYING,
+        appliedRuleNames: ["rule"],
+      },
+    );
+    await prisma.policyExceptionRequest.createMany({
+      data: Array.from({ length: 50 }, (_, index) => ({
+        id: `integration-priority-approved-${index}`,
+        status: ExceptionStatus.APPROVED,
+        reason: "integration test",
+        policyName: "policy",
+        ruleNames: ["rule"],
+        appliedRuleNames: ["rule"],
+        resourceKind: "Deployment",
+        resourceName: `api-${index}`,
+        resourceNamespace: "default",
+        targetClusterId: "local",
+        targetClusterDisplayName: "Local",
+        k8sExceptionName: `pac-exception-priority-approved-${index}`,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        createdAt: staleUpdatedAt,
+        updatedAt: staleUpdatedAt,
+        activatedAt: staleUpdatedAt,
+        requestUserId: requester.id,
+      })),
+    });
+
+    await reconciler.reconcileBatch();
+
+    await expect(
+      prisma.policyExceptionRequest.findUnique({ where: { id: request.id } }),
+    ).resolves.toMatchObject({ status: ExceptionStatus.APPROVED });
+    expect(kyverno.ensurePolicyException).toHaveBeenCalledTimes(50);
+    expect(kyverno.ensurePolicyException.mock.calls[0][1]).toEqual(
+      expect.objectContaining({ requestId: request.id }),
+    );
+  });
+
   it("skips a request whose retry time is still in the future", async () => {
     const { request } = await createPendingRequest("future-retry", {
       status: ExceptionStatus.APPLYING,
@@ -410,6 +515,7 @@ describe("policy exception lifecycle transactions", () => {
       expiresAt: Date;
       createdAt: Date;
       activatedAt: Date;
+      updatedAt: Date;
       applyAttempts: number;
       lastError: string;
       nextAttemptAt: Date;
@@ -446,6 +552,7 @@ describe("policy exception lifecycle transactions", () => {
         k8sExceptionName: `pac-exception-${suffix}`,
         expiresAt: overrides.expiresAt ?? new Date(Date.now() + 60 * 60 * 1000),
         createdAt: overrides.createdAt,
+        updatedAt: overrides.updatedAt,
         activatedAt: overrides.activatedAt,
         applyAttempts: overrides.applyAttempts,
         lastError: overrides.lastError,

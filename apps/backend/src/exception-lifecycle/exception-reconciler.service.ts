@@ -9,6 +9,8 @@ import {
 
 const RECONCILE_INTERVAL_MS = 10_000;
 const RECONCILE_BATCH_LIMIT = 50;
+const RECONCILE_CLAIM_TTL_SECONDS = 60;
+const APPROVED_RECHECK_INTERVAL_SECONDS = 5 * 60;
 
 @Injectable()
 export class ExceptionReconcilerService {
@@ -59,50 +61,97 @@ export class ExceptionReconcilerService {
   }
 
   /**
-   * `FOR UPDATE SKIP LOCKED` 는 이 조회 트랜잭션이 끝나면 함께 풀린다. 따라서
-   * 이 메서드는 행을 지속적으로 claim하지 않고 후보만 고른다. 실제 중복 전이는
-   * lifecycle의 상태 조건부 updateMany(CAS)가 막는다.
+   * 후보를 잠근 채 `nextAttemptAt` 을 짧은 lease 로 갱신한다. 조회 transaction 이
+   * 끝난 뒤에도 다른 인스턴스는 lease 가 만료되기 전까지 같은 작업을 선택하지 않는다.
+   * 정상 APPROVED 는 `updatedAt` 기준으로 주기 점검하고, 실패 건은 기존 backoff 를
+   * 그대로 따른다.
    */
   private selectReconcileCandidates(): Promise<ReconcileCandidate[]> {
     return this.prisma.$transaction(async (tx) => {
       return tx.$queryRaw<ReconcileCandidate[]>(Prisma.sql`
-        SELECT
-          "id",
-          "status",
-          "expiresAt",
-          "targetClusterId",
-          "k8sExceptionName",
-          "policyName",
-          "appliedRuleNames",
-          "resourceKind",
-          "resourceName",
-          "resourceNamespace",
-          "applyAttempts",
-          "lastError",
-          "nextAttemptAt"
-        FROM "PolicyExceptionRequest"
-        WHERE "status" IN (
-          ${ExceptionStatus.APPLYING}::"ExceptionStatus",
-          ${ExceptionStatus.APPROVED}::"ExceptionStatus",
-          ${ExceptionStatus.CANCELLING}::"ExceptionStatus",
-          ${ExceptionStatus.EXPIRING}::"ExceptionStatus"
-        )
-        AND (
-          (
-            "status" IN (
-              ${ExceptionStatus.APPLYING}::"ExceptionStatus",
-              ${ExceptionStatus.APPROVED}::"ExceptionStatus"
+        WITH candidates AS (
+          SELECT
+            "id",
+            CASE
+              WHEN "status" IN (
+                ${ExceptionStatus.APPLYING}::"ExceptionStatus",
+                ${ExceptionStatus.APPROVED}::"ExceptionStatus"
+              ) AND "expiresAt" <= NOW() THEN 0
+              WHEN "status" IN (
+                ${ExceptionStatus.EXPIRING}::"ExceptionStatus",
+                ${ExceptionStatus.CANCELLING}::"ExceptionStatus"
+              ) THEN 1
+              WHEN "status" = ${ExceptionStatus.APPLYING}::"ExceptionStatus" THEN 2
+              ELSE 3
+            END AS priority,
+            CASE
+              WHEN "status" IN (
+                ${ExceptionStatus.APPLYING}::"ExceptionStatus",
+                ${ExceptionStatus.APPROVED}::"ExceptionStatus"
+              ) AND "expiresAt" <= NOW() THEN "expiresAt"
+              ELSE COALESCE("nextAttemptAt", "updatedAt")
+            END AS "dueAt"
+          FROM "PolicyExceptionRequest"
+          WHERE
+            (
+              "status" IN (
+                ${ExceptionStatus.APPLYING}::"ExceptionStatus",
+                ${ExceptionStatus.APPROVED}::"ExceptionStatus"
+              )
+              AND "expiresAt" <= NOW()
             )
-            AND "expiresAt" <= NOW()
+            OR (
+              "status" = ${ExceptionStatus.APPROVED}::"ExceptionStatus"
+              AND (
+                "nextAttemptAt" <= NOW()
+                OR (
+                  "nextAttemptAt" IS NULL
+                  AND "updatedAt" <= NOW() - (
+                    ${APPROVED_RECHECK_INTERVAL_SECONDS} * INTERVAL '1 second'
+                  )
+                )
+              )
+            )
+            OR (
+              "status" IN (
+                ${ExceptionStatus.APPLYING}::"ExceptionStatus",
+                ${ExceptionStatus.CANCELLING}::"ExceptionStatus",
+                ${ExceptionStatus.EXPIRING}::"ExceptionStatus"
+              )
+              AND (
+                "nextAttemptAt" IS NULL
+                OR "nextAttemptAt" <= NOW()
+              )
+            )
+          ORDER BY priority, "dueAt", "updatedAt"
+          LIMIT ${RECONCILE_BATCH_LIMIT}
+          FOR UPDATE SKIP LOCKED
+        ), claimed AS (
+          UPDATE "PolicyExceptionRequest" AS request
+          SET "nextAttemptAt" = NOW() + (
+            ${RECONCILE_CLAIM_TTL_SECONDS} * INTERVAL '1 second'
           )
-          OR "nextAttemptAt" IS NULL
-          OR "nextAttemptAt" <= NOW()
+          FROM candidates
+          WHERE request."id" = candidates."id"
+          RETURNING request.*
         )
-        ORDER BY
-          CASE WHEN "expiresAt" <= NOW() THEN 0 ELSE 1 END,
-          "updatedAt" ASC
-        LIMIT ${RECONCILE_BATCH_LIMIT}
-        FOR UPDATE SKIP LOCKED
+        SELECT
+          claimed."id",
+          claimed."status",
+          claimed."expiresAt",
+          claimed."targetClusterId",
+          claimed."k8sExceptionName",
+          claimed."policyName",
+          claimed."appliedRuleNames",
+          claimed."resourceKind",
+          claimed."resourceName",
+          claimed."resourceNamespace",
+          claimed."applyAttempts",
+          claimed."lastError",
+          claimed."nextAttemptAt"
+        FROM claimed
+        JOIN candidates ON candidates."id" = claimed."id"
+        ORDER BY candidates.priority, candidates."dueAt"
       `);
     });
   }

@@ -414,14 +414,6 @@ export class ExceptionLifecycleService {
   }
 
   private async clearFailure(request: ReconcileCandidate): Promise<void> {
-    if (
-      request.applyAttempts === 0 &&
-      request.lastError === null &&
-      request.nextAttemptAt === null
-    ) {
-      return;
-    }
-
     await this.prisma.policyExceptionRequest.updateMany({
       where: {
         id: request.id,

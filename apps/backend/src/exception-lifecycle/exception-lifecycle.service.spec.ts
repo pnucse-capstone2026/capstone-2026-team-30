@@ -294,6 +294,30 @@ describe("ExceptionLifecycleService", () => {
     });
   });
 
+  it("releases a healthy APPROVED reconciliation claim and refreshes updatedAt", async () => {
+    const previousUpdatedAt = new Date(Date.now() - 10 * 60_000);
+    const context = harness(
+      request({
+        status: ExceptionStatus.APPROVED,
+        appliedRuleNames: ["require-team"],
+        nextAttemptAt: new Date(Date.now() + 60_000),
+        updatedAt: previousUpdatedAt,
+      }),
+    );
+
+    await context.service.reconcile(context.current());
+
+    expect(context.current()).toMatchObject({
+      status: ExceptionStatus.APPROVED,
+      applyAttempts: 0,
+      lastError: null,
+      nextAttemptAt: null,
+    });
+    expect(context.current().updatedAt.getTime()).toBeGreaterThan(
+      previousUpdatedAt.getTime(),
+    );
+  });
+
   it("keeps CANCELLING if deletion fails and completes on retry", async () => {
     const context = harness(
       request({
