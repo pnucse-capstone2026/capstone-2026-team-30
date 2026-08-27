@@ -35,6 +35,7 @@ export class ApiError extends Error {
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ??
+  process.env.NEXT_PUBLIC_API_URL ??
   (typeof window !== "undefined"
     ? `${window.location.origin}/api`
     : "http://localhost:3001");
