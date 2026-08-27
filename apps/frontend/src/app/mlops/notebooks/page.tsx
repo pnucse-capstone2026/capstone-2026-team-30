@@ -11,6 +11,8 @@ import { useNotebooks } from "@/hooks/use-notebooks";
 import { CreateNotebookDialog } from "./create-notebook-dialog";
 import { NotebookStatusBadge } from "./notebook-status-badge";
 import { NotebookActions } from "./notebook-actions";
+import { CopilotDrawer } from "@/components/mlops/copilot-drawer";
+import { MlopsDiagnosticModal } from "@/components/mlops/mlops-diagnostic-modal";
 import {
   BookOpen,
   Cpu,
@@ -19,6 +21,7 @@ import {
   PlayCircle,
   RefreshCw,
   Server,
+  Sparkles,
   StopCircle,
 } from "lucide-react";
 
@@ -29,6 +32,12 @@ export default function NotebooksPage() {
 
   const [selectedClusterId, setSelectedClusterId] = useState<string>("default");
   const [selectedNamespace, setSelectedNamespace] = useState<string>("default");
+
+  const [isDiagnosticOpen, setIsDiagnosticOpen] = useState(false);
+  const [diagnosticTarget, setDiagnosticTarget] = useState<{
+    name: string;
+    namespace: string;
+  } | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -240,11 +249,49 @@ export default function NotebooksPage() {
                   <span className="text-[11px] text-muted-foreground">
                     {nb.hardwareTier}
                   </span>
-                  <NotebookActions notebook={nb} />
+                  <div className="flex items-center gap-2">
+                    {nb.status === "Failed" && (
+                      <button
+                        onClick={() => {
+                          setDiagnosticTarget({
+                            name: nb.name,
+                            namespace: nb.namespace,
+                          });
+                          setIsDiagnosticOpen(true);
+                        }}
+                        className="flex items-center gap-1 text-[11px] font-semibold text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2 py-1 rounded"
+                      >
+                        <Sparkles className="h-3 w-3 text-amber-500" />
+                        <span>Ask AI to Debug</span>
+                      </button>
+                    )}
+                    <NotebookActions notebook={nb} />
+                  </div>
                 </div>
               </Card>
             ))}
           </div>
+        )}
+
+        {/* MLOps Copilot Drawer */}
+        <CopilotDrawer
+          activePageName="MLOps 노트북 센터"
+          onRefreshList={() => refetch()}
+        />
+
+        {/* MLOps Diagnostic Modal */}
+        {diagnosticTarget && (
+          <MlopsDiagnosticModal
+            isOpen={isDiagnosticOpen}
+            onClose={() => setIsDiagnosticOpen(false)}
+            resourceType="NOTEBOOK"
+            resourceName={diagnosticTarget.name}
+            namespace={diagnosticTarget.namespace}
+            podLogs="torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 16.00 GiB (GPU 0; 15.78 GiB total capacity)"
+            k8sEvents={[
+              "OOMKilled: Container notebook-main killed by OS OOM-killer",
+            ]}
+          />
         )}
       </DashboardPageShell>
     </ProtectedRoute>
