@@ -42,17 +42,19 @@ export class BedrockService {
    * Anthropic Claude Messages API 규격으로 Bedrock 모델을 호출합니다.
    *
    * @param systemPrompt 에이전트 페르소나 및 응답 지침
-   * @param userPrompt Kyverno 오류 메시지, 정책, 매니페스트 정보가 포함된 프롬프트
+   * @param userPrompt 오류 메시지, 정책, 매니페스트 또는 MLOps 질의 프롬프트
+   * @param options 선택적 모델 파라미터 (maxTokens, temperature)
    * @returns Bedrock 모델 생성 텍스트 응답
    */
   async invokeClaude(
     systemPrompt: string,
     userPrompt: string,
+    options?: { maxTokens?: number; temperature?: number },
   ): Promise<string> {
     const payload = {
       anthropic_version: "bedrock-2023-05-31",
-      max_tokens: 2048,
-      temperature: 0.2,
+      max_tokens: options?.maxTokens ?? 2048,
+      temperature: options?.temperature ?? 0.2,
       system: systemPrompt,
       messages: [
         {
