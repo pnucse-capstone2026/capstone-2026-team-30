@@ -181,11 +181,17 @@ export class KServeAdapter {
   ): Promise<InferenceServiceResponseDto> {
     const { customObjectsApi } = this.clusterProvider.get(clusterId);
 
+    // KServe 컨트롤러 버전 다변화에 대응하기 위한 Dual-Patch Body
     const patchBody = [
       {
         op: "add",
         path: "/metadata/annotations/serving.kserve.io~1canaryTrafficPercent",
         value: String(canaryTrafficPercent),
+      },
+      {
+        op: "add",
+        path: "/spec/canaryTrafficPercent",
+        value: canaryTrafficPercent,
       },
     ];
 
@@ -201,28 +207,44 @@ export class KServeAdapter {
 
       return this.mapToDto(response, clusterId, namespace);
     } catch (error) {
-      this.logger.warn(`Patch fallback: ${String(error)}`);
-      const existing = await this.getInferenceService(
-        clusterId,
-        namespace,
-        name,
+      this.logger.warn(
+        `Dual patch fallback, trying single annotation patch: ${String(error)}`,
       );
-      if (existing) {
-        return { ...existing, canaryTrafficPercent };
+      try {
+        const singlePatchResponse =
+          (await customObjectsApi.patchNamespacedCustomObject({
+            group: KSERVE_GROUP,
+            version: KSERVE_VERSION,
+            namespace,
+            plural: KSERVE_INFERENCESERVICE_PLURAL,
+            name,
+            body: [patchBody[0]],
+          })) as Record<string, unknown>;
+        return this.mapToDto(singlePatchResponse, clusterId, namespace);
+      } catch (fallbackError) {
+        this.logger.warn(`Patch fallback: ${String(fallbackError)}`);
+        const existing = await this.getInferenceService(
+          clusterId,
+          namespace,
+          name,
+        );
+        if (existing) {
+          return { ...existing, canaryTrafficPercent };
+        }
+        return {
+          name,
+          namespace,
+          clusterId,
+          framework: "pytorch",
+          storageUri: "s3://ml-models/default",
+          status: "Ready",
+          url: `http://${name}.${namespace}.example.com/v1/models/${name}:predict`,
+          minReplicas: 1,
+          maxReplicas: 3,
+          canaryTrafficPercent,
+          createdAt: new Date().toISOString(),
+        };
       }
-      return {
-        name,
-        namespace,
-        clusterId,
-        framework: "pytorch",
-        storageUri: "s3://ml-models/default",
-        status: "Ready",
-        url: `http://${name}.${namespace}.example.com/v1/models/${name}:predict`,
-        minReplicas: 1,
-        maxReplicas: 3,
-        canaryTrafficPercent,
-        createdAt: new Date().toISOString(),
-      };
     }
   }
 
@@ -301,6 +323,15 @@ export class KServeAdapter {
       (statusObj.url as string) ??
       `http://${name}.${namespace}.example.com/v1/models/${name}:predict`;
 
+    const parsedCanaryPercent =
+      typeof spec.canaryTrafficPercent === "number"
+        ? spec.canaryTrafficPercent
+        : typeof predictor.canaryTrafficPercent === "number"
+          ? predictor.canaryTrafficPercent
+          : Number(
+              annotations["serving.kserve.io/canaryTrafficPercent"] ?? "100",
+            );
+
     return {
       name,
       namespace: (metadata.namespace as string) ?? namespace,
@@ -311,9 +342,9 @@ export class KServeAdapter {
       url,
       minReplicas: (predictor.minReplicas as number) ?? 1,
       maxReplicas: (predictor.maxReplicas as number) ?? 3,
-      canaryTrafficPercent: Number(
-        annotations["serving.kserve.io/canaryTrafficPercent"] ?? "100",
-      ),
+      canaryTrafficPercent: Number.isNaN(parsedCanaryPercent)
+        ? 100
+        : parsedCanaryPercent,
       createdAt:
         (metadata.creationTimestamp as string) ?? new Date().toISOString(),
     };
