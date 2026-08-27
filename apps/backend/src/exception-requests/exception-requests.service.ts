@@ -6,7 +6,7 @@ import {
   PolicyExceptionRequest,
   Role,
 } from "@prisma/client";
-import { randomUUID } from "node:crypto";
+import { v7 as uuidv7 } from "uuid";
 import { AuthenticatedUser } from "../auth/auth.types";
 import {
   BusinessException,
@@ -94,7 +94,7 @@ export class ExceptionRequestsService {
         context: { clusterId: dto.targetClusterId },
       });
     }
-    const id = randomUUID();
+    const id = uuidv7();
     const ruleNames = this.normalizeRequestedRules(dto.ruleNames);
 
     return this.prisma.runSerializableTransaction(async (tx) => {

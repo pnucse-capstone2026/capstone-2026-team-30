@@ -1,5 +1,6 @@
 import { ConfigService } from "@nestjs/config";
 import { ExceptionStatus, PolicyExceptionRequest, Role } from "@prisma/client";
+import { validate as uuidValidate, version as uuidVersion } from "uuid";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { BusinessException } from "../common/errors/business.exception";
 import { EXCEPTION_LIFECYCLE_ERROR } from "../exception-lifecycle/exception-lifecycle.errors";
@@ -72,6 +73,14 @@ function record(
 function harness(found: PolicyExceptionRequest | null = record()) {
   const prisma = {
     policyExceptionRequest: {
+      create: jest
+        .fn()
+        .mockImplementation(
+          async (args: { data: Partial<PolicyExceptionRequest> }) => ({
+            ...record(),
+            ...args.data,
+          }),
+        ),
       findMany: jest.fn().mockResolvedValue(found ? [found] : []),
       findFirst: jest.fn().mockImplementation(async ({ where }) => {
         if (!found || found.id !== where.id) return null;
@@ -91,6 +100,17 @@ function harness(found: PolicyExceptionRequest | null = record()) {
       }),
       findUnique: jest.fn().mockResolvedValue(found),
     },
+    auditLog: {
+      create: jest.fn().mockResolvedValue({}),
+    },
+  };
+  const runSerializableTransaction = jest.fn(
+    async (callback: (tx: typeof prisma) => Promise<unknown>) =>
+      callback(prisma),
+  );
+  const prismaService = {
+    ...prisma,
+    runSerializableTransaction,
   } as unknown as PrismaService;
   const lifecycle = {
     approve: jest.fn().mockResolvedValue(found),
@@ -120,7 +140,7 @@ function harness(found: PolicyExceptionRequest | null = record()) {
 
   return {
     service: new ExceptionRequestsService(
-      prisma,
+      prismaService,
       lifecycle,
       clusters,
       kyverno,
@@ -129,10 +149,12 @@ function harness(found: PolicyExceptionRequest | null = record()) {
     ),
     prisma: prisma as unknown as {
       policyExceptionRequest: {
+        create: jest.Mock;
         findMany: jest.Mock;
         findFirst: jest.Mock;
         findUnique: jest.Mock;
       };
+      auditLog: { create: jest.Mock };
     },
     lifecycle: lifecycle as unknown as {
       approve: jest.Mock;
@@ -148,6 +170,36 @@ function harness(found: PolicyExceptionRequest | null = record()) {
 }
 
 describe("ExceptionRequestsService access control", () => {
+  it("creates persisted identifiers as UUID v7", async () => {
+    const context = harness();
+
+    const created = await context.service.create(
+      {
+        policyName: "disallow-latest-tag",
+        ruleNames: ["disallow-latest-tag"],
+        reason: "emergency rollout",
+        resourceKind: "Deployment",
+        resourceName: "api",
+        resourceNamespace: "default",
+        targetClusterId: "local",
+        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      },
+      requester,
+    );
+
+    expect(uuidValidate(created.id)).toBe(true);
+    expect(uuidVersion(created.id)).toBe(7);
+    expect(context.prisma.policyExceptionRequest.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        id: created.id,
+        k8sExceptionName: `pac-exception-${created.id}`,
+      }),
+    });
+    expect(context.prisma.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ entityId: created.id }),
+    });
+  });
+
   it("hides a request whose cluster is not assigned to the approver", async () => {
     const context = harness(record({ targetClusterId: "prod" }));
 

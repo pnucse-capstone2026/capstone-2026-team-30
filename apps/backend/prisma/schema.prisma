@@ -35,7 +35,7 @@ enum AuditActorType {
 }
 
 model User {
-  id         String    @id @default(uuid())
+  id         String    @id @default(uuid(7))
   email      String    @unique
   pwdHash    String
   role       Role
@@ -65,7 +65,7 @@ model UserCluster {
 }
 
 model Permission {
-  id          String   @id @default(uuid())
+  id          String   @id @default(uuid(7))
   key         String   @unique
   description String
   createdAt   DateTime @default(now())
@@ -88,7 +88,7 @@ model RolePermission {
 /// 위반이 어느 클러스터에서 발생했는지만 구별한다. 나머지 확장(심각도, 처리 상태,
 /// 대상 리소스 등)과 수집 경로는 위반/오류 관리 기능에서 함께 설계한다.
 model ViolationHistory {
-  id                       String   @id @default(uuid())
+  id                       String   @id @default(uuid(7))
   policyName               String
   ruleName                 String
   targetClusterId          String   @db.VarChar(128)
@@ -101,7 +101,7 @@ model ViolationHistory {
 }
 
 model PolicyExceptionRequest {
-  id                       String          @id @default(uuid())
+  id                       String          @id @default(uuid(7))
   status                   ExceptionStatus @default(PENDING)
   reason                   String          @db.VarChar(2000)
   policyName               String          @db.VarChar(253)
@@ -138,7 +138,7 @@ model PolicyExceptionRequest {
 }
 
 model AuditLog {
-  id           String           @id @default(uuid())
+  id           String           @id @default(uuid(7))
   action       String           @db.VarChar(100)
   entityType   String           @db.VarChar(100)
   entityId     String
@@ -157,7 +157,7 @@ model AuditLog {
 }
 
 model RefreshToken {
-  id        String    @id @default(uuid())
+  id        String    @id @default(uuid(7))
   tokenHash String    @unique
   expiresAt DateTime
   revokedAt DateTime?
