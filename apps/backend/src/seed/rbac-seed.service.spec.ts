@@ -72,6 +72,8 @@ describe("seedRbacPermissions", () => {
       "exception_requests.retry",
       "audit_logs.read",
       "mlops.governance",
+      "mlops.pipelines",
+      "mlops.serving",
     ]);
     expect(ROLE_PERMISSIONS[Role.REQUESTER]).toEqual([
       "policies.read",
@@ -81,12 +83,16 @@ describe("seedRbacPermissions", () => {
       "exception_requests.cancel",
       "mlops.notebooks",
       "mlops.governance",
+      "mlops.pipelines",
+      "mlops.serving",
     ]);
     expect(ROLE_PERMISSIONS[Role.VIEWER]).toEqual([
       "policies.read",
       "violations.read",
       "exception_requests.read",
       "mlops.governance",
+      "mlops.pipelines",
+      "mlops.serving",
     ]);
   });
 });

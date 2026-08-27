@@ -44,6 +44,8 @@ export const PERMISSIONS = [
   { key: "audit_logs.read", description: "Read audit logs." },
   { key: "mlops.notebooks", description: "Manage MLOps Kubeflow Notebooks." },
   { key: "mlops.governance", description: "Manage MLOps Governance & FinOps." },
+  { key: "mlops.pipelines", description: "Manage MLOps Kubeflow Pipelines." },
+  { key: "mlops.serving", description: "Manage MLOps Model Serving Center." },
 ] as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[number]["key"];
@@ -59,6 +61,8 @@ export const ROLE_PERMISSIONS: Record<Role, PermissionKey[]> = {
     "exception_requests.retry",
     "audit_logs.read",
     "mlops.governance",
+    "mlops.pipelines",
+    "mlops.serving",
   ],
   [Role.REQUESTER]: [
     "policies.read",
@@ -68,12 +72,16 @@ export const ROLE_PERMISSIONS: Record<Role, PermissionKey[]> = {
     "exception_requests.cancel",
     "mlops.notebooks",
     "mlops.governance",
+    "mlops.pipelines",
+    "mlops.serving",
   ],
   [Role.VIEWER]: [
     "policies.read",
     "violations.read",
     "exception_requests.read",
     "mlops.governance",
+    "mlops.pipelines",
+    "mlops.serving",
   ],
 };
 

@@ -46,4 +46,17 @@ export const MLOPS_ERROR = {
     code: "MLOPS_IDLE_MONITOR_FAILED",
     message: "Failed to inspect or auto-shutdown idle ML workloads.",
   },
+  INVALID_MODEL_PATH: {
+    code: "MLOPS_INVALID_MODEL_PATH",
+    message:
+      "The specified S3/MinIO model storage path is invalid or inaccessible.",
+  },
+  SERVING_DEPLOYMENT_FAILED: {
+    code: "MLOPS_SERVING_DEPLOYMENT_FAILED",
+    message: "Failed to create or update KServe InferenceService resource.",
+  },
+  PIPELINE_RUN_FAILED: {
+    code: "MLOPS_PIPELINE_RUN_FAILED",
+    message: "Failed to trigger or inspect Kubeflow Pipeline execution run.",
+  },
 } as const satisfies Record<string, BusinessErrorDefinition>;
