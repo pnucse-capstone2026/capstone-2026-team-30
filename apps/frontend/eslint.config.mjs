@@ -1,7 +1,7 @@
-import { FlatCompat } from '@eslint/eslintrc';
-import js from '@eslint/js';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { FlatCompat } from "@eslint/eslintrc";
+import js from "@eslint/js";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,9 +13,9 @@ const compat = new FlatCompat({
 
 const eslintConfig = [
   {
-    ignores: ['.next/**', 'out/**', 'node_modules/**', 'dist/**'],
+    ignores: [".next/**", "out/**", "node_modules/**", "dist/**"],
   },
-  ...compat.extends('next/core-web-vitals'),
+  ...compat.extends("next/core-web-vitals"),
 ];
 
 export default eslintConfig;
