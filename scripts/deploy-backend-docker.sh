@@ -18,8 +18,11 @@ echo "=========================================================="
 echo " Docker-based Backend Build & Deploy to EKS/Kind (${REGION})"
 echo "=========================================================="
 
-# EKS 원격 배포 및 ECR 푸시 전용 레지스트리 URI 결정
-if aws sts get-caller-identity &> /dev/null; then
+# EKS 원격 배포 및 ECR 푸시 전용 레지스트리 URI 결정 (FORCE_LOCAL=true 설정 시 로컬 Kind 클러스터 모드 강제)
+if [ "${FORCE_LOCAL}" = "true" ] || [ "$1" = "--local" ]; then
+  echo ">>> Local Kind deployment mode explicitly enabled."
+  IS_EKS=false
+elif aws sts get-caller-identity &> /dev/null; then
   ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
   ECR_URI="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/${REPO_NAME}:latest"
   echo ">>> Authenticated AWS Account: ${ACCOUNT_ID}"
@@ -86,7 +89,11 @@ kill $PF_PG_PID 2>/dev/null || true
 echo ">>> Updating deployment 'kyverno-backend' with target image '${IMAGE_TARGET}'..."
 "${KUBECTL}" apply -f "${ROOT_DIR}/k8s-manifests/system/backend.yaml"
 "${KUBECTL}" set image deployment/kyverno-backend backend="${IMAGE_TARGET}" -n kyverno-platform
-"${KUBECTL}" patch deployment kyverno-backend -n kyverno-platform -p '{"spec":{"template":{"spec":{"containers":[{"name":"backend","imagePullPolicy":"Always"}]}}}}'
+PULL_POLICY="IfNotPresent"
+if [ "${IS_EKS}" = true ]; then
+  PULL_POLICY="Always"
+fi
+"${KUBECTL}" patch deployment kyverno-backend -n kyverno-platform -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"backend\",\"imagePullPolicy\":\"${PULL_POLICY}\"}]}}}}"
 "${KUBECTL}" rollout restart deployment/kyverno-backend -n kyverno-platform
 "${KUBECTL}" rollout status deployment/kyverno-backend -n kyverno-platform --timeout=180s
 
