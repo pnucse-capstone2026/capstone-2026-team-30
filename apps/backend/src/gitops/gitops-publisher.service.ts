@@ -3,10 +3,17 @@ import * as path from "path";
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PolicyExceptionRequest } from "@prisma/client";
-import { dumpYaml } from "@kubernetes/client-node";
+import { dumpYaml, loadYaml } from "@kubernetes/client-node";
 import { buildPolicyExceptionManifest } from "../kubernetes/policy-exception-manifest";
 
 export type PublishingMode = "DUAL_PATH" | "STRICT_GITOPS" | "RUNTIME_ONLY";
+
+interface KustomizationManifest {
+  apiVersion?: string;
+  kind?: string;
+  resources?: string[];
+  [key: string]: unknown;
+}
 
 /**
  * PolicyExceptionRequest 객체를 kyverno.io/v2 PolicyException YAML 포맷으로 직렬화합니다.
@@ -155,6 +162,8 @@ export class GitOpsPublisherService {
       fs.mkdirSync(targetDir, { recursive: true });
       fs.writeFileSync(targetFilePath, yamlContent, "utf8");
 
+      this.updateKustomizationYaml(targetDir, `${request.id}.yaml`, "add");
+
       this.logger.log(
         `[Mock GitOps] Manifest successfully saved to ${targetFilePath} for request ${request.id} (minDurationHours: ${this.minDurationHours}h)`,
       );
@@ -175,6 +184,137 @@ export class GitOpsPublisherService {
         publishedToGitOps: false,
         appliedDirectly: true,
       };
+    }
+  }
+
+  /**
+   * 승인 취소/만료/철회된 PolicyException 요청의 GitOps 매니페스트 및 kustomization.yaml 항목을 제거합니다.
+   *
+   * @param requestIdOrRequest 대상 정책 예외 요청 식별자 또는 요청 객체
+   * @param namespaceArg 대상 리소스 네임스페이스 (기본값: 'default')
+   * @returns 매니페스트 제거 결과 객체
+   */
+  async unpublishManifest(
+    requestIdOrRequest:
+      | string
+      | Pick<PolicyExceptionRequest, "id" | "resourceNamespace">,
+    namespaceArg?: string,
+  ): Promise<{
+    unpublishedFromGitOps: boolean;
+    filePath?: string;
+  }> {
+    if (this.publishingMode === "RUNTIME_ONLY") {
+      this.logger.log(
+        "Publishing mode is RUNTIME_ONLY. Skipping GitOps file deletion.",
+      );
+      return { unpublishedFromGitOps: false };
+    }
+
+    const requestId =
+      typeof requestIdOrRequest === "string"
+        ? requestIdOrRequest
+        : requestIdOrRequest.id;
+    const namespace =
+      (typeof requestIdOrRequest === "object"
+        ? requestIdOrRequest.resourceNamespace
+        : namespaceArg) || "default";
+
+    try {
+      let baseDir = path.resolve(process.cwd(), "k8s-manifests");
+      if (
+        !fs.existsSync(baseDir) &&
+        fs.existsSync(path.resolve(process.cwd(), "../../k8s-manifests"))
+      ) {
+        baseDir = path.resolve(process.cwd(), "../../k8s-manifests");
+      }
+
+      const targetDir = path.join(baseDir, "exceptions", namespace);
+      const targetFilePath = path.join(targetDir, `${requestId}.yaml`);
+      const relativePath = path.join(
+        "k8s-manifests",
+        "exceptions",
+        namespace,
+        `${requestId}.yaml`,
+      );
+
+      let fileRemoved = false;
+      if (fs.existsSync(targetFilePath)) {
+        fs.unlinkSync(targetFilePath);
+        fileRemoved = true;
+      }
+
+      this.updateKustomizationYaml(targetDir, `${requestId}.yaml`, "remove");
+
+      this.logger.log(
+        `[Mock GitOps] Manifest successfully removed from ${targetFilePath} for request ${requestId}`,
+      );
+
+      return {
+        unpublishedFromGitOps: fileRemoved,
+        filePath: relativePath,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to delete GitOps manifest for request ${requestId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return { unpublishedFromGitOps: false };
+    }
+  }
+
+  /**
+   * k8s-manifests/exceptions/<namespace>/kustomization.yaml 의 resources 목록을 자동 추가/제거합니다.
+   *
+   * @param targetDir kustomization.yaml 위치 디렉터리 경로
+   * @param filename 추가/제거할 매니페스트 파일 이름
+   * @param action 'add' | 'remove'
+   */
+  updateKustomizationYaml(
+    targetDir: string,
+    filename: string,
+    action: "add" | "remove",
+  ): void {
+    try {
+      const kustomizationPath = path.join(targetDir, "kustomization.yaml");
+
+      let content: KustomizationManifest = {
+        apiVersion: "kustomize.config.k8s.io/v1beta1",
+        kind: "Kustomization",
+        resources: [],
+      };
+
+      if (fs.existsSync(kustomizationPath)) {
+        const raw = fs.readFileSync(kustomizationPath, "utf8");
+        const loaded = loadYaml(raw) as KustomizationManifest;
+        if (loaded && typeof loaded === "object") {
+          content = { ...loaded };
+        }
+      } else if (action === "remove") {
+        return;
+      }
+
+      let resources = Array.isArray(content.resources)
+        ? [...content.resources]
+        : [];
+
+      if (action === "add") {
+        if (!resources.includes(filename)) {
+          resources.push(filename);
+        }
+      } else if (action === "remove") {
+        resources = resources.filter((res) => res !== filename);
+      }
+
+      content.resources = resources;
+      const yamlString = dumpYaml(content);
+      fs.writeFileSync(kustomizationPath, yamlString, "utf8");
+    } catch (error) {
+      this.logger.warn(
+        `Failed to update kustomization.yaml in ${targetDir}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
   }
 }

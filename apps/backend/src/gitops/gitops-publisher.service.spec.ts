@@ -136,7 +136,21 @@ describe("GitOpsPublisherService", () => {
       const content = fs.readFileSync(savedFilePath, "utf8");
       expect(content).toContain("apiVersion: kyverno.io/v2");
 
-      fs.unlinkSync(savedFilePath);
+      let baseDirCleanup = path.resolve(process.cwd(), "k8s-manifests");
+      if (
+        !fs.existsSync(baseDirCleanup) &&
+        fs.existsSync(path.resolve(process.cwd(), "../../k8s-manifests"))
+      ) {
+        baseDirCleanup = path.resolve(process.cwd(), "../../k8s-manifests");
+      }
+      const kustomizationPath = path.join(
+        baseDirCleanup,
+        "exceptions",
+        "production",
+        "kustomization.yaml",
+      );
+      if (fs.existsSync(savedFilePath)) fs.unlinkSync(savedFilePath);
+      if (fs.existsSync(kustomizationPath)) fs.unlinkSync(kustomizationPath);
     });
 
     it("skips file generation in RUNTIME_ONLY mode", async () => {
@@ -160,6 +174,65 @@ describe("GitOpsPublisherService", () => {
 
       expect(result.publishedToGitOps).toBe(false);
       expect(result.appliedDirectly).toBe(true);
+    });
+  });
+
+  describe("unpublishManifest", () => {
+    it("deletes existing manifest file and removes it from kustomization.yaml", async () => {
+      const request = createMockRequest({
+        id: "req-to-delete",
+        resourceNamespace: "test-ns",
+      });
+      await service.publishManifest(request);
+
+      let baseDir = path.resolve(process.cwd(), "k8s-manifests");
+      if (
+        !fs.existsSync(baseDir) &&
+        fs.existsSync(path.resolve(process.cwd(), "../../k8s-manifests"))
+      ) {
+        baseDir = path.resolve(process.cwd(), "../../k8s-manifests");
+      }
+      const savedFilePath = path.join(
+        baseDir,
+        "exceptions",
+        "test-ns",
+        "req-to-delete.yaml",
+      );
+      const kustomizationPath = path.join(
+        baseDir,
+        "exceptions",
+        "test-ns",
+        "kustomization.yaml",
+      );
+
+      expect(fs.existsSync(savedFilePath)).toBe(true);
+      expect(fs.existsSync(kustomizationPath)).toBe(true);
+      let kContent = fs.readFileSync(kustomizationPath, "utf8");
+      expect(kContent).toContain("req-to-delete.yaml");
+
+      const unpublishResult = await service.unpublishManifest(request);
+      expect(unpublishResult.unpublishedFromGitOps).toBe(true);
+      expect(fs.existsSync(savedFilePath)).toBe(false);
+
+      kContent = fs.readFileSync(kustomizationPath, "utf8");
+      expect(kContent).not.toContain("req-to-delete.yaml");
+
+      if (fs.existsSync(kustomizationPath)) {
+        fs.unlinkSync(kustomizationPath);
+      }
+    });
+
+    it("skips file deletion in RUNTIME_ONLY mode", async () => {
+      const runtimeConfig = new ConfigService({
+        GITOPS_PUBLISHING_MODE: "RUNTIME_ONLY",
+      });
+      const runtimeService = new GitOpsPublisherService(runtimeConfig);
+      const result = await runtimeService.unpublishManifest(
+        "req-any",
+        "default",
+      );
+
+      expect(result.unpublishedFromGitOps).toBe(false);
     });
   });
 });
