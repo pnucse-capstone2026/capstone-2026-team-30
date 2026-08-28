@@ -68,8 +68,12 @@ Current UI Context: ${JSON.stringify(dto.context || {})}`;
         },
       );
 
-      const parsed =
-        this.intentParserService.parseJsonFromLlmOutput(rawResponse);
+      const parsed = this.intentParserService.parseJsonFromLlmOutput<{
+        replyText?: string;
+        intent?: string;
+        extractedParams?: Record<string, unknown>;
+        recommendations?: string[];
+      }>(rawResponse);
 
       if (parsed && parsed.replyText) {
         const proposedAction =

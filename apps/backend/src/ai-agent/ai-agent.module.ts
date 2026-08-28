@@ -19,6 +19,7 @@ import { WorkloadEvaluatorService } from "./services/workload-evaluator.service"
     WorkloadEvaluatorService,
   ],
   exports: [
+    BedrockService,
     AiAgentService,
     KyvernoRuleTemplateEngine,
     WorkloadEvaluatorService,
