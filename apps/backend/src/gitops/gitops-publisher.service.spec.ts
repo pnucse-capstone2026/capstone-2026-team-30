@@ -235,4 +235,204 @@ describe("GitOpsPublisherService", () => {
       expect(result.unpublishedFromGitOps).toBe(false);
     });
   });
+
+  describe("createGitHubPullRequest", () => {
+    let globalFetchBackup: typeof global.fetch;
+
+    beforeEach(() => {
+      globalFetchBackup = global.fetch;
+    });
+
+    afterEach(() => {
+      global.fetch = globalFetchBackup;
+    });
+
+    it("creates a branch, commits manifest, and opens a Pull Request on GitHub", async () => {
+      const prConfig = new ConfigService({
+        GITOPS_STRATEGY: "GITHUB_PR",
+        GITOPS_GITHUB_TOKEN: "ghp_mocktoken123",
+        GITOPS_GITHUB_REPO: "test-owner/test-repo",
+        GITOPS_GITHUB_BASE_BRANCH: "main",
+      });
+      const prService = new GitOpsPublisherService(prConfig);
+      const request = createMockRequest({ id: "req-pr-test" });
+
+      const mockFetch = jest
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ object: { sha: "base-commit-sha-123" } }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            ref: "refs/heads/gitops/exception-req-pr-test",
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ content: { sha: "file-sha-456" } }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            html_url: "https://github.com/test-owner/test-repo/pull/42",
+            number: 42,
+          }),
+        });
+
+      global.fetch = mockFetch as unknown as typeof fetch;
+
+      const result = await prService.publishManifest(request);
+
+      expect(result.publishedToGitOps).toBe(true);
+      expect(result.prUrl).toBe(
+        "https://github.com/test-owner/test-repo/pull/42",
+      );
+      expect(mockFetch).toHaveBeenCalledTimes(4);
+
+      let baseDir = path.resolve(process.cwd(), "k8s-manifests");
+      if (
+        !fs.existsSync(baseDir) &&
+        fs.existsSync(path.resolve(process.cwd(), "../../k8s-manifests"))
+      ) {
+        baseDir = path.resolve(process.cwd(), "../../k8s-manifests");
+      }
+      const savedFilePath = path.join(
+        baseDir,
+        "exceptions",
+        "production",
+        "req-pr-test.yaml",
+      );
+      const kustomizationPath = path.join(
+        baseDir,
+        "exceptions",
+        "production",
+        "kustomization.yaml",
+      );
+      if (fs.existsSync(savedFilePath)) fs.unlinkSync(savedFilePath);
+      if (fs.existsSync(kustomizationPath)) fs.unlinkSync(kustomizationPath);
+    });
+
+    it("falls back gracefully when GitHub token or repository is missing", async () => {
+      const missingConfig = new ConfigService({
+        GITOPS_STRATEGY: "GITHUB_PR",
+      });
+      const prService = new GitOpsPublisherService(missingConfig);
+      const request = createMockRequest();
+
+      const result = await prService.publishManifest(request);
+
+      expect(result.publishedToGitOps).toBe(true);
+      expect(result.prUrl).toBeUndefined();
+
+      let baseDir = path.resolve(process.cwd(), "k8s-manifests");
+      if (
+        !fs.existsSync(baseDir) &&
+        fs.existsSync(path.resolve(process.cwd(), "../../k8s-manifests"))
+      ) {
+        baseDir = path.resolve(process.cwd(), "../../k8s-manifests");
+      }
+      const savedFilePath = path.join(
+        baseDir,
+        "exceptions",
+        "production",
+        "req-12345.yaml",
+      );
+      const kustomizationPath = path.join(
+        baseDir,
+        "exceptions",
+        "production",
+        "kustomization.yaml",
+      );
+      if (fs.existsSync(savedFilePath)) fs.unlinkSync(savedFilePath);
+      if (fs.existsSync(kustomizationPath)) fs.unlinkSync(kustomizationPath);
+    });
+
+    it("uses per-cluster gitopsRepo configuration when ClusterProvider metadata is present", async () => {
+      const prConfig = new ConfigService({
+        GITOPS_STRATEGY: "GITHUB_PR",
+        GITOPS_GITHUB_TOKEN: "ghp_mocktoken123",
+        GITOPS_GITHUB_REPO: "global-owner/global-repo",
+      });
+      const clusterProviderMock = {
+        getMetadata: jest.fn().mockReturnValue({
+          id: "cluster-alpha",
+          displayName: "Cluster Alpha",
+          exceptionNamespace: "kyverno",
+          gitopsRepo: "cluster-org/cluster-alpha-gitops",
+          gitopsBranch: "deploy-branch",
+        }),
+      } as any;
+
+      const prService = new GitOpsPublisherService(
+        prConfig,
+        clusterProviderMock,
+      );
+      const request = createMockRequest({
+        id: "req-cluster-gitops",
+        targetClusterId: "cluster-alpha",
+      });
+
+      const mockFetch = jest
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ object: { sha: "cluster-base-sha" } }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            ref: "refs/heads/gitops/exception-req-cluster-gitops",
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ content: { sha: "file-sha" } }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            html_url:
+              "https://github.com/cluster-org/cluster-alpha-gitops/pull/1",
+            number: 1,
+          }),
+        });
+
+      global.fetch = mockFetch as unknown as typeof fetch;
+
+      const result = await prService.publishManifest(request);
+
+      expect(result.publishedToGitOps).toBe(true);
+      expect(result.prUrl).toBe(
+        "https://github.com/cluster-org/cluster-alpha-gitops/pull/1",
+      );
+      expect(mockFetch.mock.calls[0][0]).toContain(
+        "cluster-org/cluster-alpha-gitops",
+      );
+      expect(mockFetch.mock.calls[0][0]).toContain("deploy-branch");
+
+      let baseDir = path.resolve(process.cwd(), "k8s-manifests");
+      if (
+        !fs.existsSync(baseDir) &&
+        fs.existsSync(path.resolve(process.cwd(), "../../k8s-manifests"))
+      ) {
+        baseDir = path.resolve(process.cwd(), "../../k8s-manifests");
+      }
+      const savedFilePath = path.join(
+        baseDir,
+        "exceptions",
+        "production",
+        "req-cluster-gitops.yaml",
+      );
+      const kustomizationPath = path.join(
+        baseDir,
+        "exceptions",
+        "production",
+        "kustomization.yaml",
+      );
+      if (fs.existsSync(savedFilePath)) fs.unlinkSync(savedFilePath);
+      if (fs.existsSync(kustomizationPath)) fs.unlinkSync(kustomizationPath);
+    });
+  });
 });
