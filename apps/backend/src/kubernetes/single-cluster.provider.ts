@@ -21,6 +21,9 @@ export class SingleClusterProvider extends ClusterProvider {
   private readonly exceptionNamespace: string;
   private readonly inCluster: boolean;
   private readonly requestTimeoutMs: number;
+  private readonly gitopsRepo?: string;
+  private readonly gitopsBranch?: string;
+  private readonly gitopsPath?: string;
   private connection?: ClusterConnection;
 
   constructor(config: ConfigService) {
@@ -34,6 +37,9 @@ export class SingleClusterProvider extends ClusterProvider {
     this.exceptionNamespace = parseKubernetesNamespace(
       config.get<string>("KUBERNETES_EXCEPTION_NAMESPACE", "kyverno"),
     );
+    this.gitopsRepo = config.get<string>("KUBERNETES_GITOPS_REPO");
+    this.gitopsBranch = config.get<string>("KUBERNETES_GITOPS_BRANCH");
+    this.gitopsPath = config.get<string>("KUBERNETES_GITOPS_PATH");
     this.inCluster = Boolean(config.get<string>("KUBERNETES_SERVICE_HOST"));
     this.requestTimeoutMs = resolveRequestTimeoutMs(
       config.get<string>("KUBERNETES_REQUEST_TIMEOUT_MS"),
@@ -51,6 +57,9 @@ export class SingleClusterProvider extends ClusterProvider {
       id: this.id,
       displayName: this.displayName,
       exceptionNamespace: this.exceptionNamespace,
+      gitopsRepo: this.gitopsRepo,
+      gitopsBranch: this.gitopsBranch,
+      gitopsPath: this.gitopsPath,
     };
   }
 
@@ -67,6 +76,9 @@ export class SingleClusterProvider extends ClusterProvider {
         id: this.id,
         displayName: this.displayName,
         exceptionNamespace: this.exceptionNamespace,
+        gitopsRepo: this.gitopsRepo,
+        gitopsBranch: this.gitopsBranch,
+        gitopsPath: this.gitopsPath,
         customObjectsApi: createCustomObjectsApi(
           kubeConfig,
           this.requestTimeoutMs,

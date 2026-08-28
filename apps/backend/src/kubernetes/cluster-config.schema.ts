@@ -39,6 +39,9 @@ const clusterConfigEntrySchema = z
     clientCertData: z.string().trim().min(1).optional(),
     clientKeyData: z.string().trim().min(1).optional(),
     default: z.boolean().default(false),
+    gitopsRepo: z.string().trim().min(1).optional(),
+    gitopsBranch: z.string().trim().min(1).optional(),
+    gitopsPath: z.string().trim().min(1).optional(),
   })
   .strict()
   .superRefine((entry, ctx) => {

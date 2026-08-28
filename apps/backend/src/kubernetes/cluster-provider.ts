@@ -4,6 +4,9 @@ export type ClusterConnection = {
   id: string;
   displayName: string;
   exceptionNamespace: string;
+  gitopsRepo?: string;
+  gitopsBranch?: string;
+  gitopsPath?: string;
   customObjectsApi: CustomObjectsApi;
 };
 

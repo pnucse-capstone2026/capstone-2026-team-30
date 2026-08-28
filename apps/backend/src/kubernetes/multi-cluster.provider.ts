@@ -76,6 +76,9 @@ export class MultiClusterProvider extends ClusterProvider {
       id: entry.id,
       displayName: entry.displayName ?? entry.id,
       exceptionNamespace: entry.exceptionNamespace,
+      gitopsRepo: entry.gitopsRepo,
+      gitopsBranch: entry.gitopsBranch,
+      gitopsPath: entry.gitopsPath,
     };
   }
 
