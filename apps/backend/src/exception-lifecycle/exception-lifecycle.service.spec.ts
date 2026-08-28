@@ -84,13 +84,26 @@ function harness(initial = request()) {
     ensurePolicyException: jest.fn().mockResolvedValue(undefined),
     deletePolicyException: jest.fn().mockResolvedValue(undefined),
   } as unknown as KyvernoAdapter;
+  const gitOpsPublisher = {
+    publishManifest: jest
+      .fn()
+      .mockResolvedValue({ publishedToGitOps: true, appliedDirectly: true }),
+    unpublishManifest: jest
+      .fn()
+      .mockResolvedValue({ unpublishedFromGitOps: true }),
+  };
 
   return {
-    service: new ExceptionLifecycleService(prisma, kyverno),
+    service: new ExceptionLifecycleService(
+      prisma,
+      kyverno,
+      gitOpsPublisher as any,
+    ),
     kyverno: kyverno as unknown as {
       ensurePolicyException: jest.Mock;
       deletePolicyException: jest.Mock;
     },
+    gitOpsPublisher,
     audits,
     current: () => current,
   };
@@ -344,6 +357,10 @@ describe("ExceptionLifecycleService", () => {
       nextAttemptAt: null,
     });
     expect(context.kyverno.deletePolicyException).toHaveBeenCalledTimes(1);
+    expect(context.gitOpsPublisher.unpublishManifest).toHaveBeenCalledWith(
+      "request-1",
+      "production",
+    );
   });
 
   it("expires an APPLYING request without activating it", async () => {
@@ -360,6 +377,10 @@ describe("ExceptionLifecycleService", () => {
     expect(context.current().status).toBe(ExceptionStatus.EXPIRED);
     expect(context.kyverno.ensurePolicyException).not.toHaveBeenCalled();
     expect(context.kyverno.deletePolicyException).toHaveBeenCalledTimes(1);
+    expect(context.gitOpsPublisher.unpublishManifest).toHaveBeenCalledWith(
+      "request-1",
+      "production",
+    );
   });
 
   it("allows only one concurrent approval transition", async () => {

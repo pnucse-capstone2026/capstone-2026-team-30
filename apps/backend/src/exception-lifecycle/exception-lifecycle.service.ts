@@ -8,6 +8,7 @@ import {
 import { BusinessException } from "../common/errors/business.exception";
 import { KyvernoAdapter } from "../kubernetes/kyverno.adapter";
 import { PrismaService } from "../prisma/prisma.service";
+import { GitOpsPublisherService } from "../gitops/gitops-publisher.service";
 import { EXCEPTION_LIFECYCLE_ERROR } from "./exception-lifecycle.errors";
 
 const ENTITY_TYPE = "PolicyExceptionRequest";
@@ -52,6 +53,7 @@ export class ExceptionLifecycleService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly kyverno: KyvernoAdapter,
+    private readonly gitOpsPublisher?: GitOpsPublisherService,
   ) {}
 
   async approve(
@@ -320,7 +322,7 @@ export class ExceptionLifecycleService {
         request.targetClusterId,
         request.k8sExceptionName,
       );
-      return await this.completeTransition(
+      const result = await this.completeTransition(
         request.id,
         expected,
         target,
@@ -328,6 +330,17 @@ export class ExceptionLifecycleService {
           ? "EXCEPTION_CANCELLED"
           : "EXCEPTION_EXPIRED",
       );
+      if (this.gitOpsPublisher) {
+        try {
+          await this.gitOpsPublisher.unpublishManifest(
+            request.id,
+            request.resourceNamespace || "default",
+          );
+        } catch {
+          // GitOps deletion failure does not affect runtime status
+        }
+      }
+      return result;
     } catch (error) {
       const failure = await this.recordFailure(request, error);
       if (failure.request.status === request.status) {
