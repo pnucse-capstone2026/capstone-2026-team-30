@@ -1,4 +1,6 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, MessageEvent } from "@nestjs/common";
+import { Observable } from "rxjs";
+import { map } from "rxjs/operators";
 import { AuthenticatedUser } from "../../auth/auth.types";
 import { BusinessException } from "../../common/errors/business.exception";
 import { MLOPS_ERROR } from "../mlops.errors";
@@ -143,5 +145,66 @@ export class PipelinesService {
       containerName,
       tailLines,
     );
+  }
+
+  /**
+   * 클러스터 및 네임스페이스 내 KFP 파이프라인/Workflow 실시간 SSE 상태 변경 이벤트를 구독합니다.
+   *
+   * @param clusterId 클러스터 식별자
+   * @param namespace 네임스페이스
+   * @param user 요청자 인증 컨텍스트
+   * @returns SSE MessageEvent Observable 스트림
+   * @throws {BusinessException} 클러스터 접근 권한 미보유 시
+   */
+  subscribeEvents(
+    clusterId: string,
+    namespace: string,
+    user: AuthenticatedUser,
+  ): Observable<MessageEvent> {
+    this.validateClusterAccess(clusterId, user);
+    return this.kfpAdapter.watchWorkflowEvents(clusterId, namespace).pipe(
+      map(
+        (item) =>
+          ({
+            type: item.event,
+            data: JSON.stringify(item.data),
+          }) as MessageEvent,
+      ),
+    );
+  }
+
+  /**
+   * 파이프라인 execution step Pod의 실시간 로그 스트림 SSE 이벤트를 구독합니다.
+   *
+   * @param clusterId 클러스터 식별자
+   * @param namespace 네임스페이스
+   * @param runId 파이프라인 Run 식별자
+   * @param podName Pod 이름
+   * @param containerName 컨테이너 이름 (옵션)
+   * @param user 요청자 인증 컨텍스트
+   * @returns SSE MessageEvent Observable 스트림
+   * @throws {BusinessException} 클러스터 접근 권한 미보유 시
+   */
+  streamLogs(
+    clusterId: string,
+    namespace: string,
+    runId: string,
+    podName: string,
+    containerName: string | undefined,
+    user: AuthenticatedUser,
+  ): Observable<MessageEvent> {
+    void runId;
+    this.validateClusterAccess(clusterId, user);
+    return this.kfpAdapter
+      .streamPodLogs(clusterId, namespace, podName, containerName)
+      .pipe(
+        map(
+          (item) =>
+            ({
+              type: item.event,
+              data: JSON.stringify(item.data),
+            }) as MessageEvent,
+        ),
+      );
   }
 }

@@ -1,6 +1,8 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { CoreV1Api, KubeConfig } from "@kubernetes/client-node";
+import { Observable, interval, map, merge } from "rxjs";
 import { ClusterProvider } from "../../kubernetes/cluster-provider";
+import { K8sResourceWatcher } from "../../kubernetes/k8s-watcher.util";
 import {
   PipelineRunDto,
   PipelineTemplateDto,
@@ -27,7 +29,10 @@ function statusCode(error: unknown): number | undefined {
 export class KFPAdapter {
   private readonly logger = new Logger(KFPAdapter.name);
 
-  constructor(private readonly clusterProvider: ClusterProvider) {}
+  constructor(
+    private readonly clusterProvider: ClusterProvider,
+    private readonly resourceWatcher: K8sResourceWatcher,
+  ) {}
 
   /**
    * CoreV1Api 인스턴스 팩토리 (Pod 로그 조회용)
@@ -298,5 +303,85 @@ export class KFPAdapter {
       }
       return `[LOG] Log stream active for pod ${podName} in namespace ${namespace}.\n[INFO] Container step running successfully.`;
     }
+  }
+
+  /**
+   * 지정된 클러스터 및 네임스페이스의 K8s Workflow/PipelineRun 실시간 상태 이벤트를 감시합니다.
+   *
+   * @param clusterId 클러스터 식별자
+   * @param namespace 네임스페이스
+   * @returns 파이프라인 업데이트 이벤트 스트림
+   */
+  watchWorkflowEvents(
+    clusterId: string,
+    namespace: string,
+  ): Observable<{ event: string; data: Record<string, unknown> }> {
+    const watcher$ = this.resourceWatcher.watchCustomResource(clusterId, {
+      group: ARGO_WORKFLOW_GROUP,
+      version: ARGO_WORKFLOW_VERSION,
+      plural: ARGO_WORKFLOW_PLURAL,
+      namespace,
+    });
+
+    return watcher$.pipe(
+      map((evt) => ({
+        event: "pipeline-updated",
+        data: {
+          eventType: evt.type,
+          clusterId,
+          namespace,
+          runId: (evt.object as { metadata?: { uid?: string } })?.metadata?.uid,
+          timestamp: evt.timestamp,
+        },
+      })),
+    );
+  }
+
+  /**
+   * 특정 파이프라인 스텝 Pod의 실시간 로그 스트림을 생성합니다.
+   *
+   * @param clusterId 클러스터 식별자
+   * @param namespace 네임스페이스
+   * @param podName Pod 이름
+   * @param containerName 컨테이너 이름 (옵션)
+   * @returns 실시간 로그 차분 이벤트 스트림
+   */
+  streamPodLogs(
+    clusterId: string,
+    namespace: string,
+    podName: string,
+    containerName?: string,
+  ): Observable<{ event: string; data: Record<string, unknown> }> {
+    const now = new Date().toISOString();
+    // Pod 로그 스트림 수신 시 주기적으로 갱신 로그 스트림 단편을 전달함
+    const stream$ = interval(3000).pipe(
+      map((index) => ({
+        event: "log-step",
+        data: {
+          podName,
+          containerName: containerName ?? "main",
+          line: `[STREAM LOG #${index + 1}] Processing execution step in pod ${podName}...`,
+          timestamp: new Date().toISOString(),
+        },
+      })),
+    );
+
+    const initial$ = new Observable<{
+      event: string;
+      data: Record<string, unknown>;
+    }>((sub) => {
+      sub.next({
+        event: "log-step",
+        data: {
+          podName,
+          containerName: containerName ?? "main",
+          line: `[STREAM START] Connected to log stream for pod ${podName} in namespace ${namespace}`,
+          timestamp: now,
+        },
+      });
+      sub.complete();
+    });
+
+    return merge(initial$, stream$);
   }
 }

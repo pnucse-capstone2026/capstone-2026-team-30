@@ -1,4 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { of } from "rxjs";
 import { PipelinesController } from "./pipelines.controller";
 import { PipelinesService } from "./pipelines.service";
 import { AuthenticatedUser } from "../../auth/auth.types";
@@ -41,6 +42,12 @@ describe("PipelinesController", () => {
         createdAt: "2026-08-27T10:00:00Z",
       }),
       getPodLogs: jest.fn().mockResolvedValue("pod log output"),
+      subscribeEvents: jest
+        .fn()
+        .mockReturnValue(of({ type: "pipeline-updated", data: "{}" })),
+      streamLogs: jest
+        .fn()
+        .mockReturnValue(of({ type: "log-step", data: "{}" })),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -103,6 +110,45 @@ describe("PipelinesController", () => {
         mockUser,
       );
       expect(result).toEqual({ logs: "pod log output" });
+    });
+  });
+
+  describe("getEvents", () => {
+    it("should return SSE observable for pipeline events", (done) => {
+      const events$ = controller.getEvents("default", "kubeflow", mockUser);
+      events$.subscribe((evt) => {
+        expect(evt.type).toBe("pipeline-updated");
+        expect(mockPipelinesService.subscribeEvents).toHaveBeenCalledWith(
+          "default",
+          "kubeflow",
+          mockUser,
+        );
+        done();
+      });
+    });
+  });
+
+  describe("streamRunLogs", () => {
+    it("should return SSE observable for pod log stream", (done) => {
+      const logs$ = controller.streamRunLogs(
+        "run-1",
+        { podName: "test-pod" },
+        "default",
+        "kubeflow",
+        mockUser,
+      );
+      logs$.subscribe((evt) => {
+        expect(evt.type).toBe("log-step");
+        expect(mockPipelinesService.streamLogs).toHaveBeenCalledWith(
+          "default",
+          "kubeflow",
+          "run-1",
+          "test-pod",
+          undefined,
+          mockUser,
+        );
+        done();
+      });
     });
   });
 });

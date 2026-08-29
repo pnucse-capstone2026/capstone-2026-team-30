@@ -1,11 +1,14 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { of } from "rxjs";
 import { KFPAdapter } from "./kfp.adapter";
 import { ClusterProvider } from "../../kubernetes/cluster-provider";
+import { K8sResourceWatcher } from "../../kubernetes/k8s-watcher.util";
 
 describe("KFPAdapter", () => {
   let adapter: KFPAdapter;
   let mockClusterProvider: Partial<ClusterProvider>;
   let mockCustomObjectsApi: { listNamespacedCustomObject: jest.Mock };
+  let mockResourceWatcher: Partial<K8sResourceWatcher>;
 
   beforeEach(async () => {
     mockCustomObjectsApi = {
@@ -18,12 +21,26 @@ describe("KFPAdapter", () => {
       }),
     };
 
+    mockResourceWatcher = {
+      watchCustomResource: jest.fn().mockReturnValue(
+        of({
+          type: "MODIFIED",
+          object: { metadata: { uid: "run-1" } },
+          timestamp: "2026-08-29T10:00:00Z",
+        }),
+      ),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         KFPAdapter,
         {
           provide: ClusterProvider,
           useValue: mockClusterProvider,
+        },
+        {
+          provide: K8sResourceWatcher,
+          useValue: mockResourceWatcher,
         },
       ],
     }).compile();
@@ -83,6 +100,28 @@ describe("KFPAdapter", () => {
       expect(runs.length).toBe(1);
       expect(runs[0].id).toBe("run-1");
       expect(runs[0].status).toBe("Succeeded");
+    });
+  });
+
+  describe("watchWorkflowEvents", () => {
+    it("should emit pipeline update events from K8sResourceWatcher", (done) => {
+      const stream$ = adapter.watchWorkflowEvents("default", "kubeflow");
+      stream$.subscribe((evt) => {
+        expect(evt.event).toBe("pipeline-updated");
+        expect(evt.data.runId).toBe("run-1");
+        done();
+      });
+    });
+  });
+
+  describe("streamPodLogs", () => {
+    it("should emit log step events", (done) => {
+      const stream$ = adapter.streamPodLogs("default", "kubeflow", "pod-1");
+      stream$.subscribe((evt) => {
+        expect(evt.event).toBe("log-step");
+        expect(evt.data.podName).toBe("pod-1");
+        done();
+      });
     });
   });
 });

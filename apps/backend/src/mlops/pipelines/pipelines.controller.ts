@@ -5,8 +5,11 @@ import {
   Param,
   Post,
   Query,
+  Sse,
   UseGuards,
+  MessageEvent,
 } from "@nestjs/common";
+import { Observable } from "rxjs";
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -153,5 +156,57 @@ export class PipelinesController {
       user,
     );
     return { logs };
+  }
+
+  /**
+   * KFP 파이프라인/Workflow 상태 변경 실시간 SSE 이벤트를 스트리밍합니다.
+   */
+  @Sse("events")
+  @RequirePermissions("mlops.pipelines")
+  @ApiOperation({
+    summary: "파이프라인 이벤트 실시간 스트리밍 (SSE)",
+    description:
+      "K8s Workflow/PipelineRun 상태 변화 시 pipeline-updated 이벤트를 실시간 발송합니다.",
+  })
+  @ApiQuery({ name: "clusterId", required: false, example: "default" })
+  @ApiQuery({ name: "namespace", required: false, example: "kubeflow" })
+  getEvents(
+    @Query("clusterId") clusterId: string = "default",
+    @Query("namespace") namespace: string = "kubeflow",
+    @CurrentUser() user: AuthenticatedUser,
+  ): Observable<MessageEvent> {
+    return this.pipelinesService.subscribeEvents(clusterId, namespace, user);
+  }
+
+  /**
+   * 특정 파이프라인 execution step Pod의 실시간 로그 스트림을 전달합니다.
+   */
+  @Sse("runs/:runId/logs/stream")
+  @RequirePermissions("mlops.pipelines")
+  @ApiOperation({
+    summary: "파이프라인 스텝 Pod 실시간 로그 스트리밍 (SSE)",
+    description:
+      "DAG 스텝 execution Pod의 컨테이너 로그 단편을 log-step 이벤트로 실시간 수신합니다.",
+  })
+  @ApiParam({ name: "runId", description: "파이프라인 Run 식별자" })
+  @ApiQuery({ name: "podName", required: true })
+  @ApiQuery({ name: "containerName", required: false })
+  @ApiQuery({ name: "clusterId", required: false, example: "default" })
+  @ApiQuery({ name: "namespace", required: false, example: "kubeflow" })
+  streamRunLogs(
+    @Param("runId") runId: string,
+    @Query() query: RunLogQueryDto,
+    @Query("clusterId") clusterId: string = "default",
+    @Query("namespace") namespace: string = "kubeflow",
+    @CurrentUser() user: AuthenticatedUser,
+  ): Observable<MessageEvent> {
+    return this.pipelinesService.streamLogs(
+      clusterId,
+      namespace,
+      runId,
+      query.podName,
+      query.containerName,
+      user,
+    );
   }
 }

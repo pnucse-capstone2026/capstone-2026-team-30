@@ -1,4 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { of } from "rxjs";
 import { PipelinesService } from "./pipelines.service";
 import { KFPAdapter } from "./kfp.adapter";
 import { AuthenticatedUser } from "../../auth/auth.types";
@@ -46,6 +47,18 @@ describe("PipelinesService", () => {
         createdAt: "2026-08-27T10:00:00Z",
       }),
       getPodLogs: jest.fn().mockResolvedValue("sample pod log"),
+      watchWorkflowEvents: jest.fn().mockReturnValue(
+        of({
+          event: "pipeline-updated",
+          data: { clusterId: "default", namespace: "kubeflow" },
+        }),
+      ),
+      streamPodLogs: jest.fn().mockReturnValue(
+        of({
+          event: "log-step",
+          data: { podName: "pod-1", line: "log line" },
+        }),
+      ),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -95,6 +108,35 @@ describe("PipelinesService", () => {
       const run = await service.createRun(dto, mockUser);
       expect(run.id).toBe("run-1");
       expect(mockKfpAdapter.createPipelineRun).toHaveBeenCalledWith(dto);
+    });
+  });
+
+  describe("subscribeEvents", () => {
+    it("should map adapter workflow events to MessageEvents", (done) => {
+      const events$ = service.subscribeEvents("default", "kubeflow", mockUser);
+      events$.subscribe((msg) => {
+        expect(msg.type).toBe("pipeline-updated");
+        expect(typeof msg.data).toBe("string");
+        done();
+      });
+    });
+  });
+
+  describe("streamLogs", () => {
+    it("should map adapter pod log events to MessageEvents", (done) => {
+      const logs$ = service.streamLogs(
+        "default",
+        "kubeflow",
+        "run-1",
+        "pod-1",
+        undefined,
+        mockUser,
+      );
+      logs$.subscribe((msg) => {
+        expect(msg.type).toBe("log-step");
+        expect(typeof msg.data).toBe("string");
+        done();
+      });
     });
   });
 });
