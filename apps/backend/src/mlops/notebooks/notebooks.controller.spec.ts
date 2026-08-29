@@ -1,4 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { of } from "rxjs";
 import { NotebooksController } from "./notebooks.controller";
 import { NotebooksService } from "./notebooks.service";
 import type { AuthenticatedUser } from "../../auth/auth.types";
@@ -29,6 +30,7 @@ describe("NotebooksController", () => {
       startNotebook: jest.fn(),
       deleteNotebook: jest.fn(),
       getNotebookUrl: jest.fn(),
+      watchNotebookEvents: jest.fn(),
     } as unknown as jest.Mocked<NotebooksService>;
 
     const module: TestingModule = await Test.createTestingModule({
@@ -106,6 +108,22 @@ describe("NotebooksController", () => {
 
       expect(result.name).toBe("test-nb");
       expect(mockService.createNotebook).toHaveBeenCalledWith(dto, mockUser);
+    });
+  });
+
+  describe("watchEvents", () => {
+    it("should delegate event stream creation to service", () => {
+      const mockObservable = of({ type: "notebook-updated", data: {} });
+      mockService.watchNotebookEvents.mockReturnValue(mockObservable);
+
+      const result = controller.watchEvents("cluster-1", "default", mockUser);
+
+      expect(result).toBe(mockObservable);
+      expect(mockService.watchNotebookEvents).toHaveBeenCalledWith(
+        "cluster-1",
+        "default",
+        mockUser,
+      );
     });
   });
 });

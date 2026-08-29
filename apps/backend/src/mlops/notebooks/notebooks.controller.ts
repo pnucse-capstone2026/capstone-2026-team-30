@@ -5,11 +5,14 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  MessageEvent,
   Param,
   Post,
   Query,
+  Sse,
   UseGuards,
 } from "@nestjs/common";
+import { Observable } from "rxjs";
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -53,6 +56,31 @@ export class NotebooksController {
   })
   getPresets(): NotebookPresetsResponseDto {
     return this.notebooksService.getPresets();
+  }
+
+  /**
+   * Notebook 인스턴스의 실시간 상태 변경 이벤트를 SSE(Server-Sent Events) 스트림으로 수신합니다.
+   *
+   * @param clusterId 조회 대상 클러스터 ID
+   * @param namespace 조회 대상 네임스페이스
+   * @param user 인증된 요청 사용자
+   */
+  @Sse("events")
+  @ApiOperation({
+    summary: "Notebook 실시간 이벤트 SSE 스트림",
+    description:
+      "지정된 클러스터 및 네임스페이스의 Notebook CRD 상태 변경 이벤트를 SSE로 수신 스트리밍합니다.",
+  })
+  watchEvents(
+    @Query("clusterId") clusterId: string,
+    @Query("namespace") namespace: string = "default",
+    @CurrentUser() user: AuthenticatedUser,
+  ): Observable<MessageEvent> {
+    return this.notebooksService.watchNotebookEvents(
+      clusterId,
+      namespace || "default",
+      user,
+    );
   }
 
   /**

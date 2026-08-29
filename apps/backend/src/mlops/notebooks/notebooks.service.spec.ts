@@ -1,4 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { of } from "rxjs";
 import { NotebooksService } from "./notebooks.service";
 import { KubeflowAdapter } from "./kubeflow.adapter";
 import { BusinessException } from "../../common/errors/business.exception";
@@ -32,6 +33,7 @@ describe("NotebooksService", () => {
       startNotebook: jest.fn(),
       deleteNotebook: jest.fn(),
       ensureWorkspacePvc: jest.fn(),
+      watchNotebooks: jest.fn(),
     } as unknown as jest.Mocked<KubeflowAdapter>;
 
     const module: TestingModule = await Test.createTestingModule({
@@ -213,6 +215,41 @@ describe("NotebooksService", () => {
       );
 
       expect(result.status).toBe("Stopped");
+    });
+  });
+
+  describe("watchNotebookEvents", () => {
+    it("should transform adapter watch stream to SSE message events", (done) => {
+      const mockManifest = {
+        apiVersion: "kubeflow.org/v1",
+        kind: "Notebook",
+        metadata: { name: "nb-1", namespace: "default" },
+        spec: {
+          template: {
+            spec: { containers: [{ name: "nb-1", image: "test:latest" }] },
+          },
+        },
+      };
+
+      mockAdapter.watchNotebooks.mockReturnValue(
+        of({ type: "MODIFIED", object: mockManifest }),
+      );
+
+      const stream$ = service.watchNotebookEvents(
+        "cluster-1",
+        "default",
+        mockNormalUser,
+      );
+
+      stream$.subscribe((event) => {
+        expect(event.type).toBe("notebook-updated");
+        expect(event.data).toMatchObject({
+          action: "MODIFIED",
+          clusterId: "cluster-1",
+          namespace: "default",
+        });
+        done();
+      });
     });
   });
 });

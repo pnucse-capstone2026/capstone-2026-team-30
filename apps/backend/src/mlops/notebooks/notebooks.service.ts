@@ -1,4 +1,6 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, MessageEvent } from "@nestjs/common";
+import { Observable } from "rxjs";
+import { map } from "rxjs/operators";
 import { BusinessException } from "../../common/errors/business.exception";
 import { MLOPS_ERROR } from "../mlops.errors";
 import {
@@ -379,6 +381,36 @@ export class NotebooksService {
         notebook.url ||
         `/api/v1/namespaces/${namespace}/services/http:${name}:80/proxy/`,
     };
+  }
+
+  /**
+   * 지정된 클러스터 및 네임스페이스의 Notebook CRD 실시간 변경 이벤트 스트림을 구독합니다.
+   *
+   * @param clusterId 대상 클러스터 ID
+   * @param namespace 대상 네임스페이스
+   * @param user 인증된 요청 사용자
+   */
+  watchNotebookEvents(
+    clusterId: string,
+    namespace: string = "default",
+    user: AuthenticatedUser,
+  ): Observable<MessageEvent> {
+    this.validateClusterAccess(clusterId, user);
+
+    return this.kubeflowAdapter.watchNotebooks(clusterId, namespace).pipe(
+      map((event) => {
+        const notebook = this.mapManifestToDto(event.object, clusterId);
+        return {
+          data: {
+            action: event.type,
+            notebook,
+            clusterId,
+            namespace,
+          },
+          type: "notebook-updated",
+        } as MessageEvent;
+      }),
+    );
   }
 
   /**

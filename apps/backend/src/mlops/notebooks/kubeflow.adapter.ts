@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
-import { CoreV1Api, KubeConfig } from "@kubernetes/client-node";
+import { CoreV1Api, KubeConfig, Watch } from "@kubernetes/client-node";
+import { Observable } from "rxjs";
 import { ClusterProvider } from "../../kubernetes/cluster-provider";
 
 export const KUBEFLOW_GROUP = "kubeflow.org";
@@ -290,6 +291,66 @@ export class KubeflowAdapter {
           },
         },
       },
+    });
+  }
+
+  /**
+   * Kubernetes Custom Objects Watch API(`kubeflow.org/v1`, plural: `notebooks`)를 사용하여
+   * 지정된 클러스터 및 네임스페이스의 Notebook 변경 이벤트(`ADDED`, `MODIFIED`, `DELETED`)를 감지하는 Observable 스트림을 생성합니다.
+   *
+   * @param clusterId 감지 대상 클러스터 ID
+   * @param namespace 감지 대상 네임스페이스
+   */
+  watchNotebooks(
+    clusterId: string,
+    namespace: string = "default",
+  ): Observable<{ type: string; object: KubeflowNotebookManifest }> {
+    return new Observable((subscriber) => {
+      let watchRequest: { abort?: () => void; destroy?: () => void } | null =
+        null;
+
+      try {
+        const kubeConfig = this.clusterProvider.getKubeConfig(clusterId);
+        const watch = new Watch(kubeConfig);
+        const path = `/apis/${KUBEFLOW_GROUP}/${KUBEFLOW_VERSION}/namespaces/${namespace}/${KUBEFLOW_NOTEBOOK_PLURAL}`;
+
+        watch
+          .watch(
+            path,
+            {},
+            (type, apiObj) => {
+              subscriber.next({
+                type,
+                object: apiObj as KubeflowNotebookManifest,
+              });
+            },
+            (err) => {
+              if (err) {
+                subscriber.error(err);
+              } else {
+                subscriber.complete();
+              }
+            },
+          )
+          .then((req) => {
+            watchRequest = req as { abort?: () => void; destroy?: () => void };
+          })
+          .catch((err) => {
+            subscriber.error(err);
+          });
+      } catch (err) {
+        subscriber.error(err);
+      }
+
+      return () => {
+        if (watchRequest) {
+          if (typeof watchRequest.abort === "function") {
+            watchRequest.abort();
+          } else if (typeof watchRequest.destroy === "function") {
+            watchRequest.destroy();
+          }
+        }
+      };
     });
   }
 }
