@@ -1,0 +1,128 @@
+# 실제 EKS 프로덕션/테스트 환경을 모사한 Kyverno 정책 및 실시간 위반 워크로드 매니페스트
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    environment: production
+    kyverno-governance: enabled
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlops-workspace
+  labels:
+    environment: mlops
+    kyverno-governance: enabled
+---
+# 1. [위반] governance-testbed / violating-web-app (latest 태그 및 자원 제한 미설정)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: violating-web-app
+  namespace: governance-testbed
+  labels:
+    app: violating-web-app
+    tier: frontend
+spec:
+  containers:
+    - name: web-server
+      image: nginx:latest
+      ports:
+        - containerPort: 80
+---
+# 2. [위반] governance-testbed / violating-privileged-debugger (Privileged 컨테이너 및 자원 제한 미설정)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: violating-privileged-debugger
+  namespace: governance-testbed
+  labels:
+    app: privileged-debugger
+    tier: ops
+spec:
+  containers:
+    - name: debugger
+      image: busybox:1.36.1
+      command: ["sh", "-c", "sleep 3600"]
+      securityContext:
+        privileged: true
+---
+# 3. [준수] governance-testbed / compliant-payment-api (명시적 태그 및 리소스 경계 준수)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: compliant-payment-api
+  namespace: governance-testbed
+  labels:
+    app: payment-api
+    tier: backend
+spec:
+  containers:
+    - name: api-server
+      image: nginx:1.25.3
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          cpu: "500m"
+          memory: "512Mi"
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: false
+---
+# 4. [위반] production / violating-legacy-worker (latest 태그, Privileged 권한 사용)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: violating-legacy-worker
+  namespace: production
+  labels:
+    app: legacy-worker
+    tier: batch
+spec:
+  containers:
+    - name: worker
+      image: python:latest
+      command: ["python", "-c", "import time; time.sleep(3600)"]
+      securityContext:
+        privileged: true
+---
+# 5. [준수] production / compliant-frontend-service (명시적 태그 및 자원 규격 준수)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: compliant-frontend-service
+  namespace: production
+  labels:
+    app: frontend-service
+    tier: frontend
+spec:
+  containers:
+    - name: web
+      image: nginx:1.25.3
+      resources:
+        requests:
+          cpu: "200m"
+          memory: "256Mi"
+        limits:
+          cpu: "1000m"
+          memory: "1Gi"
+---
+# 6. [위반] mlops-workspace / violating-untrusted-notebook (미승인 레포지토리 이미지 및 latest 태그)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: violating-untrusted-notebook
+  namespace: mlops-workspace
+  labels:
+    app: jupyter-notebook
+    workload: ml-training
+spec:
+  containers:
+    - name: notebook
+      image: untrusted-registry.io/mlops/jupyter-notebook:latest
+      command: ["sh", "-c", "sleep 3600"]
