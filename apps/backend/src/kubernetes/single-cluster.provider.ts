@@ -67,6 +67,14 @@ export class SingleClusterProvider extends ClusterProvider {
     return [this.getMetadata(this.id)];
   }
 
+  getKubeConfig(clusterId: string): KubeConfig {
+    this.assertCluster(clusterId);
+    const kubeConfig = new KubeConfig();
+    if (this.inCluster) kubeConfig.loadFromCluster();
+    else kubeConfig.loadFromDefault();
+    return kubeConfig;
+  }
+
   getDefault(): ClusterConnection {
     if (!this.connection) {
       const kubeConfig = new KubeConfig();

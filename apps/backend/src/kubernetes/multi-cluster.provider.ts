@@ -71,6 +71,12 @@ export class MultiClusterProvider extends ClusterProvider {
     return [...this.entries.values()].map((entry) => this.toMetadata(entry));
   }
 
+  getKubeConfig(clusterId: string): KubeConfig {
+    const entry = this.entries.get(clusterId);
+    if (!entry) this.throwNotConfigured(clusterId);
+    return this.buildKubeConfig(entry);
+  }
+
   private toMetadata(entry: ClusterConfigEntry): ClusterMetadata {
     return {
       id: entry.id,
@@ -82,7 +88,7 @@ export class MultiClusterProvider extends ClusterProvider {
     };
   }
 
-  private buildConnection(entry: ClusterConfigEntry): ClusterConnection {
+  private buildKubeConfig(entry: ClusterConfigEntry): KubeConfig {
     const kubeConfig = new KubeConfig();
     kubeConfig.loadFromClusterAndUser(
       {
@@ -100,6 +106,11 @@ export class MultiClusterProvider extends ClusterProvider {
         keyData: entry.clientKeyData,
       },
     );
+    return kubeConfig;
+  }
+
+  private buildConnection(entry: ClusterConfigEntry): ClusterConnection {
+    const kubeConfig = this.buildKubeConfig(entry);
 
     return {
       ...this.toMetadata(entry),

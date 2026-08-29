@@ -1,4 +1,4 @@
-import { CustomObjectsApi } from "@kubernetes/client-node";
+import { CustomObjectsApi, KubeConfig } from "@kubernetes/client-node";
 
 export type ClusterConnection = {
   id: string;
@@ -17,4 +17,5 @@ export abstract class ClusterProvider {
   abstract getDefault(): ClusterConnection;
   abstract getMetadata(clusterId: string): ClusterMetadata;
   abstract list(): ClusterMetadata[];
+  abstract getKubeConfig(clusterId: string): KubeConfig;
 }

@@ -1,4 +1,8 @@
-import { ApiException, CustomObjectsApi } from "@kubernetes/client-node";
+import {
+  ApiException,
+  CustomObjectsApi,
+  KubeConfig,
+} from "@kubernetes/client-node";
 import { BusinessException } from "../../src/common/errors/business.exception";
 import {
   ClusterConnection,
@@ -86,6 +90,10 @@ export function buildFakeClusterProvider(
     getMetadata: (clusterId: string) => metadataFor(clusterId),
     getDefault: () => connectionFor(specs[0].id),
     list: () => [...metas.values()],
+    getKubeConfig: (clusterId: string) => {
+      metadataFor(clusterId);
+      return new KubeConfig();
+    },
     apiFor: (clusterId: string) => {
       const api = apis.get(clusterId);
       if (!api)
