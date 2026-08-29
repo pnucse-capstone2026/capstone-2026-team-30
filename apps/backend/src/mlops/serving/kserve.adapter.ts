@@ -1,5 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
+import { Observable, map } from "rxjs";
 import { ClusterProvider } from "../../kubernetes/cluster-provider";
+import { K8sResourceWatcher } from "../../kubernetes/k8s-watcher.util";
 import { DeployModelDto } from "./dto/deploy-model.dto";
 import { InferenceServiceResponseDto } from "./dto/serving-endpoint-response.dto";
 
@@ -23,7 +25,10 @@ function statusCode(error: unknown): number | undefined {
 export class KServeAdapter {
   private readonly logger = new Logger(KServeAdapter.name);
 
-  constructor(private readonly clusterProvider: ClusterProvider) {}
+  constructor(
+    private readonly clusterProvider: ClusterProvider,
+    private readonly resourceWatcher: K8sResourceWatcher,
+  ) {}
 
   /**
    * 지정된 클러스터/네임스페이스의 KServe InferenceService 목록을 조회합니다.
@@ -348,5 +353,38 @@ export class KServeAdapter {
       createdAt:
         (metadata.creationTimestamp as string) ?? new Date().toISOString(),
     };
+  }
+
+  /**
+   * 지정된 클러스터 및 네임스페이스의 KServe InferenceService 실시간 상태 이벤트를 감시합니다.
+   *
+   * @param clusterId 대상 클러스터 식별자
+   * @param namespace 네임스페이스
+   * @returns InferenceService 상태 업데이트 이벤트 스트림
+   */
+  watchInferenceServiceEvents(
+    clusterId: string,
+    namespace: string = "default",
+  ): Observable<{ event: string; data: Record<string, unknown> }> {
+    const watcher$ = this.resourceWatcher.watchCustomResource(clusterId, {
+      group: KSERVE_GROUP,
+      version: KSERVE_VERSION,
+      plural: KSERVE_INFERENCESERVICE_PLURAL,
+      namespace,
+    });
+
+    return watcher$.pipe(
+      map((evt) => ({
+        event: "serving-updated",
+        data: {
+          eventType: evt.type,
+          clusterId,
+          namespace,
+          name: (evt.object as { metadata?: { name?: string } })?.metadata
+            ?.name,
+          timestamp: evt.timestamp,
+        },
+      })),
+    );
   }
 }

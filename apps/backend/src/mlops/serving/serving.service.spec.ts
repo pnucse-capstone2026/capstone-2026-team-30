@@ -1,4 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { of } from "rxjs";
 import { ServingService } from "./serving.service";
 import { KServeAdapter } from "./kserve.adapter";
 import { AuthenticatedUser } from "../../auth/auth.types";
@@ -19,6 +20,17 @@ describe("ServingService", () => {
   beforeEach(async () => {
     mockKserveAdapter = {
       listInferenceServices: jest.fn().mockResolvedValue([]),
+      watchInferenceServiceEvents: jest.fn().mockReturnValue(
+        of({
+          event: "serving-updated",
+          data: {
+            eventType: "MODIFIED",
+            clusterId: "default",
+            namespace: "kserve-test",
+            name: "resnet50-v1",
+          },
+        }),
+      ),
       createInferenceService: jest.fn().mockResolvedValue({
         name: "resnet50-v1",
         namespace: "kserve-test",
@@ -102,6 +114,20 @@ describe("ServingService", () => {
         mockUser,
       );
       expect(result.canaryTrafficPercent).toBe(20);
+    });
+  });
+
+  describe("subscribeEvents", () => {
+    it("should subscribe to serving SSE events and return MessageEvent stream", (done) => {
+      service
+        .subscribeEvents("default", "kserve-test", mockUser)
+        .subscribe((event) => {
+          expect(event.type).toBe("serving-updated");
+          const parsed = JSON.parse(event.data as string);
+          expect(parsed.name).toBe("resnet50-v1");
+          expect(parsed.clusterId).toBe("default");
+          done();
+        });
     });
   });
 });

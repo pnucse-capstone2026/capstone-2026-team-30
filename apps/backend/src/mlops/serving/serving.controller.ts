@@ -5,12 +5,15 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  MessageEvent,
   Param,
   Patch,
   Post,
   Query,
+  Sse,
   UseGuards,
 } from "@nestjs/common";
+import { Observable } from "rxjs";
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -62,6 +65,26 @@ export class ServingController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<InferenceServiceResponseDto[]> {
     return this.servingService.getEndpoints(clusterId, namespace, user);
+  }
+
+  /**
+   * KServe InferenceService 실시간 상태 변경 SSE 이벤트를 스트리밍합니다.
+   */
+  @Sse("events")
+  @RequirePermissions("mlops.serving")
+  @ApiOperation({
+    summary: "KServe 서빙 이벤트 실시간 스트리밍 (SSE)",
+    description:
+      "KServe InferenceService 상태 변화 및 Canary 트래픽 조정 시 serving-updated 이벤트를 실시간 발송합니다.",
+  })
+  @ApiQuery({ name: "clusterId", required: false, example: "default" })
+  @ApiQuery({ name: "namespace", required: false, example: "kserve-test" })
+  getEvents(
+    @Query("clusterId") clusterId: string = "default",
+    @Query("namespace") namespace: string = "kserve-test",
+    @CurrentUser() user: AuthenticatedUser,
+  ): Observable<MessageEvent> {
+    return this.servingService.subscribeEvents(clusterId, namespace, user);
   }
 
   /**

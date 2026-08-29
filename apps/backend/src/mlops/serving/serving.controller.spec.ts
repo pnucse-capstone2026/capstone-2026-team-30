@@ -1,4 +1,6 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { of } from "rxjs";
+import { MessageEvent } from "@nestjs/common";
 import { ServingController } from "./serving.controller";
 import { ServingService } from "./serving.service";
 import { AuthenticatedUser } from "../../auth/auth.types";
@@ -22,6 +24,12 @@ describe("ServingController", () => {
   beforeEach(async () => {
     mockServingService = {
       getEndpoints: jest.fn().mockResolvedValue([]),
+      subscribeEvents: jest.fn().mockReturnValue(
+        of({
+          type: "serving-updated",
+          data: JSON.stringify({ clusterId: "default", name: "resnet50-v1" }),
+        } as MessageEvent),
+      ),
       deployModel: jest.fn().mockResolvedValue({
         name: "resnet50-v1",
         namespace: "kserve-test",
@@ -101,6 +109,21 @@ describe("ServingController", () => {
         mockUser,
       );
       expect(result.canaryTrafficPercent).toBe(30);
+    });
+  });
+
+  describe("getEvents", () => {
+    it("should return SSE stream of serving events", (done) => {
+      const stream$ = controller.getEvents("default", "kserve-test", mockUser);
+      stream$.subscribe((event) => {
+        expect(event.type).toBe("serving-updated");
+        expect(mockServingService.subscribeEvents).toHaveBeenCalledWith(
+          "default",
+          "kserve-test",
+          mockUser,
+        );
+        done();
+      });
     });
   });
 });

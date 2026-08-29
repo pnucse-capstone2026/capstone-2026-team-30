@@ -1,12 +1,14 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { of } from "rxjs";
 import { KServeAdapter } from "./kserve.adapter";
 import { ClusterProvider } from "../../kubernetes/cluster-provider";
-
+import { K8sResourceWatcher } from "../../kubernetes/k8s-watcher.util";
 import { ModelFramework } from "./dto/deploy-model.dto";
 
 describe("KServeAdapter", () => {
   let adapter: KServeAdapter;
   let mockClusterProvider: Partial<ClusterProvider>;
+  let mockResourceWatcher: Partial<K8sResourceWatcher>;
   let mockCustomObjectsApi: {
     listNamespacedCustomObject: jest.Mock;
     getNamespacedCustomObject: jest.Mock;
@@ -30,12 +32,26 @@ describe("KServeAdapter", () => {
       }),
     };
 
+    mockResourceWatcher = {
+      watchCustomResource: jest.fn().mockReturnValue(
+        of({
+          type: "MODIFIED",
+          object: { metadata: { name: "resnet50-v1" } },
+          timestamp: "2026-08-27T12:00:00Z",
+        }),
+      ),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         KServeAdapter,
         {
           provide: ClusterProvider,
           useValue: mockClusterProvider,
+        },
+        {
+          provide: K8sResourceWatcher,
+          useValue: mockResourceWatcher,
         },
       ],
     }).compile();
@@ -100,6 +116,20 @@ describe("KServeAdapter", () => {
       const result = await adapter.createInferenceService(dto);
       expect(result.name).toBe("onnx-model-v1");
       expect(result.framework).toBe("onnx");
+    });
+  });
+
+  describe("watchInferenceServiceEvents", () => {
+    it("should stream serving-updated events from k8s watcher", (done) => {
+      adapter
+        .watchInferenceServiceEvents("default", "kserve-test")
+        .subscribe((event) => {
+          expect(event.event).toBe("serving-updated");
+          expect(event.data.clusterId).toBe("default");
+          expect(event.data.namespace).toBe("kserve-test");
+          expect(event.data.name).toBe("resnet50-v1");
+          done();
+        });
     });
   });
 });

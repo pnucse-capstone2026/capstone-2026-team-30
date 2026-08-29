@@ -1,4 +1,5 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, MessageEvent } from "@nestjs/common";
+import { Observable, map } from "rxjs";
 import { AuthenticatedUser } from "../../auth/auth.types";
 import { BusinessException } from "../../common/errors/business.exception";
 import { MLOPS_ERROR } from "../mlops.errors";
@@ -163,5 +164,33 @@ export class ServingService {
       output: mockOutput,
       latencyMs,
     };
+  }
+
+  /**
+   * 클러스터 및 네임스페이스 내 KServe InferenceService 실시간 SSE 상태 변경 이벤트를 구독합니다.
+   *
+   * @param clusterId 클러스터 식별자
+   * @param namespace 네임스페이스
+   * @param user 요청자 인증 컨텍스트
+   * @returns SSE MessageEvent Observable 스트림
+   * @throws {BusinessException} 클러스터 접근 권한 미보유 시
+   */
+  subscribeEvents(
+    clusterId: string,
+    namespace: string,
+    user: AuthenticatedUser,
+  ): Observable<MessageEvent> {
+    this.validateClusterAccess(clusterId, user);
+    return this.kserveAdapter
+      .watchInferenceServiceEvents(clusterId, namespace)
+      .pipe(
+        map(
+          (item) =>
+            ({
+              type: item.event,
+              data: JSON.stringify(item.data),
+            }) as MessageEvent,
+        ),
+      );
   }
 }
