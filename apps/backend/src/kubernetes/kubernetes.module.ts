@@ -6,6 +6,7 @@ import { ClusterProvider } from "./cluster-provider";
 import { KyvernoAdapter } from "./kyverno.adapter";
 import { MultiClusterProvider } from "./multi-cluster.provider";
 import { SingleClusterProvider } from "./single-cluster.provider";
+import { K8sResourceWatcher } from "./k8s-watcher.util";
 
 export type ClusterProviderMode = "single" | "multi";
 
@@ -46,7 +47,8 @@ function resolveClusterProvider(config: ConfigService): ClusterProvider {
       useFactory: resolveClusterProvider,
     },
     KyvernoAdapter,
+    K8sResourceWatcher,
   ],
-  exports: [ClusterProvider, KyvernoAdapter],
+  exports: [ClusterProvider, KyvernoAdapter, K8sResourceWatcher],
 })
 export class KubernetesModule {}
