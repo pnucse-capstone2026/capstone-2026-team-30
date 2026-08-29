@@ -59,10 +59,13 @@ if [ "${IS_EKS}" = true ]; then
   docker push "${ECR_URI_TAGGED}"
   IMAGE_TARGET="${ECR_URI_TAGGED}"
 else
-  # 로컬 Kind 클러스터 존재 시 도커 이미지를 Kind 노드 내부로 자동 로드
-  if command -v kind &> /dev/null && kind get clusters 2>/dev/null | grep -q "k8s-lab"; then
+  KIND="${SCRIPT_DIR}/bin/kind"
+  if [ ! -f "${KIND}" ]; then
+    KIND="kind"
+  fi
+  if "${KIND}" get clusters 2>/dev/null | grep -q "k8s-lab"; then
     echo ">>> Loading Docker image '${REPO_NAME}:latest' into local Kind cluster 'k8s-lab'..."
-    kind load docker-image "${REPO_NAME}:latest" --name "k8s-lab"
+    "${KIND}" load docker-image "${REPO_NAME}:latest" --name "k8s-lab"
   fi
   IMAGE_TARGET="${REPO_NAME}:latest"
 fi

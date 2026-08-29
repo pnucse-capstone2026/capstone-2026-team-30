@@ -59,10 +59,13 @@ if [ "${IS_EKS}" = true ]; then
   docker push "${ECR_URI_TAGGED}"
   IMAGE_TARGET="${ECR_URI_TAGGED}"
 else
-  # 로컬 Kind 클러스터 존재 시 도커 이미지를 Kind 노드 내부로 자동 로드
-  if command -v kind &> /dev/null && kind get clusters 2>/dev/null | grep -q "k8s-lab"; then
+  KIND="${SCRIPT_DIR}/bin/kind"
+  if [ ! -f "${KIND}" ]; then
+    KIND="kind"
+  fi
+  if "${KIND}" get clusters 2>/dev/null | grep -q "k8s-lab"; then
     echo ">>> Loading Docker image '${REPO_NAME}:latest' into local Kind cluster 'k8s-lab'..."
-    kind load docker-image "${REPO_NAME}:latest" --name "k8s-lab"
+    "${KIND}" load docker-image "${REPO_NAME}:latest" --name "k8s-lab"
   fi
   IMAGE_TARGET="${REPO_NAME}:latest"
 fi
@@ -82,7 +85,7 @@ echo ">>> Synchronizing PostgreSQL schema and seeding initial admin/RBAC..."
 PF_PG_PID=$!
 sleep 3
 DATABASE_URL="postgresql://devuser:devpassword@localhost:5432/kyverno_dashboard?schema=public" pnpm --filter @kyverno-platform/backend exec prisma db push --accept-data-loss || true
-DATABASE_URL="postgresql://devuser:devpassword@localhost:5432/kyverno_dashboard?schema=public" SEED_ADMIN_EMAIL="admin@example.com" SEED_ADMIN_PASSWORD="change-this-admin-password" pnpm --filter @kyverno-platform/backend exec prisma db seed || true
+DATABASE_URL="postgresql://devuser:devpassword@localhost:5432/kyverno_dashboard?schema=public" SEED_ADMIN_EMAIL="admin@test.com" SEED_ADMIN_PASSWORD="test1234!" SEED_USER_EMAIL="user@test.com" SEED_USER_PASSWORD="test1234!" pnpm --filter @kyverno-platform/backend exec prisma db seed || true
 kill $PF_PG_PID 2>/dev/null || true
 
 # Deployment 이미지 갱신 및 Zero-Downtime RollingUpdate 배포 수행
