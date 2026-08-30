@@ -17,11 +17,16 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/lib/auth-store";
 import {
+  getNotificationsApi,
+  markAllNotificationsAsReadApi,
+  markNotificationAsReadApi,
+} from "@/lib/notifications-api";
+import {
   isNotificationVisibleToUser,
-  notifications,
   notificationSeverityClassName,
   notificationSeverityLabel,
   notificationTypeLabel,
+  type AppNotification,
   type NotificationSeverity,
   type NotificationType,
 } from "@/lib/notifications";
@@ -55,19 +60,16 @@ export default function NotificationsPage() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all");
   const [readFilter, setReadFilter] = useState<ReadFilter>("all");
-  const [readIds, setReadIds] = useState<Set<string>>(
-    () =>
-      new Set(
-        notifications
-          .filter((notification) => notification.read)
-          .map((item) => item.id),
-      ),
+  const [notificationsList, setNotificationsList] = useState<AppNotification[]>(
+    [],
   );
 
   const loadNotifications = useCallback(async () => {
     setLoading(true);
     try {
       await initializeAuth();
+      const liveData = await getNotificationsApi();
+      setNotificationsList(liveData);
     } catch {
       // Graceful fallback
     } finally {
@@ -81,6 +83,7 @@ export default function NotificationsPage() {
 
   const sidebarVariant =
     user?.role === "ADMIN" || user?.role === "APPROVER" ? "admin" : "user";
+
   const visibleNotifications = useMemo(() => {
     if (!user) {
       return [];
@@ -88,10 +91,9 @@ export default function NotificationsPage() {
 
     const normalizedQuery = query.trim().toLowerCase();
 
-    return notifications
+    return notificationsList
       .filter((notification) => isNotificationVisibleToUser(notification, user))
       .filter((notification) => {
-        const read = readIds.has(notification.id);
         const matchesQuery =
           normalizedQuery.length === 0 ||
           [notification.title, notification.message, notification.type]
@@ -105,13 +107,14 @@ export default function NotificationsPage() {
           (severityFilter === "all" ||
             notification.severity === severityFilter) &&
           (readFilter === "all" ||
-            (readFilter === "read" && read) ||
-            (readFilter === "unread" && !read))
+            (readFilter === "read" && notification.read) ||
+            (readFilter === "unread" && !notification.read))
         );
       });
-  }, [query, readFilter, readIds, severityFilter, typeFilter, user]);
+  }, [notificationsList, query, readFilter, severityFilter, typeFilter, user]);
+
   const unreadCount = visibleNotifications.filter(
-    (notification) => !readIds.has(notification.id),
+    (notification) => !notification.read,
   ).length;
 
   function resetFilters() {
@@ -121,13 +124,26 @@ export default function NotificationsPage() {
     setReadFilter("all");
   }
 
-  function markAllAsRead() {
-    setReadIds(
-      new Set([
-        ...Array.from(readIds),
-        ...visibleNotifications.map((notification) => notification.id),
-      ]),
+  async function handleMarkAllAsRead() {
+    setNotificationsList((prev) =>
+      prev.map((item) => ({ ...item, read: true })),
     );
+    try {
+      await markAllNotificationsAsReadApi();
+    } catch {
+      // Graceful fallback
+    }
+  }
+
+  async function handleNotificationClick(id: string) {
+    setNotificationsList((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, read: true } : item)),
+    );
+    try {
+      await markNotificationAsReadApi(id);
+    } catch {
+      // Graceful fallback
+    }
   }
 
   return (
@@ -136,17 +152,6 @@ export default function NotificationsPage() {
       activeHref="/notifications"
       title="알림"
       description="내 역할과 계정에 해당하는 조치 알림을 확인합니다."
-      actions={
-        <Button
-          type="button"
-          variant="outline"
-          className="hidden h-10 rounded-xl border-slate-200 bg-white text-slate-700 sm:inline-flex"
-          onClick={markAllAsRead}
-        >
-          <CheckCircle2 className="size-4" />
-          모두 읽음
-        </Button>
-      }
     >
       <section className="grid gap-4 md:grid-cols-3">
         <SummaryCard
@@ -219,6 +224,15 @@ export default function NotificationsPage() {
                 <Filter className="size-4" />
                 필터 초기화
               </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 rounded-xl border-slate-200 bg-white text-slate-700"
+                onClick={handleMarkAllAsRead}
+              >
+                <CheckCircle2 className="size-4" />
+                모두 읽음
+              </Button>
             </div>
           </div>
 
@@ -272,18 +286,14 @@ export default function NotificationsPage() {
             ))
           ) : visibleNotifications.length > 0 ? (
             visibleNotifications.map((notification) => {
-              const read = readIds.has(notification.id);
+              const read = notification.read;
 
               return (
                 <Link
                   key={notification.id}
                   href={notification.href}
                   className="flex gap-4 px-5 py-4 hover:bg-slate-50/70 sm:px-6"
-                  onClick={() =>
-                    setReadIds(
-                      (current) => new Set([...current, notification.id]),
-                    )
-                  }
+                  onClick={() => handleNotificationClick(notification.id)}
                 >
                   <div
                     className={`mt-1 flex size-10 shrink-0 items-center justify-center rounded-xl ${
