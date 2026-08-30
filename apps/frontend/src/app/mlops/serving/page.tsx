@@ -32,7 +32,9 @@ export default function ServingPage() {
   const liveClusters = useDataStore((state) => state.clusters);
   const fetchClusters = useDataStore((state) => state.fetchClusters);
 
-  const [selectedClusterId, setSelectedClusterId] = useState<string>("default");
+  const [selectedClusterId, setSelectedClusterId] = useState<string>(
+    () => useDataStore.getState().clusters?.[0]?.id || "default",
+  );
   const [selectedNamespace, setSelectedNamespace] =
     useState<string>("kserve-test");
 
