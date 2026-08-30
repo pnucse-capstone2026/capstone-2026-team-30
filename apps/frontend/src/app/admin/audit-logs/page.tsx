@@ -132,7 +132,7 @@ export default function AdminAuditLogsPage() {
         <SummaryCard
           label="전체 로그"
           value={String(logs.length)}
-          detail={isLive ? "라이브 수집 이력" : "최근 작업 이력"}
+          detail="최근 작업 이력"
           icon={History}
           loading={liveLogs === null}
         />
@@ -163,16 +163,6 @@ export default function AdminAuditLogsPage() {
         <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50">
-                  {isLive ? "라이브 API 연동" : "AuditLog"}
-                </Badge>
-                <span className="text-xs text-slate-400">
-                  {isLive
-                    ? "백엔드 AuditLog DB 실시간 연동 중"
-                    : "플랫폼 작업 이력 실시간 관리"}
-                </span>
-              </div>
               <h2 className="text-2xl font-semibold tracking-tight">
                 작업 이력
               </h2>
@@ -336,11 +326,7 @@ export default function AdminAuditLogsPage() {
           <span>
             {filteredLogs.length} / {logs.length}개 로그 표시
           </span>
-          <span>
-            {isLive
-              ? "백엔드 AuditLog DB와 감사 이력이 성공적으로 연동되었습니다."
-              : "백엔드 연동 불가 시 기본 목업 감사 이력이 표시됩니다."}
-          </span>
+          <span>플랫폼 작업 및 보안 감사 이력</span>
         </div>
       </section>
     </DashboardPageShell>

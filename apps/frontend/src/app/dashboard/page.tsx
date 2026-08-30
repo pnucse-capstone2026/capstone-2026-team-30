@@ -104,7 +104,7 @@ export default function UserDashboardPage() {
     {
       label: "내가 관리 중인 정책",
       value: String(policiesList.length),
-      detail: "Kubernetes 라이브 적용 중",
+      detail: "적용 중인 정책 기준",
       icon: FileCheck2,
       tone: "emerald",
       trend: "+2",
@@ -156,11 +156,6 @@ export default function UserDashboardPage() {
               <Search className="size-4" />내 정책 또는 리소스 검색
             </button>
             <NotificationDropdown />
-            <div className="ml-1 hidden items-center gap-2 sm:flex lg:hidden">
-              <div className="flex size-9 items-center justify-center rounded-full bg-[#0b2342] text-xs font-semibold text-white">
-                {user?.email?.[0]?.toUpperCase() ?? "사"}
-              </div>
-            </div>
           </div>
         </header>
 
@@ -172,13 +167,6 @@ export default function UserDashboardPage() {
                 안녕하세요, {user?.email ? user.email.split("@")[0] : "사용자"}
                 님
               </h2>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <span className="relative flex size-2">
-                <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-                <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
-              </span>
-              {isLoading ? "라이브 수집 중..." : "내 작업 목록 새로고침 완료"}
             </div>
           </section>
 

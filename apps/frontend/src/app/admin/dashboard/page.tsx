@@ -215,16 +215,6 @@ export default function AdminDashboardPage() {
     >
       <section className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
         <div>
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50">
-              {liveClusters !== null ? "라이브 API 연동" : "관리자 홈"}
-            </Badge>
-            <span className="text-xs text-slate-400">
-              {liveClusters !== null
-                ? "Kubernetes 및 백엔드 DB 실시간 대시보드 지표"
-                : "플랫폼 주요 지표 운영 요약"}
-            </span>
-          </div>
           <h2 className="text-2xl font-semibold tracking-tight">
             오늘 확인할 운영 항목
           </h2>
@@ -232,13 +222,6 @@ export default function AdminDashboardPage() {
             예외 검토, 정책 오류, 감사 로그, 클러스터 상태를 한 화면에서
             확인하고 필요한 관리 화면으로 이동합니다.
           </p>
-        </div>
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <span className="relative flex size-2">
-            <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-            <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
-          </span>
-          {isLoading ? "라이브 데이터 수집 중..." : "화면 데이터 준비 완료"}
         </div>
       </section>
 

@@ -145,7 +145,7 @@ export default function AdminClustersPage() {
                 .slice(0, 16)
                 .replace("T", " "),
               owner: "플랫폼팀",
-              description: `${item.displayName || item.id} 라이브 연동 클러스터입니다.`,
+              description: `${item.displayName || item.id} 클러스터입니다.`,
             };
           })
         : liveClusters && liveClusters.length === 0
@@ -279,16 +279,6 @@ export default function AdminClustersPage() {
         <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50">
-                  {liveClusters ? "라이브 API 연동" : "EKS"}
-                </Badge>
-                <span className="text-xs text-slate-400">
-                  {liveClusters
-                    ? "백엔드 API 및 Kubernetes 라이브 연결"
-                    : "백엔드 연동 불가 시 목업 데이터"}
-                </span>
-              </div>
               <h2 className="text-2xl font-semibold tracking-tight">
                 클러스터 연결 현황
               </h2>
@@ -498,11 +488,7 @@ export default function AdminClustersPage() {
           <span>
             {filteredClusters.length} / {activeClusters.length}개 클러스터 표시
           </span>
-          <span>
-            {liveClusters
-              ? "Kubernetes/EKS API 및 Kyverno 엔진 상태가 성공적으로 연동되었습니다."
-              : "백엔드 연동 불가 시 기본 목업 클러스터 정보가 표시됩니다."}
-          </span>
+          <span>연결된 클러스터 상태 및 노드 현황</span>
         </div>
       </section>
 

@@ -154,7 +154,7 @@ export default function PoliciesPage() {
         <SummaryCard
           label="적용 정책"
           value={String(visiblePolicies.length)}
-          detail={isLive ? "라이브 연동 정책" : "조회 가능 정책"}
+          detail="조회 가능 정책"
           icon={ShieldCheck}
           className="bg-blue-50 text-blue-600"
           loading={livePolicies === null}
@@ -189,16 +189,6 @@ export default function PoliciesPage() {
         <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50">
-                  {isLive ? "라이브 API 연동" : "사용자"}
-                </Badge>
-                <span className="text-xs text-slate-400">
-                  {isLive
-                    ? "백엔드 API 및 Kubernetes 라이브 연결"
-                    : "등록/수정 없이 조회와 예외 신청 중심"}
-                </span>
-              </div>
               <h2 className="text-2xl font-semibold tracking-tight">
                 정책 적용 기준
               </h2>

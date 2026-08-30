@@ -202,16 +202,6 @@ export default function AdminViolationsPage() {
     >
       <section className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
         <div>
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50">
-              {isLive ? "라이브 API 연동" : "관리자"}
-            </Badge>
-            <span className="text-xs text-slate-400">
-              {isLive
-                ? "백엔드 API 및 Kubernetes 라이브 연결"
-                : "백엔드 연동 불가 시 목업 데이터"}
-            </span>
-          </div>
           <h2 className="text-2xl font-semibold tracking-tight">
             정책 오류 목록
           </h2>
@@ -247,9 +237,6 @@ export default function AdminViolationsPage() {
               >
                 <Icon className="size-5" />
               </div>
-              <span className="text-[11px] font-medium text-slate-400">
-                {isLive ? "live" : "mock"}
-              </span>
             </div>
             <p className="mt-5 text-[13px] text-slate-500">{label}</p>
             {liveViolations === null ? (
@@ -512,11 +499,7 @@ export default function AdminViolationsPage() {
           <span>
             {filteredViolations.length} / {violations.length}개 항목
           </span>
-          <span>
-            {isLive
-              ? "Kubernetes live API 및 ViolationHistory DB와 정책 위반 이력이 연동되었습니다."
-              : "백엔드 연동 불가 시 목업 데이터"}
-          </span>
+          <span>정책 위반 및 예외 관리 현황</span>
         </div>
       </section>
 

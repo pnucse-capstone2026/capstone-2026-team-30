@@ -192,7 +192,7 @@ export default async function AdminPolicyDetailPage({
               <div>
                 <h3 className="text-sm font-semibold">정책 메타데이터</h3>
                 <p className="mt-1 text-xs text-slate-400">
-                  Kubernetes/Kyverno 라이브 연동 기준 정보입니다.
+                  정책 설정 및 운영 상태 정보입니다.
                 </p>
               </div>
             </div>

@@ -82,7 +82,7 @@ export default async function AdminClusterDetailPage({
     violationCount: 0,
     lastSyncedAt: new Date().toISOString().slice(0, 16).replace("T", " "),
     owner: "플랫폼팀",
-    description: `${id} 라이브 연동 클러스터입니다.`,
+    description: `${id} 클러스터입니다.`,
   };
 
   const relatedPolicies = kyvernoPolicies.filter(
@@ -220,7 +220,7 @@ export default async function AdminClusterDetailPage({
               <div>
                 <h3 className="text-sm font-semibold">연결 정보</h3>
                 <p className="mt-1 text-xs text-slate-400">
-                  Kubernetes/EKS 라이브 연동 기준 연결 정보입니다.
+                  클러스터 연결 및 상태 정보입니다.
                 </p>
               </div>
             </div>
