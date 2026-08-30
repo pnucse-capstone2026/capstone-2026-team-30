@@ -56,6 +56,7 @@ export function usePipelineRuns(
     queryKey: ["pipeline-runs", clusterId, namespace],
     queryFn: () => getPipelineRuns(clusterId, namespace),
     enabled: Boolean(clusterId),
+    staleTime: 1000 * 60 * 5,
     placeholderData: keepPreviousData,
   });
 }
@@ -91,6 +92,7 @@ export function usePipelineRunDetail(
     queryKey: ["pipeline-run-detail", runId, clusterId, namespace],
     queryFn: () => getPipelineRunDetail(runId!, clusterId, namespace),
     enabled: Boolean(runId),
+    staleTime: 1000 * 60 * 5,
     placeholderData: keepPreviousData,
   });
 }

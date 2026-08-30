@@ -88,6 +88,7 @@ export function useMlGovernanceOverview(
     queryKey: ["ml-governance-overview", clusterId, namespace],
     queryFn: () => getMlGovernanceOverview(clusterId, namespace),
     enabled: Boolean(clusterId),
+    staleTime: 1000 * 60 * 5,
     placeholderData: keepPreviousData,
   });
 }
@@ -108,6 +109,7 @@ export function useGpuQuotas(
     queryKey: ["gpu-quotas", clusterId, namespace],
     queryFn: () => getGpuQuotas(clusterId, namespace),
     enabled: Boolean(clusterId),
+    staleTime: 1000 * 60 * 5,
     placeholderData: keepPreviousData,
   });
 }
@@ -124,6 +126,7 @@ export function useMlPolicyViolations(clusterId?: string, namespace?: string) {
   return useQuery({
     queryKey: ["ml-violations", clusterId, namespace],
     queryFn: () => getMlPolicyViolations(clusterId, namespace),
+    staleTime: 1000 * 60 * 5,
     placeholderData: keepPreviousData,
   });
 }
