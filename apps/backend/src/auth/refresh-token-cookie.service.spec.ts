@@ -70,7 +70,7 @@ describe("RefreshTokenCookieService", () => {
         httpOnly: true,
         sameSite: "lax",
         secure: false,
-        path: "/auth",
+        path: "/api/auth",
         maxAge: 15 * 60 * 1000,
       },
     );
@@ -96,7 +96,7 @@ describe("RefreshTokenCookieService", () => {
       httpOnly: true,
       sameSite: "lax",
       secure: false,
-      path: "/auth",
+      path: "/api/auth",
     });
   });
 });

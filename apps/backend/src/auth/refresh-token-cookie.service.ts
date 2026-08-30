@@ -42,7 +42,7 @@ export class RefreshTokenCookieService {
       httpOnly: true,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
-      path: "/auth",
+      path: "/api/auth",
       maxAge: this.getMaxAgeMs(),
     });
   }
@@ -52,7 +52,7 @@ export class RefreshTokenCookieService {
       httpOnly: true,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
-      path: "/auth",
+      path: "/api/auth",
     });
   }
 
