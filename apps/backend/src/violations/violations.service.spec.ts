@@ -317,6 +317,12 @@ describe("ViolationsService", () => {
           targetClusterDisplayName: "Cluster One",
           policyName: "require-ro-rootfs",
           ruleName: "check-read-only-root-filesystem",
+          namespace: "cluster-wide",
+          resourceKind: "Deployment",
+          resourceName: "batch-worker",
+          severity: "critical",
+          status: "open",
+          message: "rootFS must be read-only",
           occurredAt: new Date("2026-08-19T05:30:00.000Z"),
         },
       });

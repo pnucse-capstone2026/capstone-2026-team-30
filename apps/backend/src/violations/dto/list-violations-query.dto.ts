@@ -1,5 +1,6 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { IsEnum, IsOptional, IsString } from "class-validator";
+import { Type } from "class-transformer";
+import { IsEnum, IsInt, IsOptional, IsString, Min } from "class-validator";
 
 export enum ViolationSeverityFilter {
   CRITICAL = "critical",
@@ -34,6 +35,18 @@ export class ListViolationsQueryDto {
   @IsString()
   policyName?: string;
 
+  @ApiPropertyOptional({ description: "특정 규칙 이름 필터링" })
+  @IsOptional()
+  @IsString()
+  ruleName?: string;
+
+  @ApiPropertyOptional({
+    description: "특정 리소스 종류 필터링 (Pod, Deployment 등)",
+  })
+  @IsOptional()
+  @IsString()
+  resourceKind?: string;
+
   @ApiPropertyOptional({
     enum: ViolationSeverityFilter,
     description: "위반 심각도 필터링",
@@ -50,8 +63,57 @@ export class ListViolationsQueryDto {
   @IsEnum(ViolationStatusFilter)
   status?: ViolationStatusFilter;
 
+  @ApiPropertyOptional({
+    description: "예외 신청 상태 필터링 (none, requested, approved)",
+  })
+  @IsOptional()
+  @IsString()
+  exceptionStatus?: string;
+
+  @ApiPropertyOptional({ description: "조회 시작 일시 (ISO8601 문맥)" })
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @ApiPropertyOptional({ description: "조회 종료 일시 (ISO8601 문맥)" })
+  @IsOptional()
+  @IsString()
+  endDate?: string;
+
   @ApiPropertyOptional({ description: "정책명, 리소스명, 에러 메시지 검색어" })
   @IsOptional()
   @IsString()
   search?: string;
+
+  @ApiPropertyOptional({ description: "페이지 번호 (기본값: 1)", default: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @ApiPropertyOptional({
+    description: "페이지 당 항목 수 (기본값: 50)",
+    default: 50,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  limit?: number;
+
+  @ApiPropertyOptional({
+    description: "정렬 기준 필드 (detectedAt, severity, policyName 등)",
+  })
+  @IsOptional()
+  @IsString()
+  sortBy?: string;
+
+  @ApiPropertyOptional({
+    description: "정렬 방향 (asc 또는 desc)",
+    default: "desc",
+  })
+  @IsOptional()
+  @IsString()
+  sortOrder?: "asc" | "desc";
 }

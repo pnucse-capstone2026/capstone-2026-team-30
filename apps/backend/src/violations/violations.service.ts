@@ -92,6 +92,9 @@ export class ViolationsService {
       let successClusterCount = 0;
       let failedClusterCount = 0;
 
+      // DB에서 예외 신청 목록 조회하여 매핑 준비
+      const exceptionsMap = await this.getExceptionRequestsMap();
+
       for (const cluster of accessibleClusters) {
         try {
           const clusterReports =
@@ -106,6 +109,7 @@ export class ViolationsService {
             const extracted = this.extractViolationsFromReport(
               raw as PolicyReportRaw,
               cluster,
+              exceptionsMap,
             );
             for (const item of extracted) {
               if (this.matchesFilter(item, query)) {
@@ -118,6 +122,7 @@ export class ViolationsService {
             const extracted = this.extractViolationsFromReport(
               raw as PolicyReportRaw,
               cluster,
+              exceptionsMap,
             );
             for (const item of extracted) {
               if (this.matchesFilter(item, query)) {
@@ -143,10 +148,18 @@ export class ViolationsService {
         return this.getViolationsFromDb(accessibleClusters, query);
       }
 
-      return allViolations.sort(
-        (a, b) =>
-          new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime(),
-      );
+      let sorted = allViolations.sort((a, b) => {
+        const timeA = new Date(a.detectedAt).getTime();
+        const timeB = new Date(b.detectedAt).getTime();
+        return query.sortOrder === "asc" ? timeA - timeB : timeB - timeA;
+      });
+
+      if (query.page && query.limit) {
+        const skip = (query.page - 1) * query.limit;
+        sorted = sorted.slice(skip, skip + query.limit);
+      }
+
+      return sorted;
     } catch (error) {
       // 예상치 못한 예외 발생 시 회복성 확보를 위한 DB Fallback 실행
       this.logger.warn(
@@ -338,9 +351,33 @@ export class ViolationsService {
     return userClusters;
   }
 
+  private async getExceptionRequestsMap(): Promise<
+    Map<string, { id: string; status: string }>
+  > {
+    try {
+      const requests = await this.prisma.policyExceptionRequest.findMany({
+        where: {
+          status: {
+            in: ["PENDING", "APPLYING", "APPROVED", "CANCELLING"],
+          },
+        },
+      });
+
+      const map = new Map<string, { id: string; status: string }>();
+      for (const req of requests) {
+        const key = `${req.targetClusterId}:${req.policyName}:${req.resourceName}:${req.resourceNamespace ?? "cluster-wide"}`;
+        map.set(key, { id: req.id, status: req.status });
+      }
+      return map;
+    } catch {
+      return new Map();
+    }
+  }
+
   private extractViolationsFromReport(
     report: PolicyReportRaw,
     cluster: ClusterMetadata,
+    exceptionsMap?: Map<string, { id: string; status: string }>,
   ): ViolationSummaryDto[] {
     const results = report.results ?? [];
     const violations: ViolationSummaryDto[] = [];
@@ -350,7 +387,13 @@ export class ViolationsService {
       const outcome = result.result?.toLowerCase();
       if (outcome === "fail" || outcome === "warn" || outcome === "error") {
         violations.push(
-          this.mapToViolationSummary(result, report, cluster, index),
+          this.mapToViolationSummary(
+            result,
+            report,
+            cluster,
+            index,
+            exceptionsMap,
+          ),
         );
       }
     });
@@ -363,6 +406,7 @@ export class ViolationsService {
     report: PolicyReportRaw,
     cluster: ClusterMetadata,
     index: number,
+    exceptionsMap?: Map<string, { id: string; status: string }>,
   ): ViolationSummaryDto {
     const reportName = report.metadata?.name ?? "unknown-report";
     const id = `${cluster.id}:${reportName}:${index}`;
@@ -392,6 +436,24 @@ export class ViolationsService {
       result.message ??
       `Policy '${policyName}' violation detected on ${resourceKind}/${resourceName}.`;
 
+    const key = `${cluster.id}:${policyName}:${resourceName}:${namespace}`;
+    const exc = exceptionsMap?.get(key);
+
+    let status: "open" | "inReview" | "resolved" = "open";
+    let exceptionStatus: "none" | "requested" | "approved" = "none";
+    let relatedExceptionId: string | undefined = undefined;
+
+    if (exc) {
+      relatedExceptionId = exc.id;
+      if (exc.status === "APPROVED" || exc.status === "APPLYING") {
+        exceptionStatus = "approved";
+        status = "inReview";
+      } else if (exc.status === "PENDING") {
+        exceptionStatus = "requested";
+        status = "inReview";
+      }
+    }
+
     return {
       id,
       clusterId: cluster.id,
@@ -402,10 +464,12 @@ export class ViolationsService {
       resourceKind,
       resourceName,
       severity,
-      status: "open",
+      status,
       message,
       detectedAt,
       reportName,
+      exceptionStatus,
+      relatedExceptionId,
     };
   }
 
@@ -432,11 +496,38 @@ export class ViolationsService {
     if (query.policyName && item.policyName !== query.policyName) {
       return false;
     }
+    if (query.ruleName && item.ruleName !== query.ruleName) {
+      return false;
+    }
+    if (
+      query.resourceKind &&
+      item.resourceKind.toLowerCase() !== query.resourceKind.toLowerCase()
+    ) {
+      return false;
+    }
     if (query.severity && item.severity !== (query.severity as string)) {
       return false;
     }
     if (query.status && item.status !== (query.status as string)) {
       return false;
+    }
+    if (
+      query.exceptionStatus &&
+      item.exceptionStatus !== query.exceptionStatus
+    ) {
+      return false;
+    }
+    if (query.startDate) {
+      const start = new Date(query.startDate).getTime();
+      if (!isNaN(start) && new Date(item.detectedAt).getTime() < start) {
+        return false;
+      }
+    }
+    if (query.endDate) {
+      const end = new Date(query.endDate).getTime();
+      if (!isNaN(end) && new Date(item.detectedAt).getTime() > end) {
+        return false;
+      }
     }
     if (query.search) {
       const term = query.search.toLowerCase();
@@ -444,6 +535,7 @@ export class ViolationsService {
         item.policyName.toLowerCase().includes(term) ||
         item.ruleName.toLowerCase().includes(term) ||
         item.resourceName.toLowerCase().includes(term) ||
+        item.resourceKind.toLowerCase().includes(term) ||
         item.message.toLowerCase().includes(term);
       if (!matched) return false;
     }
@@ -481,6 +573,12 @@ export class ViolationsService {
               targetClusterDisplayName: violation.clusterDisplayName,
               policyName: violation.policyName,
               ruleName: violation.ruleName,
+              namespace: violation.namespace,
+              resourceKind: violation.resourceKind,
+              resourceName: violation.resourceName,
+              severity: violation.severity,
+              status: violation.status,
+              message: violation.message,
               occurredAt,
             },
           });
@@ -511,15 +609,46 @@ export class ViolationsService {
       accessibleClusters.map((c) => [c.id, c.displayName]),
     );
 
+    const whereClause: Record<string, unknown> = {};
+    if (clusterIds.length > 0) {
+      whereClause.targetClusterId = { in: clusterIds };
+    }
+    if (query.namespace) {
+      whereClause.namespace = query.namespace;
+    }
+    if (query.policyName) {
+      whereClause.policyName = query.policyName;
+    }
+    if (query.ruleName) {
+      whereClause.ruleName = query.ruleName;
+    }
+    if (query.severity) {
+      whereClause.severity = query.severity;
+    }
+    if (query.status) {
+      whereClause.status = query.status;
+    }
+    if (query.startDate || query.endDate) {
+      const occurredAtFilter: Record<string, Date> = {};
+      if (query.startDate) {
+        const start = new Date(query.startDate);
+        if (!isNaN(start.getTime())) occurredAtFilter.gte = start;
+      }
+      if (query.endDate) {
+        const end = new Date(query.endDate);
+        if (!isNaN(end.getTime())) occurredAtFilter.lte = end;
+      }
+      if (Object.keys(occurredAtFilter).length > 0) {
+        whereClause.occurredAt = occurredAtFilter;
+      }
+    }
+
     const dbRecords = await this.prisma.violationHistory.findMany({
-      where: {
-        ...(clusterIds.length > 0
-          ? { targetClusterId: { in: clusterIds } }
-          : {}),
-        ...(query.policyName ? { policyName: query.policyName } : {}),
-      },
-      orderBy: { occurredAt: "desc" },
+      where: whereClause,
+      orderBy: { occurredAt: query.sortOrder === "asc" ? "asc" : "desc" },
     });
+
+    const exceptionsMap = await this.getExceptionRequestsMap();
 
     const mapped = dbRecords.map((record) => {
       const clusterDisplayName =
@@ -527,24 +656,60 @@ export class ViolationsService {
         record.targetClusterDisplayName ??
         record.targetClusterId;
 
+      const key = `${record.targetClusterId}:${record.policyName}:${record.resourceName}:${record.namespace}`;
+      const exc = exceptionsMap.get(key);
+
+      let status: "open" | "inReview" | "resolved" =
+        (record.status as "open" | "inReview" | "resolved") || "open";
+      let exceptionStatus: "none" | "requested" | "approved" = "none";
+      let relatedExceptionId: string | undefined = undefined;
+
+      if (exc) {
+        relatedExceptionId = exc.id;
+        if (exc.status === "APPROVED" || exc.status === "APPLYING") {
+          exceptionStatus = "approved";
+          status = "inReview";
+        } else if (exc.status === "PENDING") {
+          exceptionStatus = "requested";
+          status = "inReview";
+        }
+      }
+
       const item: ViolationSummaryDto = {
         id: record.id,
         clusterId: record.targetClusterId,
         clusterDisplayName,
-        namespace: "cluster-wide",
+        namespace: record.namespace ?? "cluster-wide",
         policyName: record.policyName,
         ruleName: record.ruleName,
-        resourceKind: "Unknown",
-        resourceName: "Unknown",
-        severity: "medium",
-        status: "open",
-        message: `[DB Fallback] Policy '${record.policyName}' rule '${record.ruleName}' violation recorded in cluster '${clusterDisplayName}'.`,
+        resourceKind: record.resourceKind ?? "Unknown",
+        resourceName: record.resourceName ?? "Unknown",
+        severity:
+          (record.severity as
+            | "critical"
+            | "high"
+            | "medium"
+            | "low"
+            | "info") ?? "medium",
+        status,
+        message:
+          record.message ??
+          `[DB Fallback] Policy '${record.policyName}' rule '${record.ruleName}' violation recorded in cluster '${clusterDisplayName}'.`,
         detectedAt: record.occurredAt.toISOString(),
         reportName: "db-fallback",
+        exceptionStatus,
+        relatedExceptionId,
       };
       return item;
     });
 
-    return mapped.filter((item) => this.matchesFilter(item, query));
+    let filtered = mapped.filter((item) => this.matchesFilter(item, query));
+
+    if (query.page && query.limit) {
+      const skip = (query.page - 1) * query.limit;
+      filtered = filtered.slice(skip, skip + query.limit);
+    }
+
+    return filtered;
   }
 }

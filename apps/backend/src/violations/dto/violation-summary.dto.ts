@@ -72,4 +72,18 @@ export class ViolationSummaryDto {
     example: "polr-ns-payments",
   })
   reportName!: string;
+
+  @ApiProperty({
+    description: "예외 처리 상태 (none | requested | approved)",
+    example: "none",
+    required: false,
+  })
+  exceptionStatus?: "none" | "requested" | "approved";
+
+  @ApiProperty({
+    description: "연관된 예외 신청 식별자",
+    example: "exc-123456",
+    required: false,
+  })
+  relatedExceptionId?: string;
 }
