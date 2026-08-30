@@ -9,6 +9,52 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuthStore } from "@/lib/auth-store";
 
+/**
+ * 플랫폼 관리자 이메일 기본값 및 환경변수 설정
+ */
+const ADMIN_EMAIL =
+  process.env.NEXT_PUBLIC_ADMIN_EMAIL || "admin@kubeguard.local";
+
+/**
+ * 플랫폼 관리자 문의 링크 (URL 또는 mailto)
+ */
+const ADMIN_CONTACT_URL =
+  process.env.NEXT_PUBLIC_ADMIN_CONTACT_URL || `mailto:${ADMIN_EMAIL}`;
+
+/**
+ * 비밀번호 재설정 기본 mailto 템플릿
+ */
+const DEFAULT_FORGOT_PASSWORD_MAILTO = `mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(
+  "[Kyverno Governance Platform] 비밀번호 재설정 요청",
+)}&body=${encodeURIComponent(
+  "안녕하세요 플랫폼 관리자님,\n\n계정 비밀번호 재설정을 요청합니다.\n- 계정(이메일):\n- 소속/부서:\n- 요청 사유:\n\n감사합니다.",
+)}`;
+
+/**
+ * 비밀번호 재설정 포털 또는 메일 링크
+ */
+const FORGOT_PASSWORD_URL =
+  process.env.NEXT_PUBLIC_FORGOT_PASSWORD_URL ||
+  DEFAULT_FORGOT_PASSWORD_URL_FALLBACK();
+
+/**
+ * 환경변수 미지정 시 관리자 문의 기반의 기본 비밀번호 재설정 링크를 생성합니다.
+ */
+function DEFAULT_FORGOT_PASSWORD_URL_FALLBACK(): string {
+  // 관리자 문의 링크가 외부 URL(사내 포털/헬프데스크)인 경우 해당 URL을 우선 연동
+  if (process.env.NEXT_PUBLIC_ADMIN_CONTACT_URL) {
+    return process.env.NEXT_PUBLIC_ADMIN_CONTACT_URL;
+  }
+  return DEFAULT_FORGOT_PASSWORD_MAILTO;
+}
+
+/**
+ * 외부 웹 링크인지 여부를 판별합니다.
+ */
+function isExternalHttpUrl(url: string): boolean {
+  return url.startsWith("http://") || url.startsWith("https://");
+}
+
 export function LoginForm() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
@@ -87,7 +133,10 @@ export function LoginForm() {
             {"\ube44\ubc00\ubc88\ud638"}
           </Label>
           <a
-            href="#"
+            href={FORGOT_PASSWORD_URL}
+            {...(isExternalHttpUrl(FORGOT_PASSWORD_URL)
+              ? { target: "_blank", rel: "noopener noreferrer" }
+              : {})}
             className="text-xs font-medium text-blue-600 transition-colors hover:text-blue-700 hover:underline"
           >
             {"\ube44\ubc00\ubc88\ud638\ub97c \uc78a\uc73c\uc168\ub098\uc694?"}
@@ -167,7 +216,10 @@ export function LoginForm() {
           "\uacc4\uc815 \ub610\ub294 \uad8c\ud55c \uad00\ub828 \ubb38\uc758\ub294 "
         }
         <a
-          href="mailto:admin@kubeguard.local"
+          href={ADMIN_CONTACT_URL}
+          {...(isExternalHttpUrl(ADMIN_CONTACT_URL)
+            ? { target: "_blank", rel: "noopener noreferrer" }
+            : {})}
           className="font-medium text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-blue-600"
         >
           {"\ud50c\ub7ab\ud3fc \uad00\ub9ac\uc790"}

@@ -41,6 +41,13 @@ spec:
               value: ""
             - name: NEXT_PUBLIC_API_BASE_URL
               value: ""
+            # 플랫폼 관리자 이메일 및 문의/비밀번호 재설정 URL 설정으로 조직 맞춤형 계정 지원 환경 제공
+            - name: NEXT_PUBLIC_ADMIN_EMAIL
+              value: "admin@kubeguard.local"
+            - name: NEXT_PUBLIC_ADMIN_CONTACT_URL
+              value: ""
+            - name: NEXT_PUBLIC_FORGOT_PASSWORD_URL
+              value: ""
           ports:
             - containerPort: 3000
           resources:
