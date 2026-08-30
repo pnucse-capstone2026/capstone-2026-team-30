@@ -48,6 +48,33 @@ model User {
   auditLogs                  AuditLog[]               @relation("AuditLogActor")
   refreshTokens              RefreshToken[]
   userClusters               UserCluster[]
+  notificationReads          NotificationRead[]
+}
+
+model Notification {
+  id               String   @id @default(uuid())
+  title            String   @db.VarChar(253)
+  message          String   @db.VarChar(2000)
+  type             String   @db.VarChar(50)
+  severity         String   @db.VarChar(50)
+  href             String   @db.VarChar(512)
+  targetRoles      Role[]
+  targetUserEmails String[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
+model NotificationRead {
+  userId         String
+  notificationId String   @db.VarChar(128)
+  readAt         DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, notificationId])
+  @@index([userId])
 }
 
 /// 사용자가 접근할 수 있는 클러스터. 클러스터는 DB 엔티티가 아니라 설정값(env)이라
@@ -93,11 +120,19 @@ model ViolationHistory {
   ruleName                 String
   targetClusterId          String   @db.VarChar(128)
   targetClusterDisplayName String   @db.VarChar(253)
+  namespace                String   @default("cluster-wide") @db.VarChar(63)
+  resourceKind             String   @default("Unknown") @db.VarChar(63)
+  resourceName             String   @default("Unknown") @db.VarChar(253)
+  severity                 String   @default("medium") @db.VarChar(20)
+  status                   String   @default("open") @db.VarChar(20)
+  message                  String?  @db.VarChar(2000)
   occurredAt               DateTime
 
   @@index([policyName])
   @@index([occurredAt])
   @@index([targetClusterId, occurredAt])
+  @@index([targetClusterId, namespace, occurredAt])
+  @@index([severity])
 }
 
 model PolicyExceptionRequest {
