@@ -40,9 +40,18 @@ export type ViolationListFilter = {
   clusterId?: string;
   namespace?: string;
   policyName?: string;
+  ruleName?: string;
+  resourceKind?: string;
   severity?: string;
   status?: string;
+  exceptionStatus?: string;
+  startDate?: string;
+  endDate?: string;
   search?: string;
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
 };
 
 /**
@@ -55,9 +64,19 @@ export async function getViolations(
   if (filter.clusterId) params.append("clusterId", filter.clusterId);
   if (filter.namespace) params.append("namespace", filter.namespace);
   if (filter.policyName) params.append("policyName", filter.policyName);
+  if (filter.ruleName) params.append("ruleName", filter.ruleName);
+  if (filter.resourceKind) params.append("resourceKind", filter.resourceKind);
   if (filter.severity) params.append("severity", filter.severity);
   if (filter.status) params.append("status", filter.status);
+  if (filter.exceptionStatus)
+    params.append("exceptionStatus", filter.exceptionStatus);
+  if (filter.startDate) params.append("startDate", filter.startDate);
+  if (filter.endDate) params.append("endDate", filter.endDate);
   if (filter.search) params.append("search", filter.search);
+  if (filter.page) params.append("page", String(filter.page));
+  if (filter.limit) params.append("limit", String(filter.limit));
+  if (filter.sortBy) params.append("sortBy", filter.sortBy);
+  if (filter.sortOrder) params.append("sortOrder", filter.sortOrder);
 
   const queryStr = params.toString();
   const path = `/violations${queryStr ? `?${queryStr}` : ""}`;
@@ -75,6 +94,8 @@ export async function getViolations(
         resourceName: string;
         severity: ViolationSeverity;
         status: ViolationStatus;
+        exceptionStatus?: ExceptionStatus;
+        relatedExceptionId?: string;
         message: string;
         detectedAt: string;
         reportName: string;
@@ -93,7 +114,8 @@ export async function getViolations(
       resourceName: item.resourceName,
       severity: item.severity,
       status: item.status,
-      exceptionStatus: "none",
+      exceptionStatus: item.exceptionStatus || "none",
+      relatedExceptionId: item.relatedExceptionId,
       detectedAt: item.detectedAt
         ? new Date(item.detectedAt).toLocaleString("ko-KR")
         : "최근",

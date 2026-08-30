@@ -171,7 +171,9 @@ export default function AdminViolationsPage() {
 
       return (
         matchesQuery &&
-        (cluster === "all" || violation.clusterName === cluster) &&
+        (cluster === "all" ||
+          violation.clusterName === cluster ||
+          violation.clusterId === cluster) &&
         (policy === "all" || violation.policyName === policy) &&
         (rule === "all" || violation.ruleName === rule) &&
         (namespace === "all" || violation.namespace === namespace) &&
