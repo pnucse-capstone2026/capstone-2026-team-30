@@ -44,6 +44,9 @@ import {
   type ViolationStatus,
 } from "@/lib/policy-violations";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { exportToCSV } from "@/lib/export-utils";
+import { ProcessingStandardsDialog } from "@/components/violations/processing-standards-dialog";
 
 const severityOptions: Array<"all" | ViolationSeverity> = [
   "all",
@@ -67,6 +70,7 @@ export default function AdminViolationsPage() {
   const [namespace, setNamespace] = useState("all");
   const [severity, setSeverity] = useState<"all" | ViolationSeverity>("all");
   const [status, setStatus] = useState<"all" | ViolationStatus>("all");
+  const [isStandardsOpen, setIsStandardsOpen] = useState(false);
 
   const liveViolations = useDataStore((state) => state.violations);
   const fetchViolations = useDataStore((state) => state.fetchViolations);
@@ -187,6 +191,36 @@ export default function AdminViolationsPage() {
     setStatus("all");
   }
 
+  const handleExport = () => {
+    if (filteredViolations.length === 0) {
+      toast.error("내보낼 정책 오류 데이터가 없습니다.");
+      return;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    exportToCSV(
+      `policy-violations-${today}.csv`,
+      [
+        { key: "id", label: "오류 ID" },
+        { key: "policyName", label: "정책명" },
+        { key: "ruleName", label: "규칙명" },
+        { key: "clusterName", label: "클러스터" },
+        { key: "namespace", label: "네임스페이스" },
+        { key: "resourceKind", label: "리소스 종류" },
+        { key: "resourceName", label: "리소스명" },
+        { key: "severity", label: "심각도" },
+        { key: "status", label: "처리 상태" },
+        { key: "exceptionStatus", label: "예외 상태" },
+        { key: "assignee", label: "담당자" },
+        { key: "detectedAt", label: "발생 시간" },
+        { key: "message", label: "오류 메시지" },
+      ],
+      filteredViolations,
+    );
+    toast.success(
+      `${filteredViolations.length}건의 정책 오류 목록을 CSV 파일로 내보냈습니다.`,
+    );
+  };
+
   return (
     <DashboardPageShell
       variant="admin"
@@ -213,12 +247,16 @@ export default function AdminViolationsPage() {
         <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
-            className="h-10 rounded-xl border-slate-200 bg-white text-slate-700"
+            onClick={handleExport}
+            className="h-10 rounded-xl border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
           >
             <Download className="size-4" />
             내보내기
           </Button>
-          <Button className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]">
+          <Button
+            onClick={() => setIsStandardsOpen(true)}
+            className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]"
+          >
             <SlidersHorizontal className="size-4" />
             처리 기준 설정
           </Button>
@@ -523,6 +561,11 @@ export default function AdminViolationsPage() {
           className="bg-emerald-50 text-emerald-600"
         />
       </section>
+
+      <ProcessingStandardsDialog
+        open={isStandardsOpen}
+        onOpenChange={setIsStandardsOpen}
+      />
     </DashboardPageShell>
   );
 }
