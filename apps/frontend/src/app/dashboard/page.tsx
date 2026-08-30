@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar";
+import { NotificationDropdown } from "@/components/dashboard/notification-dropdown";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/lib/auth-store";
@@ -154,14 +155,7 @@ export default function UserDashboardPage() {
             >
               <Search className="size-4" />내 정책 또는 리소스 검색
             </button>
-            <button
-              type="button"
-              className="relative flex size-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-              aria-label="알림 보기"
-            >
-              <Bell className="size-4.5" />
-              <span className="absolute top-2 right-2 size-1.5 rounded-full bg-rose-500" />
-            </button>
+            <NotificationDropdown />
             <div className="ml-1 hidden items-center gap-2 sm:flex lg:hidden">
               <div className="flex size-9 items-center justify-center rounded-full bg-[#0b2342] text-xs font-semibold text-white">
                 {user?.email?.[0]?.toUpperCase() ?? "사"}

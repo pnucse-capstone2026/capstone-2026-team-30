@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar";
+import { NotificationDropdown } from "@/components/dashboard/notification-dropdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getExceptionRequest } from "@/lib/exception-requests-api";
@@ -95,14 +96,7 @@ export default function AdminExceptionDetailPage({
                 목록
               </Link>
             </Button>
-            <button
-              type="button"
-              className="relative flex size-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-              aria-label="알림 보기"
-            >
-              <Bell className="size-4.5" />
-              <span className="absolute top-2 right-2 size-1.5 rounded-full bg-rose-500" />
-            </button>
+            <NotificationDropdown />
           </div>
         </header>
 

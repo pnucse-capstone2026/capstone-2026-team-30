@@ -1,5 +1,7 @@
+"use client";
+
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { use, useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -16,17 +18,22 @@ import {
 } from "lucide-react";
 
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar";
+import { NotificationDropdown } from "@/components/dashboard/notification-dropdown";
 import { AiErrorExplainerDialog } from "@/components/ai-agent/ai-error-explainer-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useAuthStore } from "@/lib/auth-store";
+import { useDataStore } from "@/lib/data-store";
 import {
   exceptionClassName,
   exceptionLabel,
+  getViolationDetail,
   policyViolations,
   severityClassName,
   severityLabel,
   statusClassName,
   statusLabel,
+  type PolicyViolation,
 } from "@/lib/policy-violations";
 import { ViolationActionPanel } from "./violation-action-panel";
 
@@ -42,20 +49,76 @@ const statusIcon = {
   resolved: CheckCircle2,
 };
 
-export function generateStaticParams() {
-  return policyViolations.map((violation) => ({
-    id: violation.id,
-  }));
-}
-
-export default async function AdminViolationDetailPage({
+export default function AdminViolationDetailPage({
   params,
 }: AdminViolationDetailPageProps) {
-  const { id } = await params;
-  const violation = policyViolations.find((item) => item.id === id);
+  const { id } = use(params);
+  const [violation, setViolation] = useState<PolicyViolation | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchViolations = useDataStore((state) => state.fetchViolations);
+  const initializeAuth = useAuthStore((state) => state.initialize);
+
+  const loadData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      await initializeAuth();
+      const freshViolations = await fetchViolations();
+      const foundInStore = freshViolations.find((v) => v.id === id);
+      if (foundInStore) {
+        setViolation(foundInStore);
+        setIsLoading(false);
+        return;
+      }
+
+      const clusterIdFromKey = id.includes(":") ? id.split(":")[0] : "";
+      const detailFromApi = await getViolationDetail(clusterIdFromKey, id);
+      if (detailFromApi) {
+        setViolation(detailFromApi);
+        setIsLoading(false);
+        return;
+      }
+    } catch {
+      // Fallback
+    }
+
+    const foundMock = policyViolations.find((item) => item.id === id);
+    setViolation(foundMock ?? null);
+    setIsLoading(false);
+  }, [fetchViolations, id, initializeAuth]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  if (isLoading) {
+    return (
+      <main className="flex min-h-dvh bg-[#f4f7fb] text-slate-950">
+        <DashboardSidebar variant="admin" activeHref="/admin/violations" />
+        <div className="flex-1 p-8 text-sm text-slate-500">
+          위반 상세 정보를 불러오는 중입니다...
+        </div>
+      </main>
+    );
+  }
 
   if (!violation) {
-    notFound();
+    return (
+      <main className="flex min-h-dvh bg-[#f4f7fb] text-slate-950">
+        <DashboardSidebar variant="admin" activeHref="/admin/violations" />
+        <div className="flex-1 p-8 text-slate-700">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center">
+            <h2 className="text-lg font-semibold">정책 위반 항목을 찾을 수 없습니다.</h2>
+            <p className="mt-2 text-sm text-slate-500">
+              요청하신 ID ({id})에 해당하는 위반 기록이 존재하지 않거나 삭제되었습니다.
+            </p>
+            <Button asChild className="mt-4 rounded-xl bg-[#0b2342] text-white">
+              <Link href="/admin/violations">목록으로 돌아가기</Link>
+            </Button>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   const StatusIcon = statusIcon[violation.status];
@@ -96,14 +159,7 @@ export default async function AdminViolationDetailPage({
                 목록
               </Link>
             </Button>
-            <button
-              type="button"
-              className="relative flex size-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-              aria-label="알림 보기"
-            >
-              <Bell className="size-4.5" />
-              <span className="absolute top-2 right-2 size-1.5 rounded-full bg-rose-500" />
-            </button>
+            <NotificationDropdown />
           </div>
         </header>
 
