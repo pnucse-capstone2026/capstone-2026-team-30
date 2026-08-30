@@ -2,10 +2,12 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { IdleWorkloadMonitorService } from "./idle-workload-monitor.service";
 import { ClusterProvider } from "../../kubernetes/cluster-provider";
 import { KubeflowAdapter } from "../notebooks/kubeflow.adapter";
+import { MlGovernanceEventBus } from "./ml-governance-event-bus.service";
 
 describe("IdleWorkloadMonitorService", () => {
   let service: IdleWorkloadMonitorService;
   let kubeflowAdapter: jest.Mocked<KubeflowAdapter>;
+  let eventBus: MlGovernanceEventBus;
 
   beforeEach(async () => {
     const mockClusterProvider = {
@@ -43,6 +45,7 @@ describe("IdleWorkloadMonitorService", () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         IdleWorkloadMonitorService,
+        MlGovernanceEventBus,
         { provide: ClusterProvider, useValue: mockClusterProvider },
         { provide: KubeflowAdapter, useValue: mockKubeflowAdapter },
       ],
@@ -52,6 +55,7 @@ describe("IdleWorkloadMonitorService", () => {
       IdleWorkloadMonitorService,
     );
     kubeflowAdapter = module.get(KubeflowAdapter);
+    eventBus = module.get<MlGovernanceEventBus>(MlGovernanceEventBus);
   });
 
   it("should return current settings and allow updating settings", () => {
@@ -67,7 +71,10 @@ describe("IdleWorkloadMonitorService", () => {
     expect(() => service.updateSettings({ idleThresholdHours: 0 })).toThrow();
   });
 
-  it("should inspect idle notebooks and trigger stopNotebook when threshold is exceeded", async () => {
+  it("should inspect idle notebooks and trigger stopNotebook when threshold is exceeded and emit event", async () => {
+    const emittedEvents: any[] = [];
+    eventBus.asObservable().subscribe((e) => emittedEvents.push(e));
+
     const result = await service.checkAndShutdownIdleNotebooks(
       "default",
       "default",
@@ -81,6 +88,8 @@ describe("IdleWorkloadMonitorService", () => {
       "default",
       "idle-notebook",
     );
+    expect(emittedEvents.length).toBe(1);
+    expect(emittedEvents[0].type).toBe("governance-updated");
   });
 
   it("should skip stopping notebooks when autoStopEnabled is false", async () => {

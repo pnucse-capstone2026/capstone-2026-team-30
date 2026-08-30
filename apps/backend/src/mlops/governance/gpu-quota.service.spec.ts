@@ -2,6 +2,7 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { GpuQuotaService } from "./gpu-quota.service";
 import { ClusterProvider } from "../../kubernetes/cluster-provider";
 import { KubeflowAdapter } from "../notebooks/kubeflow.adapter";
+import { MlGovernanceEventBus } from "./ml-governance-event-bus.service";
 
 describe("GpuQuotaService", () => {
   let service: GpuQuotaService;
@@ -59,6 +60,7 @@ describe("GpuQuotaService", () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         GpuQuotaService,
+        MlGovernanceEventBus,
         { provide: ClusterProvider, useValue: mockClusterProvider },
         { provide: KubeflowAdapter, useValue: mockKubeflowAdapter },
       ],

@@ -9,6 +9,7 @@ import { GpuQuotaService } from "./governance/gpu-quota.service";
 import { IdleWorkloadMonitorService } from "./governance/idle-workload-monitor.service";
 import { MlGovernanceService } from "./governance/ml-governance.service";
 import { MlGovernanceController } from "./governance/ml-governance.controller";
+import { MlGovernanceEventBus } from "./governance/ml-governance-event-bus.service";
 
 import { KFPAdapter } from "./pipelines/kfp.adapter";
 import { PipelinesService } from "./pipelines/pipelines.service";
@@ -40,6 +41,7 @@ import { WorkloadDiagnosticService } from "./ai-assistant/workload-diagnostic.se
     NotebooksService,
     GpuQuotaService,
     IdleWorkloadMonitorService,
+    MlGovernanceEventBus,
     MlGovernanceService,
     KFPAdapter,
     PipelinesService,
@@ -54,6 +56,7 @@ import { WorkloadDiagnosticService } from "./ai-assistant/workload-diagnostic.se
     NotebooksService,
     GpuQuotaService,
     IdleWorkloadMonitorService,
+    MlGovernanceEventBus,
     MlGovernanceService,
     KFPAdapter,
     PipelinesService,

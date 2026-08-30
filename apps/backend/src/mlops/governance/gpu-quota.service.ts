@@ -1,6 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ClusterProvider } from "../../kubernetes/cluster-provider";
 import { KubeflowAdapter } from "../notebooks/kubeflow.adapter";
+import { MlGovernanceEventBus } from "./ml-governance-event-bus.service";
 
 export type GpuQuotaStatus = {
   clusterId: string;
@@ -21,6 +22,7 @@ export class GpuQuotaService {
   constructor(
     private readonly clusterProvider: ClusterProvider,
     private readonly kubeflowAdapter: KubeflowAdapter,
+    private readonly eventBus?: MlGovernanceEventBus,
   ) {}
 
   /**

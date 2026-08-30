@@ -1,14 +1,26 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { of } from "rxjs";
 import { MlGovernanceService } from "./ml-governance.service";
 import { ClusterProvider } from "../../kubernetes/cluster-provider";
 import { KubeflowAdapter } from "../notebooks/kubeflow.adapter";
 import { KyvernoAdapter } from "../../kubernetes/kyverno.adapter";
 import { GpuQuotaService } from "./gpu-quota.service";
 import { IdleWorkloadMonitorService } from "./idle-workload-monitor.service";
+import { MlGovernanceEventBus } from "./ml-governance-event-bus.service";
+import { AuthenticatedUser } from "../../auth/auth.types";
 
 describe("MlGovernanceService", () => {
   let service: MlGovernanceService;
   let kyvernoAdapter: jest.Mocked<KyvernoAdapter>;
+  let kubeflowAdapter: jest.Mocked<KubeflowAdapter>;
+  let eventBus: MlGovernanceEventBus;
+
+  const mockUser: AuthenticatedUser = {
+    id: "user-1",
+    email: "user@example.com",
+    role: "ADMIN",
+    clusterIds: ["default"],
+  };
 
   beforeEach(async () => {
     const mockClusterProvider = {
@@ -36,6 +48,14 @@ describe("MlGovernanceService", () => {
           },
         },
       ]),
+      watchNotebooks: jest.fn().mockReturnValue(
+        of({
+          type: "MODIFIED",
+          object: {
+            metadata: { name: "nb-1", namespace: "default" },
+          },
+        }),
+      ),
     };
 
     const mockKyvernoAdapter = {
@@ -77,6 +97,7 @@ describe("MlGovernanceService", () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MlGovernanceService,
+        MlGovernanceEventBus,
         { provide: ClusterProvider, useValue: mockClusterProvider },
         { provide: KubeflowAdapter, useValue: mockKubeflowAdapter },
         { provide: KyvernoAdapter, useValue: mockKyvernoAdapter },
@@ -90,6 +111,8 @@ describe("MlGovernanceService", () => {
 
     service = module.get<MlGovernanceService>(MlGovernanceService);
     kyvernoAdapter = module.get(KyvernoAdapter);
+    kubeflowAdapter = module.get(KubeflowAdapter);
+    eventBus = module.get<MlGovernanceEventBus>(MlGovernanceEventBus);
   });
 
   it("should return governance overview with cost savings and notebooks counts", async () => {
@@ -116,5 +139,25 @@ describe("MlGovernanceService", () => {
       "default",
       "default",
     );
+  });
+
+  it("should subscribe to governance events and receive watch & bus events", (done) => {
+    const events: any[] = [];
+    const stream = service.subscribeEvents("default", "default", mockUser);
+
+    const sub = stream.subscribe({
+      next: (event) => {
+        events.push(event);
+        if (events.length === 2) {
+          expect(events[0].type).toBe("governance-updated");
+          expect(events[1].type).toBe("gpu-quota-changed");
+          sub.unsubscribe();
+          done();
+        }
+      },
+    });
+
+    // Emit event via eventBus
+    eventBus.emit("gpu-quota-changed", { usedGpus: 6 }, "default", "default");
   });
 });

@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { ClusterProvider } from "../../kubernetes/cluster-provider";
 import { KubeflowAdapter } from "../notebooks/kubeflow.adapter";
+import { MlGovernanceEventBus } from "./ml-governance-event-bus.service";
 
 export type GovernanceSettings = {
   idleThresholdHours: number;
@@ -40,6 +41,7 @@ export class IdleWorkloadMonitorService {
   constructor(
     private readonly clusterProvider: ClusterProvider,
     private readonly kubeflowAdapter: KubeflowAdapter,
+    private readonly eventBus: MlGovernanceEventBus,
   ) {}
 
   /**
@@ -65,6 +67,12 @@ export class IdleWorkloadMonitorService {
     this.logger.log(
       `Updated MLOps governance settings: ${JSON.stringify(this.settings)}`,
     );
+
+    this.eventBus.emit("governance-updated", {
+      action: "settings-updated",
+      settings: this.getSettings(),
+    });
+
     return this.getSettings();
   }
 
@@ -173,6 +181,19 @@ export class IdleWorkloadMonitorService {
           }`,
         );
       }
+    }
+
+    if (result.autoStoppedCount > 0) {
+      this.eventBus.emit(
+        "governance-updated",
+        {
+          action: "idle-notebooks-stopped",
+          autoStoppedCount: result.autoStoppedCount,
+          stoppedNotebooks: result.stoppedNotebooks,
+        },
+        targetClusterId,
+        targetNamespace,
+      );
     }
 
     return result;

@@ -1,9 +1,15 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, MessageEvent } from "@nestjs/common";
+import { Observable, merge } from "rxjs";
+import { filter, map } from "rxjs/operators";
+import { AuthenticatedUser } from "../../auth/auth.types";
+import { BusinessException } from "../../common/errors/business.exception";
+import { MLOPS_ERROR } from "../mlops.errors";
 import { ClusterProvider } from "../../kubernetes/cluster-provider";
 import { KyvernoAdapter } from "../../kubernetes/kyverno.adapter";
 import { KubeflowAdapter } from "../notebooks/kubeflow.adapter";
 import { GpuQuotaService, GpuQuotaStatus } from "./gpu-quota.service";
 import { IdleWorkloadMonitorService } from "./idle-workload-monitor.service";
+import { MlGovernanceEventBus } from "./ml-governance-event-bus.service";
 
 export type MlGovernanceOverview = {
   clusterId: string;
@@ -56,6 +62,7 @@ export class MlGovernanceService {
     private readonly kyvernoAdapter: KyvernoAdapter,
     private readonly gpuQuotaService: GpuQuotaService,
     private readonly idleMonitorService: IdleWorkloadMonitorService,
+    private readonly eventBus: MlGovernanceEventBus,
   ) {}
 
   /**
@@ -265,5 +272,84 @@ export class MlGovernanceService {
       return "컨테이너 이미지를 사내 승인된 ECR/Kubeflow 레지스트리(ecr.mycompany.com, quay.io/kubeflow 등)로 변경하세요.";
     }
     return "Kyverno ML 정책 명세에 맞추어 매니페스트를 수정한 후 재배포하세요.";
+  }
+
+  /**
+   * 클러스터 및 네임스페이스 내 거버넌스 및 GPU 쿼터 실시간 SSE 이벤트를 구독합니다.
+   * K8s Watcher의 워크로드 변경 이벤트와 내부 유휴 감시/쿼터 이벤트를 결합하여 스트리밍합니다.
+   *
+   * @param clusterId 클러스터 식별자
+   * @param namespace 네임스페이스
+   * @param user 인증된 요청 사용자
+   * @returns SSE MessageEvent Observable 스트림
+   */
+  subscribeEvents(
+    clusterId: string,
+    namespace: string = "default",
+    user: AuthenticatedUser,
+  ): Observable<MessageEvent> {
+    this.validateClusterAccess(user, clusterId);
+
+    const notebookWatch$ = this.kubeflowAdapter
+      .watchNotebooks(clusterId, namespace)
+      .pipe(
+        map(
+          (event) =>
+            ({
+              type: "governance-updated",
+              data: JSON.stringify({
+                action: event.type,
+                resourceKind: "Notebook",
+                name: event.object?.metadata?.name,
+                clusterId,
+                namespace,
+              }),
+            }) as MessageEvent,
+        ),
+      );
+
+    const internalEvents$ = this.eventBus.asObservable().pipe(
+      filter((e) => {
+        const clusterMatch = !e.clusterId || e.clusterId === clusterId;
+        const nsMatch =
+          !e.namespace || e.namespace === namespace || e.namespace === "default";
+        return clusterMatch && nsMatch;
+      }),
+      map(
+        (e) =>
+          ({
+            type: e.type,
+            data: JSON.stringify(e.data),
+          }) as MessageEvent,
+      ),
+    );
+
+    return merge(notebookWatch$, internalEvents$);
+  }
+
+  /**
+   * 거버넌스 관련 이벤트를 발생시킵니다.
+   *
+   * @param type 이벤트 유형 ('governance-updated', 'gpu-quota-changed', 'policy-violation-detected')
+   * @param data 이벤트 페이로드
+   * @param clusterId (선택) 특정 대상 클러스터 식별자
+   * @param namespace (선택) 특정 대상 네임스페이스
+   */
+  emitGovernanceEvent(
+    type: string,
+    data: Record<string, unknown> = {},
+    clusterId?: string,
+    namespace?: string,
+  ): void {
+    this.eventBus.emit(type, data, clusterId, namespace);
+  }
+
+  private validateClusterAccess(
+    user: AuthenticatedUser,
+    clusterId: string,
+  ): void {
+    if (user.role !== "ADMIN" && !user.clusterIds.includes(clusterId)) {
+      throw new BusinessException(MLOPS_ERROR.CLUSTER_ACCESS_DENIED);
+    }
   }
 }

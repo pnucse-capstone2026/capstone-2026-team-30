@@ -170,7 +170,7 @@ export default function AdminPoliciesPage() {
             <RefreshCw
               className={`size-4 ${policiesLoading ? "animate-spin" : ""}`}
             />
-            동기화
+            새로고침
           </Button>
           <Button
             asChild

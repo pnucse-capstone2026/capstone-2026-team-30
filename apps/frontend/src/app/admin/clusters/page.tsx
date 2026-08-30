@@ -236,7 +236,7 @@ export default function AdminClustersPage() {
           <RefreshCw
             className={`size-4 ${clustersLoading ? "animate-spin" : ""}`}
           />
-          동기화
+          새로고침
         </Button>
       }
     >

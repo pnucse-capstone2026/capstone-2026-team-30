@@ -2,12 +2,20 @@ import {
   Body,
   Controller,
   Get,
+  MessageEvent,
   Patch,
   Post,
   Query,
+  Sse,
   UseGuards,
 } from "@nestjs/common";
-import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { Observable } from "rxjs";
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+  ApiTags,
+} from "@nestjs/swagger";
 import { JwtAuthGuard } from "../../auth/guards/jwt-auth.guard";
 import { PermissionsGuard } from "../../auth/guards/permissions.guard";
 import { RequirePermissions } from "../../auth/decorators/require-permissions.decorator";
@@ -61,6 +69,31 @@ export class MlGovernanceController {
     private readonly gpuQuotaService: GpuQuotaService,
     private readonly idleMonitorService: IdleWorkloadMonitorService,
   ) {}
+
+  /**
+   * MLOps 거버넌스, GPU 쿼터 및 유휴 감시 실시간 SSE 스트림 이벤트를 수신합니다.
+   */
+  @Sse("events")
+  @RequirePermissions("mlops.governance")
+  @ApiOperation({
+    summary: "MLOps 거버넌스 실시간 이벤트 SSE 스트림",
+    description:
+      "유휴 워크로드 자동 중지, GPU 쿼터 변동 및 정책 위반 감지 시 governance-updated, gpu-quota-changed 등의 이벤트를 실시간 발송합니다.",
+  })
+  @ApiQuery({ name: "clusterId", required: false, example: "default" })
+  @ApiQuery({ name: "namespace", required: false, example: "default" })
+  watchEvents(
+    @Query("clusterId") clusterId: string = "default",
+    @Query("namespace") namespace: string = "default",
+    @CurrentUser() user: AuthenticatedUser,
+  ): Observable<MessageEvent> {
+    this.validateClusterAccess(user, clusterId);
+    return this.mlGovernanceService.subscribeEvents(
+      clusterId,
+      namespace,
+      user,
+    );
+  }
 
   /**
    * MLOps 리소스 거버넌스 및 FinOps 비용 절감 지표 개요를 조회합니다.

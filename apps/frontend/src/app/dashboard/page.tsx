@@ -184,7 +184,7 @@ export default function UserDashboardPage() {
                 <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-60" />
                 <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
               </span>
-              {isLoading ? "라이브 수집 중..." : "내 작업 목록 동기화 완료"}
+              {isLoading ? "라이브 수집 중..." : "내 작업 목록 새로고침 완료"}
             </div>
           </section>
 

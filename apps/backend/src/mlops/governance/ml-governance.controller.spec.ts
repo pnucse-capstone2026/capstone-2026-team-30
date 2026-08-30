@@ -42,6 +42,10 @@ describe("MlGovernanceController", () => {
         policyViolationsCount: 1,
       }),
       getMlPolicyViolations: jest.fn().mockResolvedValue([]),
+      subscribeEvents: jest.fn().mockReturnValue({
+        pipe: jest.fn().mockReturnThis(),
+        subscribe: jest.fn(),
+      }),
     };
 
     const mockGpuQuotaService = {
@@ -133,5 +137,15 @@ describe("MlGovernanceController", () => {
     expect(
       idleMonitorService.checkAndShutdownIdleNotebooks,
     ).toHaveBeenCalledWith("default", "default");
+  });
+
+  it("should stream governance SSE events", () => {
+    const stream = controller.watchEvents("default", "default", mockUser);
+    expect(stream).toBeDefined();
+    expect(mlGovernanceService.subscribeEvents).toHaveBeenCalledWith(
+      "default",
+      "default",
+      mockUser,
+    );
   });
 });

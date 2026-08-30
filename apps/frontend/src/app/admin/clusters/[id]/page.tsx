@@ -131,7 +131,7 @@ export default async function AdminClusterDetailPage({
             className="hidden h-10 rounded-xl border-slate-200 bg-white text-slate-700 sm:inline-flex"
           >
             <RefreshCw className="size-4" />
-            동기화
+            새로고침
           </Button>
         </>
       }

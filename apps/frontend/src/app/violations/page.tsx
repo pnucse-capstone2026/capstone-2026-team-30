@@ -231,7 +231,7 @@ export default function MyViolationsPage() {
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
           label="전체 위반"
-          value={String(policyViolations.length)}
+          value={String(violations.length)}
           detail="내 리소스 기준"
           icon={ShieldAlert}
           className="bg-amber-50 text-amber-600"

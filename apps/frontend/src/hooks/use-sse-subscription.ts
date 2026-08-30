@@ -9,8 +9,13 @@ export interface SseSubscriptionOptions<T = unknown> {
   queryParams?: Record<string, string | number | boolean | undefined | null>;
   /** 구독할 SSE 이벤트 명칭 목록 (미지정 시 기본 'message' 이벤트 수신) */
   events?: string[];
-  /** SSE 메시지 수신 시 처리할 콜백 함수 */
+  /** SSE 메시지 수신 시 공통 처리 콜백 함수 */
   onMessage?: (data: T, eventType: string, rawEvent: MessageEvent) => void;
+  /** 이벤트 타입별 전용 핸들러 매핑 테이블 */
+  eventHandlers?: Record<
+    string,
+    (data: any, eventType: string, rawEvent: MessageEvent) => void
+  >;
   /** SSE 연결 또는 수신 에러 발생 시 처리할 콜백 함수 */
   onError?: (error: Event) => void;
   /** SSE 연결 성공 시 콜백 함수 */
@@ -21,10 +26,10 @@ export interface SseSubscriptionOptions<T = unknown> {
 
 /**
  * MLOps 및 플랫폼 모듈 공통 SSE(Server-Sent Events) 실시간 데이터 구독 훅입니다.
- * JWT 토큰 인가, 쿼리 파라미터 자동 생성 및 컴포넌트 언마운트 시 자동 cleanup을 처리합니다.
+ * 단일 SSE 연결에서 멀티 도메인 이벤트 라우팅, JWT 토큰 인가, 자동 cleanup을 지원합니다.
  *
- * @template T SSE 이벤트 데이터의 페이로드 타입
- * @param options SSE 구독 옵션 (path, queryParams, events, onMessage, enabled 등)
+ * @template T SSE 이벤트 데이터의 기본 페이로드 타입
+ * @param options SSE 구독 옵션 (path, queryParams, events, onMessage, eventHandlers, enabled 등)
  */
 export function useSseSubscription<T = unknown>(
   options: SseSubscriptionOptions<T>,
@@ -34,6 +39,7 @@ export function useSseSubscription<T = unknown>(
     queryParams,
     events,
     onMessage,
+    eventHandlers,
     onError,
     onOpen,
     enabled = true,
@@ -41,17 +47,21 @@ export function useSseSubscription<T = unknown>(
 
   const accessToken = useAuthStore((state) => state.accessToken);
   const onMessageRef = useRef(onMessage);
+  const eventHandlersRef = useRef(eventHandlers);
   const onErrorRef = useRef(onError);
   const onOpenRef = useRef(onOpen);
 
   useEffect(() => {
     onMessageRef.current = onMessage;
+    eventHandlersRef.current = eventHandlers;
     onErrorRef.current = onError;
     onOpenRef.current = onOpen;
-  }, [onMessage, onError, onOpen]);
+  }, [onMessage, eventHandlers, onError, onOpen]);
 
+  const targetEventsList =
+    events ?? (eventHandlers ? Object.keys(eventHandlers) : []);
   const serializedQueryParams = JSON.stringify(queryParams ?? {});
-  const serializedEvents = JSON.stringify(events ?? []);
+  const serializedEvents = JSON.stringify(targetEventsList);
 
   useEffect(() => {
     if (!enabled || !accessToken || !path) {
@@ -100,6 +110,7 @@ export function useSseSubscription<T = unknown>(
           // JSON 파싱 실패 시 원본 문자열 전달
         }
 
+        eventHandlersRef.current?.[eventType]?.(parsedData, eventType, event);
         onMessageRef.current?.(parsedData, eventType, event);
       };
 

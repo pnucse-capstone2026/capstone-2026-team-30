@@ -510,10 +510,12 @@ export default function AdminViolationsPage() {
 
         <div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-4 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <span>
-            {filteredViolations.length} / {policyViolations.length}개 항목
+            {filteredViolations.length} / {violations.length}개 항목
           </span>
           <span>
-            현재는 목업 데이터이며 이후 ViolationHistory API와 연결합니다.
+            {isLive
+              ? "Kubernetes live API 및 ViolationHistory DB와 정책 위반 이력이 연동되었습니다."
+              : "백엔드 연동 불가 시 목업 데이터"}
           </span>
         </div>
       </section>
