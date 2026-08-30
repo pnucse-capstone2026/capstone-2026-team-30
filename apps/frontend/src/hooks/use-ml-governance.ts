@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   getGpuQuotas,
   getGovernanceSettings,
@@ -83,6 +88,7 @@ export function useMlGovernanceOverview(
     queryKey: ["ml-governance-overview", clusterId, namespace],
     queryFn: () => getMlGovernanceOverview(clusterId, namespace),
     enabled: Boolean(clusterId),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -102,6 +108,7 @@ export function useGpuQuotas(
     queryKey: ["gpu-quotas", clusterId, namespace],
     queryFn: () => getGpuQuotas(clusterId, namespace),
     enabled: Boolean(clusterId),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -117,6 +124,7 @@ export function useMlPolicyViolations(clusterId?: string, namespace?: string) {
   return useQuery({
     queryKey: ["ml-violations", clusterId, namespace],
     queryFn: () => getMlPolicyViolations(clusterId, namespace),
+    placeholderData: keepPreviousData,
   });
 }
 

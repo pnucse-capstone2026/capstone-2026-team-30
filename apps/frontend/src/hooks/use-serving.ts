@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   deleteServingEndpoint,
   deployModelEndpoint,
@@ -49,6 +54,7 @@ export function useServingEndpoints(
     queryKey: ["serving-endpoints", clusterId, namespace],
     queryFn: () => getServingEndpoints(clusterId, namespace),
     enabled: Boolean(clusterId),
+    placeholderData: keepPreviousData,
   });
 }
 

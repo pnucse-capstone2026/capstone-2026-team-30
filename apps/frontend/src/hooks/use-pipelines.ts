@@ -1,5 +1,10 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   createPipelineRun,
   getPipelineRunDetail,
@@ -51,6 +56,7 @@ export function usePipelineRuns(
     queryKey: ["pipeline-runs", clusterId, namespace],
     queryFn: () => getPipelineRuns(clusterId, namespace),
     enabled: Boolean(clusterId),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -85,6 +91,7 @@ export function usePipelineRunDetail(
     queryKey: ["pipeline-run-detail", runId, clusterId, namespace],
     queryFn: () => getPipelineRunDetail(runId!, clusterId, namespace),
     enabled: Boolean(runId),
+    placeholderData: keepPreviousData,
   });
 }
 

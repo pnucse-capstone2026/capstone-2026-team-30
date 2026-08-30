@@ -1,7 +1,9 @@
-import { useEffect } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { API_BASE_URL } from "@/lib/auth-api";
-import { useAuthStore } from "@/lib/auth-store";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   createNotebook,
   deleteNotebook,
@@ -11,6 +13,7 @@ import {
   stopNotebook,
   CreateNotebookInput,
 } from "@/lib/notebooks-api";
+import { useSseSubscription } from "./use-sse-subscription";
 
 export function useNotebookPresets() {
   return useQuery({
@@ -29,30 +32,22 @@ export function useNotebookEvents(
   namespace: string = "default",
 ) {
   const queryClient = useQueryClient();
-  const accessToken = useAuthStore((state) => state.accessToken);
 
-  useEffect(() => {
-    if (!clusterId) return;
-
-    const query = new URLSearchParams({
-      clusterId,
-      namespace,
-      ...(accessToken ? { token: accessToken } : {}),
-    });
-
-    const sseUrl = `${API_BASE_URL}/mlops/notebooks/events?${query.toString()}`;
-    const eventSource = new EventSource(sseUrl);
-
-    eventSource.addEventListener("notebook-updated", () => {
+  useSseSubscription<{
+    clusterId: string;
+    namespace: string;
+    name?: string;
+  }>({
+    path: "/mlops/notebooks/events",
+    queryParams: { clusterId, namespace },
+    events: ["notebook-updated"],
+    enabled: Boolean(clusterId),
+    onMessage: () => {
       queryClient.invalidateQueries({
         queryKey: ["notebooks", clusterId, namespace],
       });
-    });
-
-    return () => {
-      eventSource.close();
-    };
-  }, [clusterId, namespace, accessToken, queryClient]);
+    },
+  });
 }
 
 export function useNotebooks(clusterId: string, namespace: string = "default") {
@@ -62,6 +57,7 @@ export function useNotebooks(clusterId: string, namespace: string = "default") {
     queryKey: ["notebooks", clusterId, namespace],
     queryFn: () => getNotebooks(clusterId, namespace),
     enabled: Boolean(clusterId),
+    placeholderData: keepPreviousData,
   });
 }
 
