@@ -67,6 +67,37 @@ function formatDate(value: string) {
   return value.slice(0, 10);
 }
 
+function deriveRiskLevel(
+  policyName: string,
+  ruleNames: string[] = [],
+): "critical" | "high" | "medium" | "low" {
+  const target = `${policyName} ${ruleNames.join(" ")}`.toLowerCase();
+  if (
+    target.includes("privileged") ||
+    target.includes("host-path") ||
+    target.includes("hostpath") ||
+    target.includes("root")
+  ) {
+    return "critical";
+  }
+  if (
+    target.includes("capability") ||
+    target.includes("capabilities") ||
+    target.includes("sys-admin") ||
+    target.includes("network")
+  ) {
+    return "high";
+  }
+  if (
+    target.includes("label") ||
+    target.includes("annotation") ||
+    target.includes("tag")
+  ) {
+    return "low";
+  }
+  return "medium";
+}
+
 export function toExceptionRequest(
   request: BackendExceptionRequest,
 ): ExceptionRequest {
@@ -97,7 +128,7 @@ export function toExceptionRequest(
     nextAttemptAt: request.nextAttemptAt
       ? formatDate(request.nextAttemptAt)
       : null,
-    riskLevel: "medium",
+    riskLevel: deriveRiskLevel(request.policyName, request.ruleNames),
     compensatingControl: request.decisionNote ?? "-",
   };
 }

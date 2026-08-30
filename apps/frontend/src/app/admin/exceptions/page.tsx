@@ -84,17 +84,21 @@ export default function AdminExceptionsPage() {
   const [riskLevel, setRiskLevel] = useState<"all" | ExceptionRiskLevel>("all");
   const [cluster, setCluster] = useState("all");
   const [namespace, setNamespace] = useState("all");
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const loadRequests = useCallback(async () => {
     setErrorMessage(null);
+    setIsRefreshing(true);
     try {
-      await fetchExceptions();
+      await fetchExceptions(true);
     } catch (error) {
       setErrorMessage(
         error instanceof Error
           ? error.message
           : "예외 신청 목록을 불러오지 못했습니다.",
       );
+    } finally {
+      setIsRefreshing(false);
     }
   }, [fetchExceptions]);
 
@@ -103,7 +107,9 @@ export default function AdminExceptionsPage() {
   }, [loadRequests]);
 
   const requests = useMemo(() => cachedRequests ?? [], [cachedRequests]);
-  const isLoading = cachedRequests === null && exceptionsLoading;
+  const isLoading =
+    (cachedRequests === null && exceptionsLoading) ||
+    (cachedRequests === null && isRefreshing);
 
   const pendingRequests = requests.filter(
     (request) => request.status === "pending" || request.status === "applying",
@@ -270,10 +276,13 @@ export default function AdminExceptionsPage() {
               <Button
                 variant="outline"
                 className="h-10 rounded-xl border-slate-200 bg-white text-slate-700"
+                disabled={isRefreshing}
                 onClick={() => void loadRequests()}
               >
-                <Download className="size-4" />
-                새로고침
+                <Download
+                  className={`size-4 ${isRefreshing ? "animate-spin" : ""}`}
+                />
+                {isRefreshing ? "불러오는 중..." : "새로고침"}
               </Button>
               <Button className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]">
                 <SlidersHorizontal className="size-4" />

@@ -19,6 +19,7 @@ import {
   type ExceptionRequest,
   type ExceptionRequestStatus,
 } from "@/lib/exception-requests";
+import { useDataStore } from "@/lib/data-store";
 import {
   approveExceptionRequest,
   rejectExceptionRequest,
@@ -126,6 +127,7 @@ export function ExceptionApprovalPanel({
       setStatus(updatedRequest.status);
       setDecisionAt(new Date().toISOString().slice(0, 10));
       onRequestChange?.(updatedRequest);
+      void useDataStore.getState().fetchExceptions(true);
       toast.success(
         nextStatus === "approved"
           ? "예외 신청을 승인하고 적용을 시작했습니다."
@@ -150,6 +152,7 @@ export function ExceptionApprovalPanel({
       const updatedRequest = toExceptionRequest(response);
       setStatus(updatedRequest.status);
       onRequestChange?.(updatedRequest);
+      void useDataStore.getState().fetchExceptions(true);
       toast.success("적용 실패 요청을 재시도했습니다.");
     } catch (error) {
       const message =
