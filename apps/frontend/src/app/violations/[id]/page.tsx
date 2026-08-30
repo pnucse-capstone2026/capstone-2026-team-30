@@ -1,5 +1,7 @@
+"use client";
+
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { use, useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -15,11 +17,15 @@ import { DashboardPageShell } from "@/components/dashboard/dashboard-page-shell"
 import { AiErrorExplainerDialog } from "@/components/ai-agent/ai-error-explainer-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useAuthStore } from "@/lib/auth-store";
+import { useDataStore } from "@/lib/data-store";
 import {
   exceptionClassName,
+  getViolationDetail,
   policyViolations,
   severityClassName,
   statusClassName,
+  type PolicyViolation,
 } from "@/lib/policy-violations";
 
 type MyViolationDetailPageProps = {
@@ -90,20 +96,83 @@ const violationCopy: Record<
   },
 };
 
-export function generateStaticParams() {
-  return policyViolations.map((violation) => ({
-    id: violation.id,
-  }));
-}
-
-export default async function MyViolationDetailPage({
+export default function MyViolationDetailPage({
   params,
 }: MyViolationDetailPageProps) {
-  const { id } = await params;
-  const violation = policyViolations.find((item) => item.id === id);
+  const { id } = use(params);
+  const [violation, setViolation] = useState<PolicyViolation | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchViolations = useDataStore((state) => state.fetchViolations);
+  const initializeAuth = useAuthStore((state) => state.initialize);
+
+  const loadData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      await initializeAuth();
+      const freshViolations = await fetchViolations();
+      const foundInStore = freshViolations.find((v) => v.id === id);
+      if (foundInStore) {
+        setViolation(foundInStore);
+        setIsLoading(false);
+        return;
+      }
+
+      const clusterIdFromKey = id.includes(":") ? id.split(":")[0] : "";
+      const detailFromApi = await getViolationDetail(clusterIdFromKey, id);
+      if (detailFromApi) {
+        setViolation(detailFromApi);
+        setIsLoading(false);
+        return;
+      }
+    } catch {
+      // Fallback
+    }
+
+    const foundMock = policyViolations.find((item) => item.id === id);
+    setViolation(foundMock ?? null);
+    setIsLoading(false);
+  }, [fetchViolations, id, initializeAuth]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  if (isLoading) {
+    return (
+      <DashboardPageShell
+        activeHref="/violations"
+        title="위반 상세"
+        description="정책 위반 원인과 조치 방향을 확인합니다."
+      >
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-sm text-slate-500">
+          위반 상세 정보를 불러오는 중입니다...
+        </div>
+      </DashboardPageShell>
+    );
+  }
 
   if (!violation) {
-    notFound();
+    return (
+      <DashboardPageShell
+        activeHref="/violations"
+        title="위반 상세"
+        description="정책 위반 원인과 조치 방향을 확인합니다."
+      >
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-700">
+          <h2 className="text-lg font-semibold">
+            정책 위반 항목을 찾을 수 없습니다.
+          </h2>
+          <p className="mt-2 text-sm text-slate-500">
+            요청하신 ID ({id})에 해당하는 위반 기록이 존재하지 않거나
+            삭제되었습니다.
+          </p>
+          <Button asChild className="mt-4 rounded-xl bg-[#0b2342] text-white">
+            <Link href="/violations">목록으로 돌아가기</Link>
+          </Button>
+        </div>
+      </DashboardPageShell>
+    );
   }
 
   const StatusIcon = statusIcon[violation.status];

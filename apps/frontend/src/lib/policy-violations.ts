@@ -127,6 +127,7 @@ export async function getViolationDetail(
   clusterId: string,
   id: string,
 ): Promise<PolicyViolation | null> {
+  const targetClusterId = clusterId || "default";
   try {
     const item = await requestWithAuth<{
       id: string;
@@ -145,7 +146,7 @@ export async function getViolationDetail(
       recommendation: string;
       resourceSpec: Record<string, unknown>;
       rawResult: Record<string, unknown>;
-    }>(`/violations/${clusterId}/${id}`);
+    }>(`/violations/${targetClusterId}/${id}`);
 
     return {
       id: item.id,
@@ -170,7 +171,10 @@ export async function getViolationDetail(
       admissionReviewId: item.id,
       resourcePath: `spec.template.spec`,
       recommendation: item.recommendation,
-      manifest: JSON.stringify(item.resourceSpec, null, 2),
+      manifest:
+        Object.keys(item.resourceSpec ?? {}).length > 0
+          ? JSON.stringify(item.resourceSpec, null, 2)
+          : `apiVersion: v1\nkind: ${item.resourceKind || "Unknown"}\nmetadata:\n  name: ${item.resourceName || "Unknown"}\n  namespace: ${item.namespace || "default"}`,
       events: [
         {
           label: "탐지됨",

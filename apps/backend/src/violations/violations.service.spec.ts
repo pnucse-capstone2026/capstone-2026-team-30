@@ -17,6 +17,7 @@ describe("ViolationsService", () => {
     violationHistory: {
       findMany: jest.Mock;
       findFirst: jest.Mock;
+      findUnique: jest.Mock;
       create: jest.Mock;
     };
   };
@@ -123,6 +124,7 @@ describe("ViolationsService", () => {
       violationHistory: {
         findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest.fn().mockResolvedValue(null),
+        findUnique: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockResolvedValue({ id: "db-vio-1" }),
       },
     };
@@ -216,6 +218,28 @@ describe("ViolationsService", () => {
       ).rejects.toThrow(
         new BusinessException(VIOLATION_ERROR.CLUSTER_ACCESS_DENIED),
       );
+    });
+
+    it("DB Fallback 기록인 UUID 형태의 ID 조회를 정상 처리한다", async () => {
+      mockPrismaService.violationHistory.findUnique.mockResolvedValueOnce({
+        id: "ec90b8e7-2112-4ea0-a55b-b65100acffc5",
+        policyName: "disallow-latest-tag",
+        ruleName: "require-image-tag",
+        targetClusterId: "cluster-1",
+        targetClusterDisplayName: "Cluster One",
+        occurredAt: new Date("2026-08-19T05:30:00Z"),
+      });
+
+      const detail = await service.getDetail(
+        "cluster-1",
+        "ec90b8e7-2112-4ea0-a55b-b65100acffc5",
+        mockUser,
+      );
+
+      expect(detail).toBeDefined();
+      expect(detail.id).toBe("ec90b8e7-2112-4ea0-a55b-b65100acffc5");
+      expect(detail.policyName).toBe("disallow-latest-tag");
+      expect(detail.reportName).toBe("db-fallback");
     });
 
     it("존재하지 않는 결과 인덱스 조회 시 BusinessException(NOT_FOUND)을 던진다", async () => {

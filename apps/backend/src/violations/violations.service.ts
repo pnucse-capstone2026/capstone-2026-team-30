@@ -185,13 +185,81 @@ export class ViolationsService {
     id: string,
     user: AuthenticatedUser,
   ): Promise<ViolationDetailDto> {
+    // 1. ID가 UUID 형식(또는 ':' 미포함)일 경우 DB Fallback (violationHistory) 조회 시도
+    if (!id.includes(":")) {
+      const dbRecord = await this.prisma.violationHistory.findUnique({
+        where: { id },
+      });
+      if (dbRecord) {
+        const cluster = this.validateClusterAccess(
+          user,
+          dbRecord.targetClusterId,
+        );
+        const clusterDisplayName =
+          cluster?.displayName ??
+          dbRecord.targetClusterDisplayName ??
+          dbRecord.targetClusterId;
+        const summary: ViolationSummaryDto = {
+          id: dbRecord.id,
+          clusterId: dbRecord.targetClusterId,
+          clusterDisplayName,
+          namespace: "cluster-wide",
+          policyName: dbRecord.policyName,
+          ruleName: dbRecord.ruleName,
+          resourceKind: "Unknown",
+          resourceName: "Unknown",
+          severity: "medium",
+          status: "open",
+          message: `[DB Fallback] Policy '${dbRecord.policyName}' rule '${dbRecord.ruleName}' violation recorded in cluster '${clusterDisplayName}'.`,
+          detectedAt: dbRecord.occurredAt.toISOString(),
+          reportName: "db-fallback",
+        };
+        return {
+          ...summary,
+          recommendation: this.generateDefaultRecommendation(summary),
+          resourceSpec: {},
+          rawResult: {},
+        };
+      }
+    }
+
     const cluster = this.validateClusterAccess(user, clusterId);
 
     // ID 포맷: clusterId:reportName:index
     const parts = id.split(":");
     if (parts.length < 3) {
+      const dbRecord = await this.prisma.violationHistory.findUnique({
+        where: { id },
+      });
+      if (dbRecord) {
+        this.validateClusterAccess(user, dbRecord.targetClusterId);
+        const clusterDisplayName =
+          dbRecord.targetClusterDisplayName ?? dbRecord.targetClusterId;
+        const summary: ViolationSummaryDto = {
+          id: dbRecord.id,
+          clusterId: dbRecord.targetClusterId,
+          clusterDisplayName,
+          namespace: "cluster-wide",
+          policyName: dbRecord.policyName,
+          ruleName: dbRecord.ruleName,
+          resourceKind: "Unknown",
+          resourceName: "Unknown",
+          severity: "medium",
+          status: "open",
+          message: `[DB Fallback] Policy '${dbRecord.policyName}' rule '${dbRecord.ruleName}' violation recorded in cluster '${clusterDisplayName}'.`,
+          detectedAt: dbRecord.occurredAt.toISOString(),
+          reportName: "db-fallback",
+        };
+        return {
+          ...summary,
+          recommendation: this.generateDefaultRecommendation(summary),
+          resourceSpec: {},
+          rawResult: {},
+        };
+      }
       throw new BusinessException(VIOLATION_ERROR.NOT_FOUND);
     }
+
     const reportName = parts[1];
     const index = parseInt(parts[2], 10);
 

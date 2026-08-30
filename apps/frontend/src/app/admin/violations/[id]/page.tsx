@@ -108,9 +108,12 @@ export default function AdminViolationDetailPage({
         <DashboardSidebar variant="admin" activeHref="/admin/violations" />
         <div className="flex-1 p-8 text-slate-700">
           <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center">
-            <h2 className="text-lg font-semibold">정책 위반 항목을 찾을 수 없습니다.</h2>
+            <h2 className="text-lg font-semibold">
+              정책 위반 항목을 찾을 수 없습니다.
+            </h2>
             <p className="mt-2 text-sm text-slate-500">
-              요청하신 ID ({id})에 해당하는 위반 기록이 존재하지 않거나 삭제되었습니다.
+              요청하신 ID ({id})에 해당하는 위반 기록이 존재하지 않거나
+              삭제되었습니다.
             </p>
             <Button asChild className="mt-4 rounded-xl bg-[#0b2342] text-white">
               <Link href="/admin/violations">목록으로 돌아가기</Link>
