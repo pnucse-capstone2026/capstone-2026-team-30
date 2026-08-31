@@ -9,6 +9,7 @@ import {
 import { KyvernoAdapter } from "../kubernetes/kyverno.adapter";
 import { PrismaService } from "../prisma/prisma.service";
 import { ListViolationsQueryDto } from "./dto/list-violations-query.dto";
+import { UpdateViolationStatusDto } from "./dto/update-violation-status.dto";
 import { ViolationDetailDto } from "./dto/violation-detail.dto";
 import { ViolationSummaryDto } from "./dto/violation-summary.dto";
 import { VIOLATION_ERROR } from "./violation.errors";
@@ -92,8 +93,12 @@ export class ViolationsService {
       let successClusterCount = 0;
       let failedClusterCount = 0;
 
-      // DB에서 예외 신청 목록 조회하여 매핑 준비
-      const exceptionsMap = await this.getExceptionRequestsMap();
+      let exceptionsMap:
+        | Map<string, { id: string; status: string }>
+        | undefined;
+      let savedStatusesMap:
+        | Map<string, "open" | "inReview" | "resolved">
+        | undefined;
 
       for (const cluster of accessibleClusters) {
         try {
@@ -105,11 +110,21 @@ export class ViolationsService {
               query.namespace,
             );
 
+          if (clusterReports.length > 0 || namespacedReports.length > 0) {
+            if (!exceptionsMap) {
+              exceptionsMap = await this.getExceptionRequestsMap();
+            }
+            if (!savedStatusesMap) {
+              savedStatusesMap = await this.getSavedStatusMap();
+            }
+          }
+
           for (const raw of clusterReports) {
             const extracted = this.extractViolationsFromReport(
               raw as PolicyReportRaw,
               cluster,
               exceptionsMap,
+              savedStatusesMap,
             );
             for (const item of extracted) {
               if (this.matchesFilter(item, query)) {
@@ -123,6 +138,7 @@ export class ViolationsService {
               raw as PolicyReportRaw,
               cluster,
               exceptionsMap,
+              savedStatusesMap,
             );
             for (const item of extracted) {
               if (this.matchesFilter(item, query)) {
@@ -185,7 +201,7 @@ export class ViolationsService {
   }
 
   /**
-   * 특정 정책 위반의 상세 정보 및 Bedrock AI 분석용 메타데이터를 조회합니다.
+   * 특정 정책 위반의 상세 정보 및 Bedrock AI 분석용 메타데이터, 감사 이력을 조회합니다.
    *
    * @param clusterId 클러스터 식별자
    * @param id 위반 고유 식별자 (<clusterId>:<reportName>:<resultIndex>)
@@ -216,22 +232,37 @@ export class ViolationsService {
           id: dbRecord.id,
           clusterId: dbRecord.targetClusterId,
           clusterDisplayName,
-          namespace: "cluster-wide",
+          namespace: dbRecord.namespace ?? "cluster-wide",
           policyName: dbRecord.policyName,
           ruleName: dbRecord.ruleName,
-          resourceKind: "Unknown",
-          resourceName: "Unknown",
-          severity: "medium",
-          status: "open",
-          message: `[DB Fallback] Policy '${dbRecord.policyName}' rule '${dbRecord.ruleName}' violation recorded in cluster '${clusterDisplayName}'.`,
+          resourceKind: dbRecord.resourceKind ?? "Unknown",
+          resourceName: dbRecord.resourceName ?? "Unknown",
+          severity:
+            (dbRecord.severity as
+              | "critical"
+              | "high"
+              | "medium"
+              | "low"
+              | "info") ?? "medium",
+          status:
+            (dbRecord.status as "open" | "inReview" | "resolved") ?? "open",
+          message:
+            dbRecord.message ??
+            `[DB Fallback] Policy '${dbRecord.policyName}' rule '${dbRecord.ruleName}' violation recorded in cluster '${clusterDisplayName}'.`,
           detectedAt: dbRecord.occurredAt.toISOString(),
           reportName: "db-fallback",
         };
+        const events = await this.getViolationAuditEvents(
+          id,
+          summary.detectedAt,
+          summary.message,
+        );
         return {
           ...summary,
           recommendation: this.generateDefaultRecommendation(summary),
           resourceSpec: {},
           rawResult: {},
+          events,
         };
       }
     }
@@ -252,22 +283,37 @@ export class ViolationsService {
           id: dbRecord.id,
           clusterId: dbRecord.targetClusterId,
           clusterDisplayName,
-          namespace: "cluster-wide",
+          namespace: dbRecord.namespace ?? "cluster-wide",
           policyName: dbRecord.policyName,
           ruleName: dbRecord.ruleName,
-          resourceKind: "Unknown",
-          resourceName: "Unknown",
-          severity: "medium",
-          status: "open",
-          message: `[DB Fallback] Policy '${dbRecord.policyName}' rule '${dbRecord.ruleName}' violation recorded in cluster '${clusterDisplayName}'.`,
+          resourceKind: dbRecord.resourceKind ?? "Unknown",
+          resourceName: dbRecord.resourceName ?? "Unknown",
+          severity:
+            (dbRecord.severity as
+              | "critical"
+              | "high"
+              | "medium"
+              | "low"
+              | "info") ?? "medium",
+          status:
+            (dbRecord.status as "open" | "inReview" | "resolved") ?? "open",
+          message:
+            dbRecord.message ??
+            `[DB Fallback] Policy '${dbRecord.policyName}' rule '${dbRecord.ruleName}' violation recorded in cluster '${clusterDisplayName}'.`,
           detectedAt: dbRecord.occurredAt.toISOString(),
           reportName: "db-fallback",
         };
+        const events = await this.getViolationAuditEvents(
+          id,
+          summary.detectedAt,
+          summary.message,
+        );
         return {
           ...summary,
           recommendation: this.generateDefaultRecommendation(summary),
           resourceSpec: {},
           rawResult: {},
+          events,
         };
       }
       throw new BusinessException(VIOLATION_ERROR.NOT_FOUND);
@@ -303,21 +349,223 @@ export class ViolationsService {
     }
 
     const rawResult = report.results[index];
+
+    // DB에서 저장된 처리 상태 및 예외 맵 조회
+    const [exceptionsMap, savedStatusesMap] = await Promise.all([
+      this.getExceptionRequestsMap(),
+      this.getSavedStatusMap(),
+    ]);
+
     const summary = this.mapToViolationSummary(
       rawResult,
       report,
       cluster,
       index,
+      exceptionsMap,
+      savedStatusesMap,
     );
 
     const recommendation = this.generateDefaultRecommendation(summary);
+    const events = await this.getViolationAuditEvents(
+      id,
+      summary.detectedAt,
+      summary.message,
+    );
 
     return {
       ...summary,
       recommendation,
       resourceSpec: (rawResult.resources?.[0] as Record<string, unknown>) ?? {},
       rawResult,
+      events,
     };
+  }
+
+  /**
+   * 정책 위반 처리 상태를 변경하고 PostgreSQL DB에 영속화하며 AuditLog 감사 기록을 생성합니다.
+   *
+   * @param clusterId 클러스터 식별자
+   * @param id 정책 위반 고유 식별자
+   * @param dto 상태 변경 요청 데이터
+   * @param user 요청자 정보
+   * @returns 갱신된 정책 위반 상세 DTO
+   */
+  async updateStatus(
+    clusterId: string,
+    id: string,
+    dto: UpdateViolationStatusDto,
+    user: AuthenticatedUser,
+  ): Promise<ViolationDetailDto> {
+    const currentDetail = await this.getDetail(clusterId, id, user);
+    const previousStatus = currentDetail.status;
+
+    const targetClusterId = currentDetail.clusterId || clusterId;
+    const targetClusterDisplayName =
+      currentDetail.clusterDisplayName || targetClusterId;
+
+    // 1. ViolationHistory DB 레코드 upsert
+    const existing = await this.prisma.violationHistory.findFirst({
+      where: {
+        OR: [
+          { id },
+          {
+            targetClusterId,
+            policyName: currentDetail.policyName,
+            ruleName: currentDetail.ruleName,
+            resourceName: currentDetail.resourceName,
+            namespace: currentDetail.namespace,
+          },
+        ],
+      },
+    });
+
+    if (existing) {
+      await this.prisma.violationHistory.update({
+        where: { id: existing.id },
+        data: {
+          status: dto.status,
+        },
+      });
+    } else {
+      await this.prisma.violationHistory.create({
+        data: {
+          targetClusterId,
+          targetClusterDisplayName,
+          policyName: currentDetail.policyName,
+          ruleName: currentDetail.ruleName,
+          namespace: currentDetail.namespace,
+          resourceKind: currentDetail.resourceKind,
+          resourceName: currentDetail.resourceName,
+          severity: currentDetail.severity,
+          status: dto.status,
+          message: currentDetail.message,
+          occurredAt: new Date(currentDetail.detectedAt),
+        },
+      });
+    }
+
+    // 2. AuditLog 감사 로그 생성
+    await this.prisma.auditLog.create({
+      data: {
+        action: "VIOLATION_STATUS_UPDATED",
+        entityType: "POLICY_VIOLATION",
+        entityId: id,
+        actorType: "USER",
+        userId: user.id,
+        metadata: {
+          previousStatus,
+          newStatus: dto.status,
+          note: dto.note ?? null,
+          clusterId: targetClusterId,
+          clusterDisplayName: targetClusterDisplayName,
+          policyName: currentDetail.policyName,
+          ruleName: currentDetail.ruleName,
+          resourceName: currentDetail.resourceName,
+          resourceKind: currentDetail.resourceKind,
+          namespace: currentDetail.namespace,
+        },
+      },
+    });
+
+    // 3. 최신 감사 이력 타임라인 조회 후 반환
+    const updatedEvents = await this.getViolationAuditEvents(
+      id,
+      currentDetail.detectedAt,
+      currentDetail.message,
+    );
+
+    return {
+      ...currentDetail,
+      status: dto.status,
+      events: updatedEvents,
+    };
+  }
+
+  private async getViolationAuditEvents(
+    id: string,
+    detectedAt?: string,
+    initialMessage?: string,
+  ): Promise<Array<{ label: string; at: string; description: string }>> {
+    const events: Array<{ label: string; at: string; description: string }> =
+      [];
+
+    if (detectedAt) {
+      events.push({
+        label: "정책 위반 감지",
+        at: detectedAt,
+        description:
+          initialMessage ?? "정책 엔진(Kyverno)에서 위반이 감지되었습니다.",
+      });
+    }
+
+    try {
+      const auditLogs = await this.prisma.auditLog.findMany({
+        where: {
+          entityType: "POLICY_VIOLATION",
+          entityId: id,
+        },
+        orderBy: { createdAt: "asc" },
+        include: {
+          user: {
+            select: { email: true },
+          },
+        },
+      });
+
+      for (const log of auditLogs) {
+        const meta = log.metadata as Record<string, unknown> | null;
+        const nextStatus = (meta?.newStatus as string) ?? "inReview";
+        const actor = log.user?.email ?? "관리자";
+        const label =
+          nextStatus === "resolved"
+            ? "해결 완료 처리"
+            : nextStatus === "inReview"
+              ? "검토 중 상태 변경"
+              : "초기 상태(미처리)로 변경";
+        const noteSuffix = meta?.note ? ` (메모: ${meta.note})` : "";
+        const description = `${actor}님이 처리 상태를 '${nextStatus}'(으)로 변경했습니다.${noteSuffix}`;
+
+        events.push({
+          label,
+          at: log.createdAt.toISOString(),
+          description,
+        });
+      }
+    } catch {
+      // 감사 로그 조회 실패 시 기본 이벤트 유지
+    }
+
+    return events;
+  }
+
+  private async getSavedStatusMap(): Promise<
+    Map<string, "open" | "inReview" | "resolved">
+  > {
+    try {
+      const records = await this.prisma.violationHistory.findMany({
+        select: {
+          id: true,
+          targetClusterId: true,
+          policyName: true,
+          ruleName: true,
+          resourceName: true,
+          namespace: true,
+          status: true,
+        },
+      });
+
+      const map = new Map<string, "open" | "inReview" | "resolved">();
+      for (const rec of records) {
+        const validStatus =
+          (rec.status as "open" | "inReview" | "resolved") || "open";
+        map.set(rec.id, validStatus);
+        const key = `${rec.targetClusterId}:${rec.policyName}:${rec.ruleName}:${rec.resourceName}:${rec.namespace ?? "cluster-wide"}`;
+        map.set(key, validStatus);
+      }
+      return map;
+    } catch {
+      return new Map();
+    }
   }
 
   private validateClusterAccess(
@@ -378,6 +626,7 @@ export class ViolationsService {
     report: PolicyReportRaw,
     cluster: ClusterMetadata,
     exceptionsMap?: Map<string, { id: string; status: string }>,
+    savedStatusesMap?: Map<string, "open" | "inReview" | "resolved">,
   ): ViolationSummaryDto[] {
     const results = report.results ?? [];
     const violations: ViolationSummaryDto[] = [];
@@ -393,6 +642,7 @@ export class ViolationsService {
             cluster,
             index,
             exceptionsMap,
+            savedStatusesMap,
           ),
         );
       }
@@ -407,6 +657,7 @@ export class ViolationsService {
     cluster: ClusterMetadata,
     index: number,
     exceptionsMap?: Map<string, { id: string; status: string }>,
+    savedStatusesMap?: Map<string, "open" | "inReview" | "resolved">,
   ): ViolationSummaryDto {
     const reportName = report.metadata?.name ?? "unknown-report";
     const id = `${cluster.id}:${reportName}:${index}`;
@@ -436,10 +687,14 @@ export class ViolationsService {
       result.message ??
       `Policy '${policyName}' violation detected on ${resourceKind}/${resourceName}.`;
 
-    const key = `${cluster.id}:${policyName}:${resourceName}:${namespace}`;
-    const exc = exceptionsMap?.get(key);
+    const excKey = `${cluster.id}:${policyName}:${resourceName}:${namespace}`;
+    const exc = exceptionsMap?.get(excKey);
 
-    let status: "open" | "inReview" | "resolved" = "open";
+    const statusKey = `${cluster.id}:${policyName}:${ruleName}:${resourceName}:${namespace}`;
+    const savedStatus =
+      savedStatusesMap?.get(id) ?? savedStatusesMap?.get(statusKey);
+
+    let status: "open" | "inReview" | "resolved" = savedStatus ?? "open";
     let exceptionStatus: "none" | "requested" | "approved" = "none";
     let relatedExceptionId: string | undefined = undefined;
 
@@ -447,10 +702,10 @@ export class ViolationsService {
       relatedExceptionId = exc.id;
       if (exc.status === "APPROVED" || exc.status === "APPLYING") {
         exceptionStatus = "approved";
-        status = "inReview";
+        if (!savedStatus) status = "inReview";
       } else if (exc.status === "PENDING") {
         exceptionStatus = "requested";
-        status = "inReview";
+        if (!savedStatus) status = "inReview";
       }
     }
 

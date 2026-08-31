@@ -19,6 +19,14 @@ describe("ViolationsService", () => {
       findFirst: jest.Mock;
       findUnique: jest.Mock;
       create: jest.Mock;
+      update: jest.Mock;
+    };
+    policyExceptionRequest: {
+      findMany: jest.Mock;
+    };
+    auditLog: {
+      findMany: jest.Mock;
+      create: jest.Mock;
     };
   };
 
@@ -126,6 +134,14 @@ describe("ViolationsService", () => {
         findFirst: jest.fn().mockResolvedValue(null),
         findUnique: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockResolvedValue({ id: "db-vio-1" }),
+        update: jest.fn().mockResolvedValue({ id: "db-vio-1" }),
+      },
+      policyExceptionRequest: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      auditLog: {
+        findMany: jest.fn().mockResolvedValue([]),
+        create: jest.fn().mockResolvedValue({ id: "audit-1" }),
       },
     };
 
@@ -186,7 +202,7 @@ describe("ViolationsService", () => {
   });
 
   describe("getDetail", () => {
-    it("PolicyReport 단건 위반 상세와 추천 해결 가이드를 정상 반환한다", async () => {
+    it("PolicyReport 단건 위반 상세와 추천 해결 가이드, 감사 이벤트를 정상 반환한다", async () => {
       const detail = await service.getDetail(
         "cluster-1",
         "cluster-1:polr-ns-payments:0",
@@ -200,6 +216,8 @@ describe("ViolationsService", () => {
         "':latest' 태그 사용을 제거하세요",
       );
       expect(detail.resourceSpec).toBeDefined();
+      expect(detail.events).toBeDefined();
+      expect(detail.events?.length).toBeGreaterThan(0);
     });
 
     it("잘못된 ID 포맷인 경우 BusinessException(NOT_FOUND)을 던진다", async () => {
@@ -250,6 +268,54 @@ describe("ViolationsService", () => {
           mockUser,
         ),
       ).rejects.toThrow(new BusinessException(VIOLATION_ERROR.NOT_FOUND));
+    });
+  });
+
+  describe("updateStatus", () => {
+    it("위반 상태를 'resolved'로 업데이트하고 DB 저장 및 감사 로그를 생성한다", async () => {
+      const result = await service.updateStatus(
+        "cluster-1",
+        "cluster-1:polr-ns-payments:0",
+        { status: "resolved", note: "리소스 limits 매니페스트 수정 완료" },
+        mockUser,
+      );
+
+      expect(result).toBeDefined();
+      expect(result.status).toBe("resolved");
+      expect(mockPrismaService.violationHistory.create).toHaveBeenCalled();
+      expect(mockPrismaService.auditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            action: "VIOLATION_STATUS_UPDATED",
+            entityType: "POLICY_VIOLATION",
+            entityId: "cluster-1:polr-ns-payments:0",
+            userId: mockUser.id,
+          }),
+        }),
+      );
+    });
+
+    it("기존 DB 레코드가 있는 경우 update를 수행한다", async () => {
+      mockPrismaService.violationHistory.findFirst.mockResolvedValueOnce({
+        id: "existing-vio-1",
+        targetClusterId: "cluster-1",
+        policyName: "disallow-latest-tag",
+        status: "open",
+      });
+
+      const result = await service.updateStatus(
+        "cluster-1",
+        "cluster-1:polr-ns-payments:0",
+        { status: "inReview", note: "담당자 검토 진행 중" },
+        mockUser,
+      );
+
+      expect(result.status).toBe("inReview");
+      expect(mockPrismaService.violationHistory.update).toHaveBeenCalledWith({
+        where: { id: "existing-vio-1" },
+        data: { status: "inReview" },
+      });
+      expect(mockPrismaService.auditLog.create).toHaveBeenCalled();
     });
   });
 

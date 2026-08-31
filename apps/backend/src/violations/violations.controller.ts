@@ -1,4 +1,12 @@
-import { Controller, Get, Param, Query, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Query,
+  UseGuards,
+} from "@nestjs/common";
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -11,12 +19,13 @@ import { RequirePermissions } from "../auth/decorators/require-permissions.decor
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { PermissionsGuard } from "../auth/guards/permissions.guard";
 import { ListViolationsQueryDto } from "./dto/list-violations-query.dto";
+import { UpdateViolationStatusDto } from "./dto/update-violation-status.dto";
 import { ViolationDetailDto } from "./dto/violation-detail.dto";
 import { ViolationSummaryDto } from "./dto/violation-summary.dto";
 import { ViolationsService } from "./violations.service";
 
 /**
- * Kyverno 정책 위반 실시간 조회 API 컨트롤러
+ * Kyverno 정책 위반 실시간 조회 및 상태 관리 API 컨트롤러
  */
 @ApiTags("violations")
 @ApiBearerAuth()
@@ -91,5 +100,56 @@ export class ViolationsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<ViolationDetailDto> {
     return this.service.getDetail(clusterId, id, user);
+  }
+
+  /**
+   * 정책 위반의 처리 상태를 변경하고 감사 로그를 기록합니다. (클러스터 포함 경로)
+   *
+   * @param clusterId 클러스터 식별자
+   * @param id 위반 식별자
+   * @param body 상태 변경 DTO
+   * @param user 인증된 요청자 정보
+   * @returns 갱신된 정책 위반 상세 DTO
+   */
+  @Patch(":clusterId/:id/status")
+  @RequirePermissions("violations.read")
+  @ApiOperation({ summary: "정책 위반 처리 상태 변경 (클러스터 지정)" })
+  @ApiResponse({
+    status: 200,
+    description: "위반 상태 변경 성공",
+    type: ViolationDetailDto,
+  })
+  updateStatusWithCluster(
+    @Param("clusterId") clusterId: string,
+    @Param("id") id: string,
+    @Body() body: UpdateViolationStatusDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ViolationDetailDto> {
+    return this.service.updateStatus(clusterId, id, body, user);
+  }
+
+  /**
+   * 정책 위반의 처리 상태를 변경하고 감사 로그를 기록합니다. (단일 ID 경로)
+   *
+   * @param id 위반 식별자
+   * @param body 상태 변경 DTO
+   * @param user 인증된 요청자 정보
+   * @returns 갱신된 정책 위반 상세 DTO
+   */
+  @Patch(":id/status")
+  @RequirePermissions("violations.read")
+  @ApiOperation({ summary: "정책 위반 처리 상태 변경" })
+  @ApiResponse({
+    status: 200,
+    description: "위반 상태 변경 성공",
+    type: ViolationDetailDto,
+  })
+  updateStatus(
+    @Param("id") id: string,
+    @Body() body: UpdateViolationStatusDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ViolationDetailDto> {
+    const clusterId = id.includes(":") ? id.split(":")[0] : "default";
+    return this.service.updateStatus(clusterId, id, body, user);
   }
 }

@@ -18,6 +18,8 @@ describe("ViolationsController", () => {
     ["list", "violations.read"],
     ["getSummary", "violations.read"],
     ["getDetail", "violations.read"],
+    ["updateStatus", "violations.read"],
+    ["updateStatusWithCluster", "violations.read"],
   ])("declares %s permission as %s", (method, permission) => {
     expect(
       Reflect.getMetadata(
@@ -32,6 +34,7 @@ describe("ViolationsController", () => {
       list: jest.fn().mockResolvedValue([]),
       getViolations: jest.fn(),
       getDetail: jest.fn(),
+      updateStatus: jest.fn(),
     };
     const controller = new ViolationsController(service as never);
     const user: AuthenticatedUser = {
@@ -50,6 +53,7 @@ describe("ViolationsController", () => {
       list: jest.fn(),
       getViolations: jest.fn().mockResolvedValue([]),
       getDetail: jest.fn(),
+      updateStatus: jest.fn(),
     };
     const controller = new ViolationsController(service as never);
     const user: AuthenticatedUser = {
@@ -70,6 +74,7 @@ describe("ViolationsController", () => {
       list: jest.fn(),
       getViolations: jest.fn(),
       getDetail: jest.fn().mockResolvedValue({ id: "v-1" }),
+      updateStatus: jest.fn(),
     };
     const controller = new ViolationsController(service as never);
     const user: AuthenticatedUser = {
@@ -87,6 +92,36 @@ describe("ViolationsController", () => {
     expect(service.getDetail).toHaveBeenCalledWith(
       "cluster-1",
       "cluster-1:polr-ns-payments:0",
+      user,
+    );
+  });
+
+  it("delegates updateStatus call to service", async () => {
+    const service = {
+      list: jest.fn(),
+      getViolations: jest.fn(),
+      getDetail: jest.fn(),
+      updateStatus: jest
+        .fn()
+        .mockResolvedValue({ id: "v-1", status: "resolved" }),
+    };
+    const controller = new ViolationsController(service as never);
+    const user: AuthenticatedUser = {
+      id: "user-1",
+      email: "user@example.com",
+      role: Role.APPROVER,
+      clusterIds: ["cluster-1"],
+    };
+
+    await controller.updateStatus(
+      "cluster-1:polr-ns-payments:0",
+      { status: "resolved", note: "해결 완료" },
+      user,
+    );
+    expect(service.updateStatus).toHaveBeenCalledWith(
+      "cluster-1",
+      "cluster-1:polr-ns-payments:0",
+      { status: "resolved", note: "해결 완료" },
       user,
     );
   });

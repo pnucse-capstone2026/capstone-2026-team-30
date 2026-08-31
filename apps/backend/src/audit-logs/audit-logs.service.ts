@@ -192,6 +192,12 @@ export class AuditLogsService {
         return `${actor}님이 사용자를 비활성화했습니다.`;
       case "USER_ENABLED":
         return `${actor}님이 사용자를 활성화했습니다.`;
+      case "VIOLATION_STATUS_UPDATED": {
+        const meta = log.metadata as Record<string, unknown> | null;
+        const prev = meta?.previousStatus ?? "이전 상태";
+        const next = meta?.newStatus ?? "새 상태";
+        return `${actor}님이 정책 위반의 상태를 '${prev}'에서 '${next}'(으)로 변경했습니다. (${entity})`;
+      }
       default:
         if (log.beforeStatus && log.afterStatus) {
           return `${actor}님이 상태를 ${log.beforeStatus}에서 ${log.afterStatus}(으)로 변경했습니다. (${log.action})`;
