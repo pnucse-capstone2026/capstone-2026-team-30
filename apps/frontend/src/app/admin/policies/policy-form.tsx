@@ -101,6 +101,25 @@ export function PolicyForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
+    if (policy) {
+      setForm({
+        name: policy.name,
+        description: policy.description,
+        type: policy.type,
+        scope: policy.scope,
+        mode: policy.mode,
+        status: policy.status,
+        clusterName: policy.clusterId ?? policy.clusterName,
+        namespace: policy.namespace ?? "",
+        owner: policy.owner ?? "플랫폼팀",
+        ruleName: policy.rules?.[0] || `${policy.type}-${policy.name}`,
+        matchKinds: "Pod, Deployment",
+        message: policy.description,
+      });
+    }
+  }, [policy]);
+
+  useEffect(() => {
     void (async () => {
       try {
         await initializeAuth();
@@ -221,7 +240,11 @@ export function PolicyForm({
           className="hidden h-10 rounded-xl border-slate-200 bg-white text-slate-700 sm:inline-flex"
         >
           <Link
-            href={policy ? `/admin/policies/${policy.id}` : "/admin/policies"}
+            href={
+              policy
+                ? `/admin/policies/${encodeURIComponent(policy.id)}`
+                : "/admin/policies"
+            }
           >
             <ArrowLeft className="size-4" />
             {policy ? "상세" : "목록"}
