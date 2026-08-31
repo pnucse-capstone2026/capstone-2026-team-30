@@ -13,9 +13,9 @@ import {
   FileSearch,
   Filter,
   Menu,
+  RefreshCw,
   Search,
   ShieldAlert,
-  SlidersHorizontal,
   XCircle,
 } from "lucide-react";
 
@@ -75,17 +75,25 @@ export default function MyExceptionRequestsPage() {
   const [status, setStatus] = useState<"all" | ExceptionRequestStatus>("all");
   const [policyName, setPolicyName] = useState("all");
   const [clusterName, setClusterName] = useState("all");
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
+  /**
+   * 백엔드 API에서 실시간 예외 신청 목록을 조회합니다.
+   * forceFresh=true로 캐시 없이 최신 상태를 직접 요청합니다.
+   */
   const loadRequests = useCallback(async () => {
     setErrorMessage(null);
+    setIsRefreshing(true);
     try {
-      await fetchExceptions();
+      await fetchExceptions(true);
     } catch (error) {
       setErrorMessage(
         error instanceof Error
           ? error.message
           : "예외 신청 내역을 불러오지 못했습니다.",
       );
+    } finally {
+      setIsRefreshing(false);
     }
   }, [fetchExceptions]);
 
@@ -94,7 +102,9 @@ export default function MyExceptionRequestsPage() {
   }, [loadRequests]);
 
   const requests = useMemo(() => cachedRequests ?? [], [cachedRequests]);
-  const isLoading = cachedRequests === null && exceptionsLoading;
+  const isLoading =
+    (cachedRequests === null && exceptionsLoading) ||
+    (cachedRequests === null && isRefreshing);
 
   const policies = useMemo(
     () => Array.from(new Set(requests.map((request) => request.policyName))),
@@ -259,10 +269,13 @@ export default function MyExceptionRequestsPage() {
               <Button
                 variant="outline"
                 className="h-10 rounded-xl border-slate-200 bg-white text-slate-700"
+                disabled={isRefreshing}
                 onClick={() => void loadRequests()}
               >
-                <SlidersHorizontal className="size-4" />
-                새로고침
+                <RefreshCw
+                  className={`size-4 ${isRefreshing ? "animate-spin" : ""}`}
+                />
+                {isRefreshing ? "불러오는 중..." : "새로고침"}
               </Button>
               <Button
                 asChild
