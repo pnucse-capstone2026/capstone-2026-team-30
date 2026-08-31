@@ -99,6 +99,86 @@ export async function getPolicyDetail(
   }
 }
 
+export type CreatePolicyInput = {
+  name: string;
+  clusterId: string;
+  scope: PolicyScope;
+  namespace?: string;
+  type: PolicyType;
+  mode: PolicyMode;
+  description?: string;
+  ruleName: string;
+  matchKinds: string;
+  message?: string;
+  rawYaml?: string;
+};
+
+/**
+ * 백엔드에 신규 Kyverno 정책을 등록(생성)합니다.
+ */
+export async function createPolicy(
+  input: CreatePolicyInput,
+): Promise<KyvernoPolicy> {
+  const data = await requestWithAuth<KyvernoPolicy>("/policies", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+
+  return {
+    ...data,
+    clusterName: data.clusterDisplayName ?? data.clusterId ?? input.clusterId,
+    updatedAt: data.createdAt
+      ? new Date(data.createdAt).toLocaleString("ko-KR")
+      : "방금 전",
+    violationCount: 0,
+  };
+}
+
+/**
+ * 정책 식별자(ID) 또는 이름을 기반으로 정책 상세 정보를 조회합니다.
+ */
+export async function getPolicyById(id: string): Promise<KyvernoPolicy | null> {
+  const decodedId = decodeURIComponent(id);
+
+  // 1. clusterId:scope:namespace:name 복합 키 포맷인 경우 직접 단건 상세 API 호출
+  const parts = decodedId.split(":");
+  if (parts.length >= 4) {
+    const [clusterId, , namespace, ...nameParts] = parts;
+    const name = nameParts.join(":");
+    const detail = await getPolicyDetail(
+      clusterId,
+      name,
+      namespace ? namespace : undefined,
+    );
+    if (detail) return detail;
+  }
+
+  // 2. 전체 정책 목록에서 ID 또는 이름 매칭 검색 후 상세 조회
+  try {
+    const list = await getPolicies();
+    const matched = list.find(
+      (p) => p.id === decodedId || p.name === decodedId,
+    );
+    if (matched && matched.clusterId) {
+      const detail = await getPolicyDetail(
+        matched.clusterId,
+        matched.name,
+        matched.namespace ? matched.namespace : undefined,
+      );
+      if (detail) return detail;
+      return matched;
+    }
+  } catch {
+    // ignore
+  }
+
+  // 3. Mock fallback 검색
+  const mockMatched = kyvernoPolicies.find(
+    (p) => p.id === decodedId || p.name === decodedId,
+  );
+  return mockMatched ?? null;
+}
+
 export const kyvernoPolicies: KyvernoPolicy[] = [
   {
     id: "require-resource-limits",

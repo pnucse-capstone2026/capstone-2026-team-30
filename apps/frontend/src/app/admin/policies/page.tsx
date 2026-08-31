@@ -368,19 +368,22 @@ export default function AdminPoliciesPage() {
               : filteredPolicies.map((policy) => (
                   <TableRow key={policy.id} className="hover:bg-slate-50/70">
                     <TableCell className="px-5 py-4 sm:px-6">
-                      <div className="flex items-center gap-3">
-                        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                      <Link
+                        href={`/admin/policies/${encodeURIComponent(policy.id)}`}
+                        className="flex items-center gap-3 group"
+                      >
+                        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 group-hover:bg-blue-100 transition-colors">
                           <ShieldCheck className="size-4.5" />
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate text-[13px] font-medium text-slate-950">
+                          <p className="truncate text-[13px] font-medium text-slate-950 group-hover:text-blue-600 transition-colors">
                             {policy.name}
                           </p>
                           <p className="mt-1 line-clamp-1 text-[11px] text-slate-400">
                             {policy.description}
                           </p>
                         </div>
-                      </div>
+                      </Link>
                     </TableCell>
                     <TableCell className="py-4">
                       <Badge className={policyTypeClassName[policy.type]}>
@@ -420,12 +423,13 @@ export default function AdminPoliciesPage() {
                         {policy.updatedAt}
                       </p>
                       <p className="mt-1 text-[11px] text-slate-400">
-                        {policy.owner} · {policy.clusterName}
+                        {policy.owner} ·{" "}
+                        {policy.clusterDisplayName ?? policy.clusterName}
                       </p>
                     </TableCell>
                     <TableCell className="py-4 pr-5 sm:pr-6">
                       <Link
-                        href={`/admin/policies/${policy.id}`}
+                        href={`/admin/policies/${encodeURIComponent(policy.id)}`}
                         aria-label={`${policy.name} 상세 보기`}
                         className="flex size-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                       >
