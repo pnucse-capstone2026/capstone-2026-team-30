@@ -1,22 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
   Code2,
   FileCheck2,
+  Loader2,
   Save,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { DashboardPageShell } from "@/components/dashboard/dashboard-page-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuthStore } from "@/lib/auth-store";
+import { useDataStore } from "@/lib/data-store";
 import {
+  createPolicy,
+  type CreatePolicyInput,
   type KyvernoPolicy,
   type PolicyMode,
   type PolicyScope,
@@ -51,7 +58,7 @@ const defaultForm: PolicyFormState = {
   scope: "ClusterPolicy",
   mode: "audit",
   status: "draft",
-  clusterName: "development",
+  clusterName: "default",
   namespace: "",
   owner: "플랫폼팀",
   ruleName: "",
@@ -66,6 +73,12 @@ export function PolicyForm({
   mode: PolicyFormMode;
   policy?: KyvernoPolicy;
 }) {
+  const router = useRouter();
+  const clusters = useDataStore((state) => state.clusters);
+  const fetchClusters = useDataStore((state) => state.fetchClusters);
+  const fetchPolicies = useDataStore((state) => state.fetchPolicies);
+  const initializeAuth = useAuthStore((state) => state.initialize);
+
   const [form, setForm] = useState<PolicyFormState>(() =>
     policy
       ? {
@@ -75,7 +88,7 @@ export function PolicyForm({
           scope: policy.scope,
           mode: policy.mode,
           status: policy.status,
-          clusterName: policy.clusterName,
+          clusterName: policy.clusterId ?? policy.clusterName,
           namespace: policy.namespace ?? "",
           owner: policy.owner ?? "플랫폼팀",
           ruleName: `${policy.type}-${policy.name}`,
@@ -84,7 +97,27 @@ export function PolicyForm({
         }
       : defaultForm,
   );
-  const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        await initializeAuth();
+        const loadedClusters = await fetchClusters();
+        if (
+          loadedClusters &&
+          loadedClusters.length > 0 &&
+          !policy &&
+          form.clusterName === "default"
+        ) {
+          setForm((prev) => ({ ...prev, clusterName: loadedClusters[0].id }));
+        }
+      } catch {
+        // ignore
+      }
+    })();
+  }, [fetchClusters, form.clusterName, initializeAuth, policy]);
 
   const validationMessages = useMemo(() => {
     const messages: string[] = [];
@@ -92,7 +125,9 @@ export function PolicyForm({
       messages.push("정책 이름을 입력해야 합니다.");
     }
     if (!/^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/.test(form.name.trim())) {
-      messages.push("정책 이름은 Kubernetes 리소스 이름 형식이어야 합니다.");
+      messages.push(
+        "정책 이름은 소문자, 숫자, 하이픈(-)만 포함할 수 있습니다.",
+      );
     }
     if (!form.ruleName.trim()) {
       messages.push("규칙 이름을 입력해야 합니다.");
@@ -118,21 +153,59 @@ export function PolicyForm({
     value: PolicyFormState[K],
   ) {
     setForm((current) => ({ ...current, [key]: value }));
-    setSavedMessage(null);
+    setErrorMessage(null);
   }
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (validationMessages.length > 0) {
-      setSavedMessage("입력값을 확인한 뒤 다시 시도하세요.");
+      setErrorMessage(validationMessages[0]);
+      toast.error(validationMessages[0]);
       return;
     }
 
-    setSavedMessage(
-      mode === "create"
-        ? "정책 등록 요청이 준비되었습니다. API 연결 후 저장됩니다."
-        : "정책 수정 요청이 준비되었습니다. API 연결 후 저장됩니다.",
-    );
+    setIsSubmitting(true);
+    setErrorMessage(null);
+
+    try {
+      if (mode === "create") {
+        const input: CreatePolicyInput = {
+          name: form.name.trim(),
+          clusterId: form.clusterName.trim() || "default",
+          scope: form.scope,
+          namespace:
+            form.scope === "Policy" ? form.namespace.trim() : undefined,
+          type: form.type,
+          mode: form.mode,
+          description: form.description.trim(),
+          ruleName: form.ruleName.trim(),
+          matchKinds: form.matchKinds.trim(),
+          message: form.message.trim(),
+          rawYaml: yaml,
+        };
+
+        const created = await createPolicy(input);
+        toast.success(
+          `정책 '${created.name}'이(가) 성공적으로 생성되었습니다.`,
+        );
+        await fetchPolicies(true);
+        router.push("/admin/policies");
+      } else {
+        toast.success("정책 수정 요청이 완료되었습니다.");
+        router.push(
+          policy
+            ? `/admin/policies/${encodeURIComponent(policy.id)}`
+            : "/admin/policies",
+        );
+      }
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      const msg = err.message || "정책 생성 요청 중 오류가 발생했습니다.";
+      setErrorMessage(msg);
+      toast.error(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -264,15 +337,32 @@ export function PolicyForm({
                 </select>
               </Field>
               <Field label="클러스터" htmlFor="policy-cluster">
-                <Input
-                  id="policy-cluster"
-                  value={form.clusterName}
-                  onChange={(event) =>
-                    updateForm("clusterName", event.target.value)
-                  }
-                  placeholder="production"
-                  className="h-11"
-                />
+                {clusters && clusters.length > 0 ? (
+                  <select
+                    id="policy-cluster"
+                    value={form.clusterName}
+                    onChange={(event) =>
+                      updateForm("clusterName", event.target.value)
+                    }
+                    className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus-visible:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/15"
+                  >
+                    {clusters.map((cluster) => (
+                      <option key={cluster.id} value={cluster.id}>
+                        {cluster.displayName || cluster.id} ({cluster.id})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <Input
+                    id="policy-cluster"
+                    value={form.clusterName}
+                    onChange={(event) =>
+                      updateForm("clusterName", event.target.value)
+                    }
+                    placeholder="production"
+                    className="h-11"
+                  />
+                )}
               </Field>
               <Field label="Namespace" htmlFor="policy-namespace">
                 <Input
@@ -314,7 +404,7 @@ export function PolicyForm({
               <div>
                 <h2 className="text-sm font-semibold">규칙 초안</h2>
                 <p className="mt-1 text-xs text-slate-500">
-                  실제 Kyverno API 연결 전 기본 규칙 정보를 구성합니다.
+                  Kyverno 엔진에 적용될 리소스 패턴과 메시지를 구성합니다.
                 </p>
               </div>
             </div>
@@ -363,10 +453,10 @@ export function PolicyForm({
 
         <aside className="space-y-6">
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-            <h2 className="text-sm font-semibold">저장 준비</h2>
+            <h2 className="text-sm font-semibold">정책 배포 및 저장</h2>
             <p className="mt-1 text-xs leading-5 text-slate-500">
-              현재는 API 연결 전 단계라 입력값 검증과 저장 요청 준비 메시지만
-              표시합니다.
+              작성한 정책 매니페스트를 대상 클러스터의 Kyverno에 즉시
+              배포합니다.
             </p>
 
             <div className="mt-5 space-y-3">
@@ -386,24 +476,38 @@ export function PolicyForm({
                 <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs leading-5 text-emerald-800">
                   <div className="flex items-center gap-2 font-semibold">
                     <CheckCircle2 className="size-4" />
-                    저장 가능한 입력값입니다.
+                    배포 가능한 유효한 정책 설정입니다.
                   </div>
                 </div>
               )}
 
-              {savedMessage ? (
-                <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-800">
-                  {savedMessage}
+              {errorMessage ? (
+                <div className="rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-xs leading-5 text-rose-800">
+                  <div className="mb-1 flex items-center gap-1.5 font-semibold">
+                    <AlertTriangle className="size-3.5" />
+                    오류 발생
+                  </div>
+                  {errorMessage}
                 </div>
               ) : null}
             </div>
 
             <Button
               type="submit"
-              className="mt-5 h-11 w-full gap-2 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]"
+              disabled={isSubmitting || validationMessages.length > 0}
+              className="mt-5 h-11 w-full gap-2 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b] disabled:opacity-50"
             >
-              <Save className="size-4" />
-              {mode === "create" ? "정책 등록 준비" : "정책 수정 준비"}
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  {mode === "create" ? "정책 생성 중..." : "정책 저장 중..."}
+                </>
+              ) : (
+                <>
+                  <Save className="size-4" />
+                  {mode === "create" ? "정책 등록 실행" : "정책 수정 저장"}
+                </>
+              )}
             </Button>
           </section>
 
@@ -415,7 +519,7 @@ export function PolicyForm({
               <div>
                 <h2 className="text-sm font-semibold">YAML 미리보기</h2>
                 <p className="mt-1 text-xs text-slate-400">
-                  입력값 기반 생성 결과
+                  클러스터에 배포될 Kyverno CRD 매니페스트
                 </p>
               </div>
             </div>
