@@ -524,7 +524,9 @@ function MyViolationsContent() {
                       asChild
                       className="h-9 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]"
                     >
-                      <Link href="/exceptions/new">
+                      <Link
+                        href={`/exceptions/new?policy=${encodeURIComponent(violation.policyName)}&rule=${encodeURIComponent(violation.ruleName)}&cluster=${encodeURIComponent(violation.clusterId || violation.clusterName)}&resource=${encodeURIComponent(violation.resourceName)}&kind=${encodeURIComponent(violation.resourceKind)}&namespace=${encodeURIComponent(violation.namespace || "")}`}
+                      >
                         <FilePlus2 className="size-4" />
                         예외 신청
                       </Link>
