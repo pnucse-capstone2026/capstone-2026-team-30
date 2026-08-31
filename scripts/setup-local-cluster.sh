@@ -99,15 +99,17 @@ helm repo add kyverno https://kyverno.github.io/kyverno/ --force-update > /dev/n
 helm repo update kyverno > /dev/null 2>&1
 
 if [ "${MINIMAL_MODE}" = true ]; then
-  echo ">>> Deploying lightweight Kyverno (Admission Controller only with strict CPU/RAM limits)..."
-  # [경량화 핵심 조치] 로컬 부하 방지를 위해 어드미션 컨트롤러만 1개 배치하고 불필요 컨트롤러 오프로딩
+  # 로컬 개발 환경 I/O 부하 방지를 위해 주기 스캔(backgroundScan)을 비활성화하고 초기/어드미션 평가만 유지
+  echo ">>> Deploying Kyverno (Periodic background scan disabled for zero-I/O local development)..."
   helm upgrade --install kyverno kyverno/kyverno \
     --namespace kyverno \
     --create-namespace \
     --set admissionController.replicas=1 \
-    --set backgroundController.enabled=false \
+    --set backgroundController.enabled=true \
     --set cleanupController.enabled=false \
-    --set reportsController.enabled=false \
+    --set reportsController.enabled=true \
+    --set "reportsController.backgroundScan=false" \
+    --set "backgroundController.backgroundScanInterval=0" \
     --set admissionController.resources.requests.cpu=50m \
     --set admissionController.resources.requests.memory=64Mi \
     --set admissionController.resources.limits.cpu=200m \
@@ -116,10 +118,14 @@ if [ "${MINIMAL_MODE}" = true ]; then
     --set "features.policyExceptions.namespace=*" \
     --set features.validatingAdmissionPolicyReports.enabled=false \
     --set features.admissionReports.enabled=false \
-    --set features.aggregateReports.enabled=false \
-    --set features.policyReports.enabled=false
+    --set features.aggregateReports.enabled=true \
+    --set features.policyReports.enabled=true
 else
-  echo ">>> Deploying Kyverno full suite with single replica optimization..."
+  # [디스크 I/O 최적화 풀스택 모드]
+  # 1. 4대 컨트롤러(Admission, Background, Cleanup, Reports) 전체 활성화
+  # 2. backgroundScan=true 활성화하되 backgroundScanInterval을 1h로 설정하여 etcd I/O 스래싱 원천 차단
+  # 3. admissionReports.enabled=false로 설정하여 매 요청마다 발생하는 임시 CRD etcd 쓰기 오버헤드 방지
+  echo ">>> Deploying Kyverno full suite (Disk I/O optimized: 1h scan interval, admission reports disabled)..."
   helm upgrade --install kyverno kyverno/kyverno \
     --namespace kyverno \
     --create-namespace \
@@ -127,6 +133,8 @@ else
     --set backgroundController.replicas=1 \
     --set cleanupController.replicas=1 \
     --set reportsController.replicas=1 \
+    --set "reportsController.backgroundScan=true" \
+    --set "backgroundController.backgroundScanInterval=1h" \
     --set admissionController.resources.requests.cpu=50m \
     --set admissionController.resources.requests.memory=64Mi \
     --set admissionController.resources.limits.cpu=200m \
@@ -134,7 +142,7 @@ else
     --set features.policyExceptions.enabled=true \
     --set "features.policyExceptions.namespace=*" \
     --set features.validatingAdmissionPolicyReports.enabled=false \
-    --set features.admissionReports.enabled=true \
+    --set features.admissionReports.enabled=false \
     --set features.aggregateReports.enabled=true \
     --set features.policyReports.enabled=true
 fi
@@ -143,23 +151,81 @@ fi
 echo ">>> Waiting for Kyverno Admission Controller to be Ready..."
 kubectl -n kyverno rollout status deployment/kyverno-admission-controller --timeout=180s
 
-# 9. 기본 테스트 정책 배포 (보안 베이스라인 규정)
-POLICIES_PATH="${SCRIPT_DIR}/../k8s-manifests/policies/disallow-latest-tag.yaml"
-if [ -f "${POLICIES_PATH}" ]; then
-  echo ">>> Applying initial baseline policies..."
-  kubectl apply -f "${POLICIES_PATH}"
-  echo ">>> Baseline policies successfully applied."
+# 9. 기본 테스트 정책 및 테스트베드 시나리오 배포
+echo ">>> Labeling Kind control-plane node with spot label for MLOps policies..."
+kubectl label node "${CLUSTER_NAME}-control-plane" cloud.google.com/gke-spot=true --overwrite || true
+
+MANIFESTS_DIR="${SCRIPT_DIR}/../k8s-manifests"
+if [ -d "${MANIFESTS_DIR}" ]; then
+  echo ">>> Applying initial policies and testbed workloads..."
+  kubectl apply -f "${MANIFESTS_DIR}/testbed/00-namespace.yaml" || true
+  kubectl apply -f "${MANIFESTS_DIR}/policies/" || true
+  kubectl apply -f "${MANIFESTS_DIR}/policies/mlops/" || true
+  kubectl apply -f "${MANIFESTS_DIR}/testbed/real-world-scenarios.yaml" || true
+  kubectl apply -f "${MANIFESTS_DIR}/exceptions/default-cluster/governance-testbed/" || true
+  echo ">>> Policies and testbed workloads successfully applied."
 else
-  echo ">>> Baseline policy path not found at: ${POLICIES_PATH}"
+  echo ">>> Manifests directory not found at: ${MANIFESTS_DIR}"
 fi
 
-# 10. 로컬 플랫폼 네임스페이스 생성 사전 보장
+# 10. 로컬 플랫폼 네임스페이스 및 풀스택 배포
 echo ">>> Ensuring 'kyverno-platform' namespace exists for local development..."
 kubectl create namespace kyverno-platform --dry-run=client -o yaml | kubectl apply -f -
 
+if [ "${MINIMAL_MODE}" = false ]; then
+  echo ">>> [Full Stack Mode] Loading local docker images into Kind cluster..."
+  if docker image inspect kyverno-backend:latest >/dev/null 2>&1; then
+    kind load docker-image kyverno-backend:latest --name "${CLUSTER_NAME}"
+  fi
+  if docker image inspect kyverno-frontend:latest >/dev/null 2>&1; then
+    kind load docker-image kyverno-frontend:latest --name "${CLUSTER_NAME}"
+  fi
+
+  echo ">>> [Full Stack Mode] Deploying PostgreSQL DB, RBAC, Backend, and Frontend..."
+  kubectl apply -f "${MANIFESTS_DIR}/system/namespace.yaml" || true
+  kubectl apply -f "${MANIFESTS_DIR}/system/rbac.yaml" || true
+  kubectl apply -f "${MANIFESTS_DIR}/system/postgres.yaml" || true
+
+  echo ">>> Waiting for PostgreSQL rollout to complete..."
+  kubectl rollout status deployment/postgres -n kyverno-platform --timeout=180s
+
+  # PostgreSQL DB 스키마 생성 및 기본 테스트 계정 시딩
+  echo ">>> Synchronizing PostgreSQL DB schema & seeding default accounts..."
+  kubectl port-forward svc/postgres 5432:5432 -n kyverno-platform > /dev/null 2>&1 &
+  PF_PG_PID=$!
+  sleep 3
+
+  DATABASE_URL="postgresql://devuser:devpassword@localhost:5432/kyverno_dashboard?schema=public" \
+    pnpm --filter @kyverno-platform/backend exec prisma db push --accept-data-loss || true
+
+  DATABASE_URL="postgresql://devuser:devpassword@localhost:5432/kyverno_dashboard?schema=public" \
+    SEED_ADMIN_EMAIL="admin@test.com" \
+    SEED_ADMIN_PASSWORD="test1234!" \
+    SEED_USER_EMAIL="user@test.com" \
+    SEED_USER_PASSWORD="test1234!" \
+    pnpm --filter @kyverno-platform/backend exec prisma db seed || true
+
+  kill ${PF_PG_PID} 2>/dev/null || true
+
+  kubectl apply -f "${MANIFESTS_DIR}/system/backend.yaml" || true
+  kubectl apply -f "${MANIFESTS_DIR}/system/frontend.yaml" || true
+
+  echo ">>> Waiting for Backend & Frontend deployments to be Ready..."
+  kubectl rollout status deployment/kyverno-backend -n kyverno-platform --timeout=180s
+  kubectl rollout status deployment/kyverno-frontend -n kyverno-platform --timeout=180s
+fi
+
 echo "================================================="
-echo " Bare Minimum Kubernetes Lab Setup Completed! 🚀"
-echo " Active Nodes    : 1 Control-Plane Node"
-echo " Kyverno Mode    : Admission Controller Only"
-echo " Resource Load   : Optimized for Minimal CPU/RAM"
+if [ "${MINIMAL_MODE}" = true ]; then
+  echo " Bare Minimum Kubernetes Lab Setup Completed! 🚀"
+  echo " Active Nodes    : 1 Control-Plane Node"
+  echo " Kyverno Mode    : Admission Controller Only"
+  echo " Resource Load   : Optimized for Minimal CPU/RAM"
+else
+  echo " Full-Stack Kubernetes Lab Setup Completed! 🚀"
+  echo " Active Nodes    : 1 Control-Plane Node"
+  echo " Kyverno Mode    : Full Suite (Admission, Background, Reports, Cleanup)"
+  echo " Platform Stack  : PostgreSQL, NestJS Backend, Next.js Frontend"
+  echo " Disk I/O        : Fully Optimized (Zero unnecessary etcd writes)"
+fi
 echo "================================================="

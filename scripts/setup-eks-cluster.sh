@@ -82,7 +82,7 @@ helm repo add kyverno https://kyverno.github.io/kyverno/
 helm repo update
 
 echo ">>> Deploying Kyverno to namespace 'kyverno' with multi-node HA configuration..."
-# 멀티노드 고가용성을 위해 레플리카 2개 배정 및 세부 가버너 기능 활성화
+# 멀티노드 고가용성을 위해 레플리카 2개 배정 및 프로덕션 1시간 주기 감사 활성화
 helm upgrade --install kyverno kyverno/kyverno \
   --namespace kyverno \
   --create-namespace \
@@ -90,7 +90,13 @@ helm upgrade --install kyverno kyverno/kyverno \
   --set backgroundController.replicas=1 \
   --set cleanupController.replicas=1 \
   --set reportsController.replicas=1 \
-  --set features.policyExceptions.enabled=true
+  --set "reportsController.backgroundScan=true" \
+  --set "reportsController.backgroundScanInterval=1h" \
+  --set "backgroundController.backgroundScanInterval=1h" \
+  --set features.policyExceptions.enabled=true \
+  --set features.admissionReports.enabled=true \
+  --set features.aggregateReports.enabled=true \
+  --set features.policyReports.enabled=true
 
 echo ">>> Waiting for Kyverno Admission Controller to be Ready..."
 kubectl -n kyverno rollout status deployment/kyverno-admission-controller --timeout=300s

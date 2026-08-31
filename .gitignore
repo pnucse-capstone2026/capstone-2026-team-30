@@ -38,3 +38,9 @@ gemini-*.log
 
 # Local Cluster Scripts Binaries
 scripts/bin/
+
+# Temporary Backups & Notes
+*.sql
+*_backup.*
+prompts/
+
