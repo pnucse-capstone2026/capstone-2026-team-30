@@ -293,10 +293,16 @@ export default function PoliciesPage() {
                         {policyStatusLabel[policy.status]}
                       </Badge>
                     </div>
-                    <h3 className="mt-4 truncate text-base font-semibold text-slate-950">
+                    <h3
+                      className="mt-3 truncate text-sm font-semibold text-slate-950"
+                      title={policy.name}
+                    >
                       {policy.name}
                     </h3>
-                    <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">
+                    <p
+                      className="mt-1 truncate text-xs text-slate-500"
+                      title={policy.description}
+                    >
                       {policy.description}
                     </p>
                   </div>

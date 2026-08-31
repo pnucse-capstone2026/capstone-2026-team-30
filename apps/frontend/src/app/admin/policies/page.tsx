@@ -184,7 +184,7 @@ export default function AdminPoliciesPage() {
         </div>
       }
     >
-      <section className="grid gap-4 md:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard
           label="전체 정책"
           value={String(policies.length)}
@@ -219,42 +219,42 @@ export default function AdminPoliciesPage() {
         />
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white">
-        <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+      <section className="rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+        <div className="border-b border-slate-100 px-5 py-3.5 sm:px-6">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <h2 className="text-2xl font-semibold tracking-tight">
+              <h2 className="text-xl font-semibold tracking-tight">
                 정책 운영 현황
               </h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+              <p className="mt-1 max-w-2xl text-xs text-slate-500">
                 정책 유형, 적용 범위, 모드, 상태, 클러스터 기준으로 운영 중인
                 정책을 확인합니다.
               </p>
             </div>
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
               <div className="relative">
-                <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400" />
+                <Search className="absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-slate-400" />
                 <Input
                   type="search"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="정책명, 설명, 담당자 검색"
-                  className="h-10 w-full rounded-xl border-slate-200 bg-slate-50 pr-3 pl-9 text-xs lg:w-72"
+                  className="h-9 w-full rounded-xl border-slate-200 bg-slate-50 pr-3 pl-8 text-xs sm:w-64"
                 />
               </div>
               <Button
                 type="button"
                 variant="outline"
-                className="h-10 rounded-xl border-slate-200 bg-white text-slate-700"
+                className="h-9 rounded-xl border-slate-200 bg-white text-xs text-slate-700"
                 onClick={resetFilters}
               >
-                <Filter className="size-4" />
+                <Filter className="size-3.5" />
                 필터 초기화
               </Button>
             </div>
           </div>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <FilterSelect
               label="유형"
               value={typeFilter}
@@ -318,136 +318,161 @@ export default function AdminPoliciesPage() {
           </div>
         </div>
 
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-slate-50/80 hover:bg-slate-50/80">
-              <TableHead className="w-[300px] px-5 text-xs text-slate-500 sm:px-6">
-                정책
-              </TableHead>
-              <TableHead className="text-xs text-slate-500">유형</TableHead>
-              <TableHead className="text-xs text-slate-500">범위</TableHead>
-              <TableHead className="text-xs text-slate-500">모드</TableHead>
-              <TableHead className="text-xs text-slate-500">상태</TableHead>
-              <TableHead className="text-xs text-slate-500">
-                규칙/오류
-              </TableHead>
-              <TableHead className="text-xs text-slate-500">
-                최근 수정
-              </TableHead>
-              <TableHead className="w-12" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {livePolicies === null
-              ? [1, 2, 3].map((key) => (
-                  <TableRow key={key}>
-                    <TableCell className="px-5 py-4 sm:px-6">
-                      <Skeleton className="h-5 w-48 rounded-lg" />
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <Skeleton className="h-5 w-16 rounded-lg" />
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <Skeleton className="h-5 w-24 rounded-lg" />
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <Skeleton className="h-5 w-16 rounded-lg" />
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <Skeleton className="h-5 w-16 rounded-lg" />
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <Skeleton className="h-5 w-20 rounded-lg" />
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <Skeleton className="h-5 w-28 rounded-lg" />
-                    </TableCell>
-                    <TableCell className="py-4 pr-5 sm:pr-6" />
-                  </TableRow>
-                ))
-              : filteredPolicies.map((policy) => (
-                  <TableRow key={policy.id} className="hover:bg-slate-50/70">
-                    <TableCell className="px-5 py-4 sm:px-6">
-                      <Link
-                        href={`/admin/policies/${encodeURIComponent(policy.id)}`}
-                        className="flex items-center gap-3 group"
-                      >
-                        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 group-hover:bg-blue-100 transition-colors">
-                          <ShieldCheck className="size-4.5" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="truncate text-[13px] font-medium text-slate-950 group-hover:text-blue-600 transition-colors">
-                            {policy.name}
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-slate-50/80 hover:bg-slate-50/80">
+                <TableHead className="w-[300px] max-w-[300px] px-5 py-2.5 text-xs text-slate-500 sm:px-6">
+                  정책
+                </TableHead>
+                <TableHead className="w-[85px] py-2.5 text-xs text-slate-500">
+                  유형
+                </TableHead>
+                <TableHead className="w-[120px] py-2.5 text-xs text-slate-500">
+                  범위
+                </TableHead>
+                <TableHead className="w-[80px] py-2.5 text-xs text-slate-500">
+                  모드
+                </TableHead>
+                <TableHead className="w-[80px] py-2.5 text-xs text-slate-500">
+                  상태
+                </TableHead>
+                <TableHead className="w-[90px] py-2.5 text-xs text-slate-500">
+                  규칙/오류
+                </TableHead>
+                <TableHead className="w-[150px] py-2.5 text-xs text-slate-500">
+                  최근 수정
+                </TableHead>
+                <TableHead className="w-10 py-2.5" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {livePolicies === null
+                ? [1, 2, 3].map((key) => (
+                    <TableRow key={key}>
+                      <TableCell className="px-5 py-2.5 sm:px-6">
+                        <Skeleton className="h-5 w-48 rounded-lg" />
+                      </TableCell>
+                      <TableCell className="py-2.5">
+                        <Skeleton className="h-5 w-14 rounded-lg" />
+                      </TableCell>
+                      <TableCell className="py-2.5">
+                        <Skeleton className="h-5 w-20 rounded-lg" />
+                      </TableCell>
+                      <TableCell className="py-2.5">
+                        <Skeleton className="h-5 w-14 rounded-lg" />
+                      </TableCell>
+                      <TableCell className="py-2.5">
+                        <Skeleton className="h-5 w-14 rounded-lg" />
+                      </TableCell>
+                      <TableCell className="py-2.5">
+                        <Skeleton className="h-5 w-16 rounded-lg" />
+                      </TableCell>
+                      <TableCell className="py-2.5">
+                        <Skeleton className="h-5 w-24 rounded-lg" />
+                      </TableCell>
+                      <TableCell className="py-2.5 pr-5 sm:pr-6" />
+                    </TableRow>
+                  ))
+                : filteredPolicies.map((policy) => (
+                    <TableRow
+                      key={policy.id}
+                      className="hover:bg-slate-50/70 transition-colors"
+                    >
+                      <TableCell className="max-w-[300px] px-5 py-2.5 sm:px-6">
+                        <Link
+                          href={`/admin/policies/${encodeURIComponent(policy.id)}`}
+                          className="flex items-center gap-3 group min-w-0"
+                        >
+                          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 group-hover:bg-blue-100 transition-colors">
+                            <ShieldCheck className="size-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p
+                              className="truncate text-xs font-semibold text-slate-950 group-hover:text-blue-600 transition-colors"
+                              title={policy.name}
+                            >
+                              {policy.name}
+                            </p>
+                            <p
+                              className="mt-0.5 truncate text-[11px] text-slate-400"
+                              title={policy.description}
+                            >
+                              {policy.description}
+                            </p>
+                          </div>
+                        </Link>
+                      </TableCell>
+                      <TableCell className="py-2.5 whitespace-nowrap">
+                        <Badge className={policyTypeClassName[policy.type]}>
+                          {policyTypeLabel[policy.type]}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="py-2.5 whitespace-nowrap">
+                        <div>
+                          <p className="text-xs font-medium text-slate-800">
+                            {policy.scope}
                           </p>
-                          <p className="mt-1 line-clamp-1 text-[11px] text-slate-400">
-                            {policy.description}
+                          <p
+                            className="mt-0.5 max-w-[120px] truncate text-[11px] text-slate-400"
+                            title={policy.namespace ?? "cluster-wide"}
+                          >
+                            {policy.namespace ?? "cluster-wide"}
                           </p>
                         </div>
-                      </Link>
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <Badge className={policyTypeClassName[policy.type]}>
-                        {policyTypeLabel[policy.type]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <div>
+                      </TableCell>
+                      <TableCell className="py-2.5 whitespace-nowrap">
+                        <Badge className="bg-slate-100 text-slate-600 ring-1 ring-slate-200">
+                          {policyModeLabel[policy.mode]}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="py-2.5 whitespace-nowrap">
+                        <Badge className={policyStatusClassName[policy.status]}>
+                          {policyStatusLabel[policy.status]}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="py-2.5 whitespace-nowrap">
                         <p className="text-xs font-medium text-slate-800">
-                          {policy.scope}
+                          규칙 {policy.ruleCount}
                         </p>
-                        <p className="mt-1 text-[11px] text-slate-400">
-                          {policy.namespace ?? "cluster-wide"}
+                        <p className="mt-0.5 text-[11px] text-slate-400">
+                          오류 {policy.violationCount}
                         </p>
-                      </div>
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <Badge className="bg-slate-100 text-slate-600 ring-1 ring-slate-200">
-                        {policyModeLabel[policy.mode]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <Badge className={policyStatusClassName[policy.status]}>
-                        {policyStatusLabel[policy.status]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <p className="text-xs font-medium text-slate-800">
-                        규칙 {policy.ruleCount}
-                      </p>
-                      <p className="mt-1 text-[11px] text-slate-400">
-                        오류 {policy.violationCount}
-                      </p>
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <p className="text-xs text-slate-600">
-                        {policy.updatedAt}
-                      </p>
-                      <p className="mt-1 text-[11px] text-slate-400">
-                        {policy.owner} ·{" "}
-                        {policy.clusterDisplayName ?? policy.clusterName}
-                      </p>
-                    </TableCell>
-                    <TableCell className="py-4 pr-5 sm:pr-6">
-                      <Link
-                        href={`/admin/policies/${encodeURIComponent(policy.id)}`}
-                        aria-label={`${policy.name} 상세 보기`}
-                        className="flex size-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                      >
-                        <ChevronRight className="size-4" />
-                      </Link>
-                    </TableCell>
-                  </TableRow>
-                ))}
-          </TableBody>
-        </Table>
+                      </TableCell>
+                      <TableCell className="py-2.5 whitespace-nowrap">
+                        <p className="text-xs text-slate-600">
+                          {policy.updatedAt}
+                        </p>
+                        <p
+                          className="mt-0.5 max-w-[150px] truncate text-[11px] text-slate-400"
+                          title={`${policy.owner} · ${policy.clusterDisplayName ?? policy.clusterName}`}
+                        >
+                          {policy.owner} ·{" "}
+                          {policy.clusterDisplayName ?? policy.clusterName}
+                        </p>
+                      </TableCell>
+                      <TableCell className="py-2.5 pr-5 sm:pr-6 text-right">
+                        <Link
+                          href={`/admin/policies/${encodeURIComponent(policy.id)}`}
+                          aria-label={`${policy.name} 상세 보기`}
+                          className="inline-flex size-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                        >
+                          <ChevronRight className="size-4" />
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+            </TableBody>
+          </Table>
+        </div>
 
         {filteredPolicies.length === 0 ? (
-          <div className="border-t border-slate-100 px-5 py-10 text-center text-sm text-slate-500">
+          <div className="border-t border-slate-100 px-5 py-8 text-center text-xs text-slate-500">
             조건에 맞는 정책이 없습니다.
           </div>
         ) : null}
 
-        <div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-4 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div className="flex flex-col gap-2 border-t border-slate-100 px-5 py-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <span>
             {filteredPolicies.length} / {policies.length}개 정책 표시
           </span>
@@ -455,7 +480,7 @@ export default function AdminPoliciesPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-3">
+      <section className="grid gap-3 lg:grid-cols-3">
         <StatusNote
           title="정책 등록"
           description="YAML 또는 폼 기반 등록 화면으로 이동합니다."
@@ -495,21 +520,23 @@ function SummaryCard({
   loading?: boolean;
 }) {
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
       <div className="flex items-start justify-between">
         <div
-          className={`flex size-10 items-center justify-center rounded-xl ${className}`}
+          className={`flex size-8 items-center justify-center rounded-lg ${className}`}
         >
-          <Icon className="size-5" />
+          <Icon className="size-4" />
         </div>
       </div>
-      <p className="mt-5 text-[13px] text-slate-500">{label}</p>
+      <p className="mt-2.5 text-xs text-slate-500">{label}</p>
       {loading ? (
-        <Skeleton className="mt-1 h-9 w-20 rounded-lg" />
+        <Skeleton className="mt-1 h-7 w-16 rounded-lg" />
       ) : (
-        <p className="mt-1 text-3xl font-semibold tracking-tight">{value}</p>
+        <p className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
+          {value}
+        </p>
       )}
-      <p className="mt-2 text-[11px] text-slate-400">{detail}</p>
+      <p className="mt-0.5 text-[11px] text-slate-400">{detail}</p>
     </article>
   );
 }
@@ -526,12 +553,12 @@ function FilterSelect({
   children: React.ReactNode;
 }) {
   return (
-    <label className="space-y-1.5">
+    <label className="space-y-1">
       <span className="text-[11px] font-medium text-slate-500">{label}</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none focus:border-blue-500 focus:ring-3 focus:ring-blue-500/10"
+        className="h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
       >
         {children}
       </select>
@@ -553,15 +580,17 @@ function StatusNote({
   return (
     <Link
       href={href}
-      className="rounded-2xl border border-slate-200 bg-white p-5 transition-colors hover:border-blue-200 hover:bg-blue-50/30"
+      className="rounded-2xl border border-slate-200 bg-white p-3.5 transition-colors hover:border-blue-200 hover:bg-blue-50/30 shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
     >
       <div className="flex items-center gap-3">
-        <div className="flex size-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-          <Icon className="size-4.5" />
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+          <Icon className="size-4" />
         </div>
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold">{title}</h3>
-          <p className="mt-1 text-xs text-slate-400">{description}</p>
+          <h3 className="text-xs font-semibold text-slate-900">{title}</h3>
+          <p className="mt-0.5 truncate text-[11px] text-slate-400">
+            {description}
+          </p>
         </div>
       </div>
     </Link>
