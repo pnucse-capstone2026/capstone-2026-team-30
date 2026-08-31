@@ -96,10 +96,10 @@ export function AiErrorExplainerDialog({
           <Button
             variant="outline"
             size="sm"
-            className="gap-2 border-indigo-200 bg-indigo-50/50 text-indigo-700 hover:bg-indigo-100 dark:border-indigo-900/50 dark:bg-indigo-950/30 dark:text-indigo-300"
+            className="gap-1.5 border-indigo-200 bg-indigo-50/50 text-indigo-700 hover:bg-indigo-100 dark:border-indigo-900/50 dark:bg-indigo-950/30 dark:text-indigo-300"
           >
             <Sparkles className="h-4 w-4 text-indigo-500" />
-            AI 원인 분석 및 해결 가이드
+            가이드
           </Button>
         )}
       </DialogTrigger>

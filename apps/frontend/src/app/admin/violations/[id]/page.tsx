@@ -1,21 +1,23 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
-  Bell,
   CheckCircle2,
   Clock3,
   Code2,
   Copy,
   Download,
   FileWarning,
+  Loader2,
   Menu,
   ShieldAlert,
   XCircle,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar";
 import { NotificationDropdown } from "@/components/dashboard/notification-dropdown";
@@ -35,6 +37,8 @@ import {
   statusLabel,
   type PolicyViolation,
 } from "@/lib/policy-violations";
+import { ViolationReportDialog } from "@/components/violations/violation-report-dialog";
+import { NoExceptionDialog } from "@/components/violations/no-exception-dialog";
 import { ViolationActionPanel } from "./violation-action-panel";
 
 type AdminViolationDetailPageProps = {
@@ -53,10 +57,14 @@ export default function AdminViolationDetailPage({
   params,
 }: AdminViolationDetailPageProps) {
   const { id } = use(params);
+  const router = useRouter();
   const [violation, setViolation] = useState<PolicyViolation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCheckingException, setIsCheckingException] = useState(false);
+  const [isNoExceptionOpen, setIsNoExceptionOpen] = useState(false);
 
   const fetchViolations = useDataStore((state) => state.fetchViolations);
+  const fetchExceptions = useDataStore((state) => state.fetchExceptions);
   const initializeAuth = useAuthStore((state) => state.initialize);
 
   const loadData = useCallback(async () => {
@@ -90,6 +98,40 @@ export default function AdminViolationDetailPage({
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  const handleCheckException = async () => {
+    if (!violation) return;
+
+    if (violation.relatedExceptionId) {
+      router.push(`/admin/exceptions/${violation.relatedExceptionId}`);
+      return;
+    }
+
+    setIsCheckingException(true);
+    try {
+      const allExceptions = await fetchExceptions();
+      const matched = allExceptions.find(
+        (exc) =>
+          (exc.targetClusterId === violation.clusterId ||
+            exc.clusterName === violation.clusterName) &&
+          exc.policyName === violation.policyName &&
+          exc.resourceName === violation.resourceName &&
+          (exc.namespace === violation.namespace ||
+            exc.namespace === "cluster-wide"),
+      );
+
+      if (matched) {
+        toast.info("연관된 정책 예외 신청을 발견했습니다. 이동합니다.");
+        router.push(`/admin/exceptions/${matched.id}`);
+      } else {
+        setIsNoExceptionOpen(true);
+      }
+    } catch {
+      setIsNoExceptionOpen(true);
+    } finally {
+      setIsCheckingException(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -198,13 +240,7 @@ export default function AdminViolationDetailPage({
                 resourceManifest={violation.manifest}
                 clusterContext={violation.clusterName}
               />
-              <Button
-                variant="outline"
-                className="h-10 rounded-xl border-slate-200 bg-white text-slate-700"
-              >
-                <Download className="size-4" />
-                리포트
-              </Button>
+              <ViolationReportDialog violation={violation} />
               {violation.relatedExceptionId ? (
                 <Button
                   asChild
@@ -218,10 +254,14 @@ export default function AdminViolationDetailPage({
                 </Button>
               ) : (
                 <Button
-                  asChild
                   className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]"
+                  disabled={isCheckingException}
+                  onClick={handleCheckException}
                 >
-                  <Link href="/admin/exceptions">예외 신청 확인</Link>
+                  {isCheckingException ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : null}
+                  예외 신청 확인
                 </Button>
               )}
             </div>
@@ -304,6 +344,10 @@ export default function AdminViolationDetailPage({
                     variant="outline"
                     size="sm"
                     className="rounded-lg border-slate-200"
+                    onClick={() => {
+                      navigator.clipboard.writeText(violation.manifest);
+                      toast.success("매니페스트가 클립보드에 복사되었습니다.");
+                    }}
                   >
                     <Copy className="size-3.5" />
                     복사
@@ -369,11 +413,20 @@ export default function AdminViolationDetailPage({
                 </div>
               </article>
 
-              <ViolationActionPanel violation={violation} />
+              <ViolationActionPanel
+                violation={violation}
+                onStatusChange={setViolation}
+              />
             </aside>
           </section>
         </div>
       </div>
+
+      <NoExceptionDialog
+        open={isNoExceptionOpen}
+        onOpenChange={setIsNoExceptionOpen}
+        violation={violation}
+      />
     </main>
   );
 }
