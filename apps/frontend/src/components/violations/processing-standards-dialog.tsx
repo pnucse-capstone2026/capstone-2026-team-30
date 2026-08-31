@@ -2,16 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import {
-  AlertTriangle,
-  Bot,
-  Clock,
-  RotateCcw,
-  Save,
-  ShieldCheck,
-  Sliders,
-  Users,
-} from "lucide-react";
+import { Clock, RotateCcw, Save, Sliders, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -24,7 +15,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
-  AUTOMATION_FIELD_DEFINITIONS,
   DEFAULT_PROCESSING_STANDARDS,
   loadProcessingStandards,
   saveProcessingStandards,
@@ -44,9 +34,7 @@ export function ProcessingStandardsDialog({
   const [config, setConfig] = useState<ProcessingStandardsConfig>(
     DEFAULT_PROCESSING_STANDARDS,
   );
-  const [activeTab, setActiveTab] = useState<
-    "sla" | "automation" | "assignment"
-  >("sla");
+  const [activeTab, setActiveTab] = useState<"sla" | "assignment">("sla");
 
   // 모달이 열릴 때 저장된 설정값 불러오기
   useEffect(() => {
@@ -64,19 +52,6 @@ export function ProcessingStandardsDialog({
       sla: {
         ...prev.sla,
         [key]: Math.max(1, isNaN(val) ? 1 : val),
-      },
-    }));
-  };
-
-  const handleAutomationChange = (
-    key: keyof ProcessingStandardsConfig["automation"],
-    val: boolean,
-  ) => {
-    setConfig((prev) => ({
-      ...prev,
-      automation: {
-        ...prev.automation,
-        [key]: val,
       },
     }));
   };
@@ -118,8 +93,7 @@ export function ProcessingStandardsDialog({
                 정책 오류 처리 기준 설정
               </DialogTitle>
               <DialogDescription className="mt-0.5 text-xs text-slate-500">
-                심각도별 조치 권장 시간(SLA), 자동화 처리 규칙 및 기본 담당
-                그룹을 관리합니다.
+                심각도별 조치 권장 시간(SLA) 및 기본 담당 그룹을 관리합니다.
               </DialogDescription>
             </div>
           </div>
@@ -138,18 +112,6 @@ export function ProcessingStandardsDialog({
           >
             <Clock className="size-3.5" />
             심각도별 SLA
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("automation")}
-            className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 transition-colors ${
-              activeTab === "automation"
-                ? "border-[#0b2342] font-semibold text-[#0b2342] dark:border-blue-400 dark:text-blue-400"
-                : "border-transparent text-slate-500 hover:text-slate-900"
-            }`}
-          >
-            <Bot className="size-3.5" />
-            자동 처리 규칙
           </button>
           <button
             type="button"
@@ -199,39 +161,6 @@ export function ProcessingStandardsDialog({
                       <span className="text-xs text-slate-500">{def.unit}</span>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {activeTab === "automation" && (
-            <div className="space-y-3">
-              <p className="text-xs text-slate-500">
-                오류 상태 변경 및 SLA 감지에 따른 자동화 조치를 활성화합니다.
-              </p>
-              <div className="space-y-2">
-                {AUTOMATION_FIELD_DEFINITIONS.map((def) => (
-                  <label
-                    key={def.key}
-                    className="flex items-start gap-3 rounded-xl border border-slate-200 p-3.5 transition-colors hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900/50"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={config.automation[def.key]}
-                      onChange={(e) =>
-                        handleAutomationChange(def.key, e.target.checked)
-                      }
-                      className="mt-0.5 size-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div className="space-y-0.5">
-                      <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                        {def.label}
-                      </span>
-                      <p className="text-[11px] text-slate-500">
-                        {def.description}
-                      </p>
-                    </div>
-                  </label>
                 ))}
               </div>
             </div>
