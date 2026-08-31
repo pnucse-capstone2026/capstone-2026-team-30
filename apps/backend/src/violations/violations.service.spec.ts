@@ -350,6 +350,46 @@ describe("ViolationsService", () => {
       expect(result[0].policyName).toBe("disallow-latest-tag");
       expect(result[0].reportName).toBe("db-fallback");
     });
+
+    it("예외 신청이 존재하더라도 이미 'resolved'로 처리된 DB 기록의 상태를 덮어쓰지 않는다", async () => {
+      (
+        mockKyvernoAdapter.listClusterPolicyReports as jest.Mock
+      ).mockRejectedValue(new Error("K8s cluster unreachable"));
+      (
+        mockKyvernoAdapter.listNamespacedPolicyReports as jest.Mock
+      ).mockRejectedValue(new Error("K8s cluster unreachable"));
+
+      mockPrismaService.violationHistory.findMany.mockResolvedValueOnce([
+        {
+          id: "db-vio-002",
+          policyName: "disallow-latest-tag",
+          ruleName: "require-image-tag",
+          targetClusterId: "cluster-1",
+          targetClusterDisplayName: "Cluster One",
+          resourceName: "payment-api-pod",
+          namespace: "payments",
+          status: "resolved",
+          occurredAt: new Date("2026-08-19T05:30:00Z"),
+        },
+      ]);
+
+      mockPrismaService.policyExceptionRequest.findMany.mockResolvedValueOnce([
+        {
+          id: "exc-001",
+          targetClusterId: "cluster-1",
+          policyName: "disallow-latest-tag",
+          resourceName: "payment-api-pod",
+          resourceNamespace: "payments",
+          status: "PENDING",
+        },
+      ]);
+
+      const result = await service.getViolations(mockUser, {});
+
+      expect(result).toHaveLength(1);
+      expect(result[0].status).toBe("resolved");
+      expect(result[0].exceptionStatus).toBe("requested");
+    });
   });
 
   describe("syncLiveViolations", () => {
@@ -394,6 +434,49 @@ describe("ViolationsService", () => {
           status: "open",
           message: "rootFS must be read-only",
           occurredAt: new Date("2026-08-19T05:30:00.000Z"),
+        },
+      });
+    });
+
+    it("기존 DB 레코드가 있는 경우 관리자가 수정한 상태를 보존하며 메타데이터만 업데이트한다", async () => {
+      (
+        mockKyvernoAdapter.getClusterPolicyReports as jest.Mock
+      ).mockResolvedValueOnce([
+        {
+          id: "cluster-1:cpolr-cluster:0",
+          clusterId: "cluster-1",
+          clusterDisplayName: "Cluster One",
+          namespace: "cluster-wide",
+          policyName: "require-ro-rootfs",
+          ruleName: "check-read-only-root-filesystem",
+          resourceKind: "Deployment",
+          resourceName: "batch-worker",
+          severity: "critical",
+          status: "open",
+          message: "rootFS must be read-only (updated)",
+          detectedAt: "2026-08-19T06:00:00.000Z",
+          reportName: "cpolr-cluster",
+        },
+      ]);
+      (mockKyvernoAdapter.getPolicyReports as jest.Mock).mockResolvedValueOnce(
+        [],
+      );
+
+      mockPrismaService.violationHistory.findFirst.mockResolvedValueOnce({
+        id: "existing-vio-1",
+        status: "inReview",
+      });
+
+      await service.syncLiveViolations();
+
+      expect(mockPrismaService.violationHistory.update).toHaveBeenCalledWith({
+        where: { id: "existing-vio-1" },
+        data: {
+          targetClusterDisplayName: "Cluster One",
+          resourceKind: "Deployment",
+          severity: "critical",
+          message: "rootFS must be read-only (updated)",
+          occurredAt: new Date("2026-08-19T06:00:00.000Z"),
         },
       });
     });

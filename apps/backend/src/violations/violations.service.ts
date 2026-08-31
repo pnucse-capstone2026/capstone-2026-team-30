@@ -634,10 +634,19 @@ export class ViolationsService {
         const validStatus =
           (rec.status as "open" | "inReview" | "resolved") || "open";
         map.set(rec.id, validStatus);
-        // 리소스명이 유효한 경우에만 복합 키 매핑을 추가하여 Unknown에 의한 상태 오염 방지
+        // 리소스명이 유효한 경우 복합 키 매핑을 등록하여 인덱스 변동 시에도 상태 보존
         if (rec.resourceName && rec.resourceName !== "Unknown") {
-          const key = `${rec.targetClusterId}:${rec.policyName}:${rec.ruleName}:${rec.resourceName}:${rec.namespace ?? "cluster-wide"}`;
+          const ns = rec.namespace || "cluster-wide";
+          const key = `${rec.targetClusterId}:${rec.policyName}:${rec.ruleName}:${rec.resourceName}:${ns}`;
           map.set(key, validStatus);
+
+          // 네임스페이스 생략 또는 cluster-wide 호환 키도 함께 등록
+          if (ns !== "cluster-wide") {
+            map.set(
+              `${rec.targetClusterId}:${rec.policyName}:${rec.ruleName}:${rec.resourceName}:cluster-wide`,
+              validStatus,
+            );
+          }
         }
       }
       return map;
@@ -920,19 +929,39 @@ export class ViolationsService {
 
       for (const violation of liveViolations) {
         const occurredAt = new Date(violation.detectedAt);
+        const isNamedResource =
+          violation.resourceName && violation.resourceName !== "Unknown";
+
         // 동일 위반 항목의 중복 DB 저장을 방지하기 위한 유니크 조건 확인
         const existing = await this.prisma.violationHistory.findFirst({
           where: {
             targetClusterId: violation.clusterId,
             policyName: violation.policyName,
             ruleName: violation.ruleName,
-            resourceName: violation.resourceName,
-            namespace: violation.namespace,
-            occurredAt,
+            ...(isNamedResource
+              ? {
+                  resourceName: violation.resourceName,
+                  namespace: violation.namespace,
+                }
+              : {
+                  occurredAt,
+                }),
           },
         });
 
-        if (!existing) {
+        if (existing) {
+          // 기존 레코드가 있는 경우 관리자가 수정한 상태(inReview, resolved 등)를 보존하며 메타데이터만 갱신
+          await this.prisma.violationHistory.update({
+            where: { id: existing.id },
+            data: {
+              targetClusterDisplayName: violation.clusterDisplayName,
+              resourceKind: violation.resourceKind,
+              severity: violation.severity,
+              message: violation.message,
+              occurredAt,
+            },
+          });
+        } else {
           await this.prisma.violationHistory.create({
             data: {
               targetClusterId: violation.clusterId,
@@ -943,7 +972,7 @@ export class ViolationsService {
               resourceKind: violation.resourceKind,
               resourceName: violation.resourceName,
               severity: violation.severity,
-              status: violation.status,
+              status: violation.status || "open",
               message: violation.message,
               occurredAt,
             },
@@ -1025,8 +1054,9 @@ export class ViolationsService {
       const key = `${record.targetClusterId}:${record.policyName}:${record.resourceName}:${record.namespace}`;
       const exc = exceptionsMap.get(key);
 
-      let status: "open" | "inReview" | "resolved" =
+      const recordStatus =
         (record.status as "open" | "inReview" | "resolved") || "open";
+      let status: "open" | "inReview" | "resolved" = recordStatus;
       let exceptionStatus: "none" | "requested" | "approved" = "none";
       let relatedExceptionId: string | undefined = undefined;
 
@@ -1034,10 +1064,14 @@ export class ViolationsService {
         relatedExceptionId = exc.id;
         if (exc.status === "APPROVED" || exc.status === "APPLYING") {
           exceptionStatus = "approved";
-          status = "inReview";
+          if (recordStatus !== "resolved") {
+            status = "inReview";
+          }
         } else if (exc.status === "PENDING") {
           exceptionStatus = "requested";
-          status = "inReview";
+          if (recordStatus !== "resolved") {
+            status = "inReview";
+          }
         }
       }
 
