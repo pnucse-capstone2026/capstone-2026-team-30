@@ -8,23 +8,29 @@ import {
   CheckCircle2,
   Clock3,
   Code2,
+  Copy,
   FilePlus2,
   ShieldAlert,
   XCircle,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { DashboardPageShell } from "@/components/dashboard/dashboard-page-shell";
 import { AiErrorExplainerDialog } from "@/components/ai-agent/ai-error-explainer-dialog";
+import { ViolationReportDialog } from "@/components/violations/violation-report-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/lib/auth-store";
 import { useDataStore } from "@/lib/data-store";
 import {
   exceptionClassName,
+  exceptionLabel,
   getViolationDetail,
   policyViolations,
   severityClassName,
+  severityLabel,
   statusClassName,
+  statusLabel,
   type PolicyViolation,
 } from "@/lib/policy-violations";
 
@@ -34,68 +40,15 @@ type MyViolationDetailPageProps = {
   }>;
 };
 
-const severityLabel = {
-  critical: "긴급",
-  high: "높음",
-  medium: "중간",
-  low: "낮음",
-  info: "정보",
-};
-
-const statusLabel = {
-  open: "수정 필요",
-  inReview: "검토 중",
-  resolved: "완료",
-};
-
-const exceptionLabel = {
-  none: "예외 없음",
-  requested: "예외 요청됨",
-  approved: "예외 승인됨",
-};
-
 const statusIcon = {
   open: XCircle,
   inReview: Clock3,
   resolved: CheckCircle2,
 };
 
-const violationCopy: Record<
-  string,
-  {
-    message: string;
-    recommendation: string;
-  }
-> = {
-  "vio-001": {
-    message:
-      "payment-api 컨테이너에 CPU와 memory limits가 설정되어 있지 않습니다.",
-    recommendation:
-      "컨테이너 resources.limits에 cpu와 memory 값을 추가한 뒤 다시 배포하세요.",
-  },
-  "vio-002": {
-    message: "worker Pod가 latest 이미지 태그를 사용하고 있습니다.",
-    recommendation:
-      "재현 가능한 배포를 위해 빌드 번호나 SemVer 기반의 고정 태그를 사용하세요.",
-  },
-  "vio-003": {
-    message: "user-service 리소스에 team 라벨이 없습니다.",
-    recommendation:
-      "metadata.labels.team 값을 추가해 소유 팀을 추적할 수 있게 하세요.",
-  },
-  "vio-004": {
-    message: "node-exporter가 제한된 hostPath 볼륨을 사용하고 있습니다.",
-    recommendation:
-      "승인된 모니터링 목적의 예외인지 확인하고 만료 전 대체 구성을 검토하세요.",
-  },
-  "vio-005": {
-    message:
-      "허용된 이미지 레지스트리 접두어가 누락되어 정책 보정이 필요합니다.",
-    recommendation:
-      "이미지 경로가 승인된 레지스트리 기준을 따르도록 수정하세요.",
-  },
-};
-
+/**
+ * 사용자용 정책 위반 상세 페이지 컴포넌트입니다.
+ */
 export default function MyViolationDetailPage({
   params,
 }: MyViolationDetailPageProps) {
@@ -177,7 +130,6 @@ export default function MyViolationDetailPage({
   }
 
   const StatusIcon = statusIcon[violation.status];
-  const copy = violationCopy[violation.id];
 
   return (
     <DashboardPageShell
@@ -216,16 +168,17 @@ export default function MyViolationDetailPage({
             {violation.resourceKind} / {violation.resourceName}
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-            {copy?.message ?? violation.message}
+            {violation.message}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <AiErrorExplainerDialog
-            errorMessage={copy?.message ?? violation.message}
+            errorMessage={violation.message}
             policyName={violation.policyName}
             resourceManifest={violation.manifest}
             clusterContext={violation.clusterName}
           />
+          <ViolationReportDialog violation={violation} />
           {violation.relatedExceptionId ? (
             <Button
               asChild
@@ -295,21 +248,35 @@ export default function MyViolationDetailPage({
               예외 신청 전에 수정 가능한 항목인지 먼저 확인합니다.
             </p>
             <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900">
-              {copy?.recommendation ?? violation.recommendation}
+              {violation.recommendation}
             </div>
           </article>
 
           <article className="rounded-2xl border border-slate-200 bg-white">
-            <div className="flex items-center gap-3 border-b border-slate-100 px-6 py-4">
-              <div className="flex size-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
-                <Code2 className="size-4.5" />
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex size-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+                  <Code2 className="size-4.5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold">리소스 매니페스트</h3>
+                  <p className="mt-1 text-xs text-slate-400">
+                    검사 시점의 YAML 일부
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-sm font-semibold">리소스 매니페스트</h3>
-                <p className="mt-1 text-xs text-slate-400">
-                  검사 시점의 YAML 일부
-                </p>
-              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-lg border-slate-200"
+                onClick={() => {
+                  navigator.clipboard.writeText(violation.manifest);
+                  toast.success("매니페스트가 클립보드에 복사되었습니다.");
+                }}
+              >
+                <Copy className="size-3.5" />
+                복사
+              </Button>
             </div>
             <pre className="overflow-x-auto p-6 text-xs leading-6 text-slate-700">
               <code>{violation.manifest}</code>
@@ -359,6 +326,9 @@ export default function MyViolationDetailPage({
   );
 }
 
+/**
+ * 상세 정보 카드 컴포넌트입니다.
+ */
 function InfoCard({
   label,
   value,
@@ -379,6 +349,9 @@ function InfoCard({
   );
 }
 
+/**
+ * 상태 요약 행 컴포넌트입니다.
+ */
 function StatusRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-4">
