@@ -25,7 +25,7 @@ export function NoExceptionDialog({
   onOpenChange,
   violation,
 }: NoExceptionDialogProps) {
-  const newExceptionUrl = `/exceptions/new?policy=${encodeURIComponent(
+  const newExceptionUrl = `/admin/exceptions/new?policy=${encodeURIComponent(
     violation.policyName,
   )}&rule=${encodeURIComponent(violation.ruleName)}&cluster=${encodeURIComponent(
     violation.clusterId || violation.clusterName,

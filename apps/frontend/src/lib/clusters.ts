@@ -12,14 +12,32 @@ export type ClusterMetadata = {
   id: string;
   displayName: string;
   exceptionNamespace: string;
+  gitopsRepo?: string;
+  gitopsBranch?: string;
+  gitopsPath?: string;
 };
 
+/**
+ * 로그인한 사용자가 접근 권한을 가진 클러스터 목록을 조회합니다.
+ */
 export function listClusters() {
   return requestWithAuth<ClusterMetadata[]>("/clusters");
 }
 
+/**
+ * 전체 클러스터 카탈로그 목록을 조회합니다. (관리자 권한 필요)
+ */
 export function listClusterCatalog() {
   return requestWithAuth<ClusterMetadata[]>("/clusters/catalog");
+}
+
+/**
+ * 지정된 ID를 가진 클러스터의 메타데이터를 조회합니다.
+ *
+ * @param id 클러스터 고유 식별자
+ */
+export function getCluster(id: string) {
+  return requestWithAuth<ClusterMetadata>(`/clusters/${id}`);
 }
 
 export type ManagedCluster = {

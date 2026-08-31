@@ -1,8 +1,10 @@
+"use client";
+
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
-  CheckCircle2,
   Clock3,
   History,
   RefreshCw,
@@ -15,98 +17,305 @@ import {
 import { DashboardPageShell } from "@/components/dashboard/dashboard-page-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
-  auditLogs,
+  auditLogs as fallbackAuditLogs,
   entityTypeClassName,
   entityTypeLabel,
+  type AuditLog,
 } from "@/lib/audit-logs";
+import { useAuthStore } from "@/lib/auth-store";
 import {
-  clusters,
+  clusters as fallbackClusters,
   clusterEnvironmentLabel,
   clusterStatusClassName,
   clusterStatusLabel,
+  getCluster,
   kyvernoStatusClassName,
   kyvernoStatusLabel,
+  type ClusterEnvironment,
+  type ClusterMetadata,
+  type ManagedCluster,
 } from "@/lib/clusters";
+import { useDataStore } from "@/lib/data-store";
 import {
-  kyvernoPolicies,
+  kyvernoPolicies as fallbackPolicies,
   policyModeLabel,
   policyStatusClassName,
   policyStatusLabel,
   policyTypeClassName,
   policyTypeLabel,
+  type KyvernoPolicy,
 } from "@/lib/policies";
 import {
-  policyViolations,
+  policyViolations as fallbackViolations,
   severityClassName,
   severityLabel,
   statusClassName,
   statusLabel,
+  type PolicyViolation,
 } from "@/lib/policy-violations";
 
-type AdminClusterDetailPageProps = {
-  params: Promise<{
-    id: string;
-  }>;
-};
+/**
+ * 관리자용 클러스터 세부 정보 페이지 컴포넌트입니다.
+ * 실시간 API 및 DataStore를 통해 개별 클러스터의 연결 메타데이터, 바인딩된 Kyverno 정책, 위반 건수, 감사 로그를 표출합니다.
+ */
+export default function AdminClusterDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const rawId = params?.id;
+  const clusterId = Array.isArray(rawId) ? rawId[0] : (rawId ?? "");
 
-export function generateStaticParams() {
-  return clusters.map((cluster) => ({
-    id: cluster.id,
-  }));
-}
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [directCluster, setDirectCluster] = useState<ClusterMetadata | null>(
+    null,
+  );
 
-export default async function AdminClusterDetailPage({
-  params,
-}: AdminClusterDetailPageProps) {
-  const { id } = await params;
-  const cluster = clusters.find(
-    (item) => item.id === id || item.name === id,
-  ) ?? {
-    id,
-    name: id,
-    environment: id.includes("stage")
-      ? ("staging" as const)
-      : id.includes("dev")
-        ? ("development" as const)
-        : id.includes("sand")
-          ? ("sandbox" as const)
-          : ("production" as const),
-    region: "us-east-1",
-    provider: "EKS" as const,
-    status: "healthy" as const,
-    kyvernoStatus: "ready" as const,
-    nodeCount: 3,
-    namespaceCount: 8,
-    policyCount: 1,
-    violationCount: 0,
-    lastSyncedAt: new Date().toISOString().slice(0, 16).replace("T", " "),
-    owner: "플랫폼팀",
-    description: `${id} 클러스터입니다.`,
+  const liveClusters = useDataStore((state) => state.clusters);
+  const livePolicies = useDataStore((state) => state.policies);
+  const liveViolations = useDataStore((state) => state.violations);
+  const liveAuditLogs = useDataStore((state) => state.auditLogs);
+
+  const fetchClusters = useDataStore((state) => state.fetchClusters);
+  const fetchPolicies = useDataStore((state) => state.fetchPolicies);
+  const fetchViolations = useDataStore((state) => state.fetchViolations);
+  const fetchAuditLogs = useDataStore((state) => state.fetchAuditLogs);
+
+  const authStatus = useAuthStore((state) => state.status);
+  const initializeAuth = useAuthStore((state) => state.initialize);
+
+  /**
+   * 해당 클러스터와 관련된 실시간 데이터들을 병렬 패칭합니다.
+   */
+  const loadClusterData = useCallback(
+    async (force = false) => {
+      if (!clusterId) return;
+
+      try {
+        await initializeAuth();
+
+        const promises: Promise<unknown>[] = [
+          fetchClusters(force),
+          fetchPolicies(force),
+          fetchViolations(force),
+          fetchAuditLogs(force),
+        ];
+
+        // 개별 클러스터 상세 API 호출 병행
+        promises.push(
+          getCluster(clusterId)
+            .then((data) => {
+              if (data) setDirectCluster(data);
+            })
+            .catch(() => {
+              // catalog나 목록에서 찾기 시도
+            }),
+        );
+
+        await Promise.allSettled(promises);
+      } catch {
+        // 네트워크 또는 백엔드 예외 시 fallback 처리
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [
+      clusterId,
+      fetchAuditLogs,
+      fetchClusters,
+      fetchPolicies,
+      fetchViolations,
+      initializeAuth,
+    ],
+  );
+
+  useEffect(() => {
+    void loadClusterData();
+  }, [authStatus, loadClusterData]);
+
+  /** 새로고침 버튼 핸들러 */
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadClusterData(true);
   };
 
-  const relatedPolicies = kyvernoPolicies.filter(
-    (policy) =>
-      policy.clusterId === cluster.id ||
-      policy.clusterName === cluster.name ||
-      policy.clusterDisplayName === cluster.name,
+  const currentCluster: ManagedCluster | null = useMemo(() => {
+    if (!clusterId) return null;
+
+    const foundInStore = liveClusters?.find(
+      (c) => c.id === clusterId || c.displayName === clusterId,
+    );
+
+    const targetMeta = directCluster ?? foundInStore;
+
+    const foundInFallback = fallbackClusters.find(
+      (c) => c.id === clusterId || c.name === clusterId,
+    );
+
+    if (targetMeta) {
+      if (foundInFallback) {
+        return {
+          ...foundInFallback,
+          id: targetMeta.id,
+          name: targetMeta.displayName || foundInFallback.name,
+        };
+      }
+
+      const env: ClusterEnvironment = clusterId.includes("stage")
+        ? "staging"
+        : clusterId.includes("dev")
+          ? "development"
+          : clusterId.includes("sand")
+            ? "sandbox"
+            : "production";
+
+      return {
+        id: targetMeta.id,
+        name: targetMeta.displayName || targetMeta.id,
+        environment: env,
+        region: "us-east-1",
+        provider: "EKS",
+        status: "healthy",
+        kyvernoStatus: "ready",
+        nodeCount: 3,
+        namespaceCount: 8,
+        policyCount: 0,
+        violationCount: 0,
+        lastSyncedAt: new Date().toISOString().slice(0, 16).replace("T", " "),
+        owner: "플랫폼팀",
+        description: `${targetMeta.displayName || targetMeta.id} 클러스터입니다.`,
+      };
+    }
+
+    if (foundInFallback) {
+      return foundInFallback;
+    }
+
+    return null;
+  }, [clusterId, directCluster, liveClusters]);
+
+  const policyList: KyvernoPolicy[] = livePolicies ?? fallbackPolicies;
+  const violationList: PolicyViolation[] = liveViolations ?? fallbackViolations;
+  const auditLogList: AuditLog[] = liveAuditLogs ?? fallbackAuditLogs;
+
+  const relatedPolicies = useMemo(() => {
+    if (!currentCluster) return [];
+    return policyList.filter(
+      (policy) =>
+        policy.clusterId === currentCluster.id ||
+        policy.clusterName === currentCluster.name ||
+        policy.clusterDisplayName === currentCluster.name ||
+        policy.clusterDisplayName === currentCluster.id,
+    );
+  }, [currentCluster, policyList]);
+
+  const relatedViolations = useMemo(() => {
+    if (!currentCluster) return [];
+    return violationList.filter(
+      (violation) =>
+        violation.clusterId === currentCluster.id ||
+        violation.clusterName === currentCluster.name ||
+        violation.clusterDisplayName === currentCluster.name ||
+        violation.clusterDisplayName === currentCluster.id,
+    );
+  }, [currentCluster, violationList]);
+
+  const relatedAuditLogs = useMemo(() => {
+    if (!currentCluster) return [];
+    return auditLogList.filter(
+      (log) =>
+        log.entityId === currentCluster.name ||
+        log.entityId === currentCluster.id ||
+        log.metadata?.includes(`cluster=${currentCluster.name}`) ||
+        log.metadata?.includes(`cluster=${currentCluster.id}`),
+    );
+  }, [auditLogList, currentCluster]);
+
+  const unresolvedViolations = useMemo(
+    () =>
+      relatedViolations.filter((violation) => violation.status !== "resolved"),
+    [relatedViolations],
   );
-  const relatedViolations = policyViolations.filter(
-    (violation) =>
-      violation.clusterId === cluster.id ||
-      violation.clusterName === cluster.name ||
-      violation.clusterDisplayName === cluster.name,
-  );
-  const relatedAuditLogs = auditLogs.filter(
-    (log) =>
-      log.entityId === cluster.name ||
-      log.entityId === cluster.id ||
-      log.metadata.includes(`cluster=${cluster.name}`) ||
-      log.metadata.includes(`cluster=${cluster.id}`),
-  );
-  const unresolvedViolations = relatedViolations.filter(
-    (violation) => violation.status !== "resolved",
-  );
+
+  if (loading && !currentCluster) {
+    return (
+      <DashboardPageShell
+        variant="admin"
+        activeHref="/admin/clusters"
+        title="클러스터 상세"
+        description="클러스터 정보를 불러오는 중입니다..."
+      >
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-10 w-48 rounded-xl" />
+            <Skeleton className="h-10 w-24 rounded-xl" />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-32 rounded-2xl" />
+            ))}
+          </div>
+          <Skeleton className="h-96 rounded-2xl" />
+        </div>
+      </DashboardPageShell>
+    );
+  }
+
+  if (!currentCluster && !loading) {
+    return (
+      <DashboardPageShell
+        variant="admin"
+        activeHref="/admin/clusters"
+        title="클러스터를 찾을 수 없습니다"
+        description={`요청하신 클러스터 ID (${clusterId})가 존재하지 않거나 권한이 없습니다.`}
+        actions={
+          <Button
+            asChild
+            variant="outline"
+            className="h-10 rounded-xl border-slate-200 bg-white text-slate-700"
+          >
+            <Link href="/admin/clusters">
+              <ArrowLeft className="size-4" />
+              클러스터 목록으로 이동
+            </Link>
+          </Button>
+        }
+      >
+        <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center">
+          <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+            <ShieldAlert className="size-6" />
+          </div>
+          <h3 className="mt-4 text-base font-semibold text-slate-900">
+            클러스터 정보를 확인할 수 없습니다.
+          </h3>
+          <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
+            요청하신 식별자({clusterId})에 해당하는 클러스터가 등록되어 있지
+            않거나, 현재 계정에 접근 권한이 부여되지 않았습니다.
+          </p>
+          <div className="mt-6 flex justify-center gap-3">
+            <Button
+              onClick={() => router.push("/admin/clusters")}
+              className="rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]"
+            >
+              목록으로 돌아가기
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleRefresh}
+              className="rounded-xl border-slate-200"
+            >
+              <RefreshCw className="mr-1.5 size-4" />
+              다시 시도
+            </Button>
+          </div>
+        </div>
+      </DashboardPageShell>
+    );
+  }
+
+  const cluster = currentCluster!;
 
   return (
     <DashboardPageShell
@@ -129,8 +338,12 @@ export default async function AdminClusterDetailPage({
           <Button
             variant="outline"
             className="hidden h-10 rounded-xl border-slate-200 bg-white text-slate-700 sm:inline-flex"
+            onClick={handleRefresh}
+            disabled={refreshing}
           >
-            <RefreshCw className="size-4" />
+            <RefreshCw
+              className={`size-4 ${refreshing ? "animate-spin" : ""}`}
+            />
             새로고침
           </Button>
         </>
@@ -227,7 +440,8 @@ export default async function AdminClusterDetailPage({
 
             <dl className="mt-5 grid gap-4 sm:grid-cols-2">
               {[
-                ["클러스터 이름", cluster.name],
+                ["클러스터 ID", cluster.id],
+                ["표시 이름", cluster.name],
                 ["환경", clusterEnvironmentLabel[cluster.environment]],
                 ["Provider", cluster.provider],
                 ["Region", cluster.region],

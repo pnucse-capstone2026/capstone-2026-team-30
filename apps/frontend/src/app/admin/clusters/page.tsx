@@ -68,6 +68,10 @@ const environmentOptions: ClusterEnvironment[] = [
 const statusOptions: ClusterStatus[] = ["healthy", "syncing", "warning"];
 const kyvernoOptions: KyvernoStatus[] = ["ready", "syncing", "degraded"];
 
+/**
+ * 관리자용 클러스터 관리 목록 페이지 컴포넌트입니다.
+ * 등록된 전체 클러스터의 연결 상태, Kyverno 엔진 상태, 바인딩된 정책 및 위반 현황을 종합 제공합니다.
+ */
 export default function AdminClustersPage() {
   const [query, setQuery] = useState("");
   const [environment, setEnvironment] = useState<EnvironmentFilter>("all");
@@ -85,6 +89,9 @@ export default function AdminClustersPage() {
   const authStatus = useAuthStore((state) => state.status);
   const initializeAuth = useAuthStore((state) => state.initialize);
 
+  /**
+   * 클러스터 관리 대시보드에 필요한 데이터들을 백엔드 API로부터 병렬 로드합니다.
+   */
   const loadDashboardData = useCallback(async () => {
     try {
       await initializeAuth();
@@ -94,7 +101,7 @@ export default function AdminClustersPage() {
         fetchViolations(),
       ]);
     } catch {
-      // Graceful fallback
+      // 라이브 API 연동 실패 시 기본 상태 유지
     }
   }, [fetchClusters, fetchPolicies, fetchViolations, initializeAuth]);
 

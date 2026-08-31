@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Clock3,
   FileClock,
+  FilePlus2,
   Filter,
   Menu,
   RefreshCw,
@@ -276,6 +277,15 @@ export default function AdminExceptionsPage() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button
+                asChild
+                className="h-10 gap-2 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]"
+              >
+                <Link href="/admin/exceptions/new">
+                  <FilePlus2 className="size-4" />
+                  신규 예외 등록
+                </Link>
+              </Button>
+              <Button
                 variant="outline"
                 className="h-10 rounded-xl border-slate-200 bg-white text-slate-700"
                 disabled={isRefreshing}
@@ -287,8 +297,9 @@ export default function AdminExceptionsPage() {
                 {isRefreshing ? "불러오는 중..." : "새로고침"}
               </Button>
               <Button
+                variant="outline"
                 onClick={() => setIsStandardsOpen(true)}
-                className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]"
+                className="h-10 rounded-xl border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
               >
                 <SlidersHorizontal className="size-4" />
                 승인 기준 설정

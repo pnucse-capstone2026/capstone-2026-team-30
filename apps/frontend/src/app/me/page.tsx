@@ -159,8 +159,17 @@ export default function MyProfilePage() {
                 variant="outline"
                 className="h-10 justify-start rounded-xl border-slate-200 bg-white"
               >
-                <Link href="/exceptions">
-                  <ShieldCheck className="size-4" />내 예외 신청 보기
+                <Link
+                  href={
+                    user?.role === "ADMIN" || user?.role === "APPROVER"
+                      ? "/admin/exceptions"
+                      : "/exceptions"
+                  }
+                >
+                  <ShieldCheck className="size-4" />
+                  {user?.role === "ADMIN" || user?.role === "APPROVER"
+                    ? "예외 관리"
+                    : "내 예외 신청 보기"}
                 </Link>
               </Button>
               <Button
@@ -168,8 +177,17 @@ export default function MyProfilePage() {
                 variant="outline"
                 className="h-10 justify-start rounded-xl border-slate-200 bg-white"
               >
-                <Link href="/exceptions/new">
-                  <KeyRound className="size-4" />새 예외 신청
+                <Link
+                  href={
+                    user?.role === "ADMIN" || user?.role === "APPROVER"
+                      ? "/admin/exceptions/new"
+                      : "/exceptions/new"
+                  }
+                >
+                  <KeyRound className="size-4" />
+                  {user?.role === "ADMIN" || user?.role === "APPROVER"
+                    ? "신규 예외 등록"
+                    : "새 예외 신청"}
                 </Link>
               </Button>
               {user?.role === "ADMIN" ? (
