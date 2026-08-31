@@ -16,11 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/lib/auth-store";
-import {
-  getNotificationsApi,
-  markAllNotificationsAsReadApi,
-  markNotificationAsReadApi,
-} from "@/lib/notifications-api";
+import { useNotificationStore } from "@/lib/notifications-store";
 import {
   isNotificationVisibleToUser,
   notificationSeverityClassName,
@@ -55,27 +51,29 @@ export default function NotificationsPage() {
   const authStatus = useAuthStore((state) => state.status);
   const initializeAuth = useAuthStore((state) => state.initialize);
 
-  const [loading, setLoading] = useState(true);
+  const notificationsList = useNotificationStore(
+    (state) => state.notifications,
+  );
+  const loading = useNotificationStore((state) => state.loading);
+  const fetchNotifications = useNotificationStore(
+    (state) => state.fetchNotifications,
+  );
+  const markAsRead = useNotificationStore((state) => state.markAsRead);
+  const markAllAsRead = useNotificationStore((state) => state.markAllAsRead);
+
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all");
   const [readFilter, setReadFilter] = useState<ReadFilter>("all");
-  const [notificationsList, setNotificationsList] = useState<AppNotification[]>(
-    [],
-  );
 
   const loadNotifications = useCallback(async () => {
-    setLoading(true);
     try {
       await initializeAuth();
-      const liveData = await getNotificationsApi();
-      setNotificationsList(liveData);
+      await fetchNotifications(true);
     } catch {
       // Graceful fallback
-    } finally {
-      setLoading(false);
     }
-  }, [initializeAuth]);
+  }, [initializeAuth, fetchNotifications]);
 
   useEffect(() => {
     void loadNotifications();
@@ -125,25 +123,11 @@ export default function NotificationsPage() {
   }
 
   async function handleMarkAllAsRead() {
-    setNotificationsList((prev) =>
-      prev.map((item) => ({ ...item, read: true })),
-    );
-    try {
-      await markAllNotificationsAsReadApi();
-    } catch {
-      // Graceful fallback
-    }
+    await markAllAsRead();
   }
 
   async function handleNotificationClick(id: string) {
-    setNotificationsList((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, read: true } : item)),
-    );
-    try {
-      await markNotificationAsReadApi(id);
-    } catch {
-      // Graceful fallback
-    }
+    await markAsRead(id);
   }
 
   return (

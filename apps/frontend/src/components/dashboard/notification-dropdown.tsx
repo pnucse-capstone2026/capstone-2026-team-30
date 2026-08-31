@@ -15,11 +15,7 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { useAuthStore } from "@/lib/auth-store";
-import {
-  getNotificationsApi,
-  markAllNotificationsAsReadApi,
-  markNotificationAsReadApi,
-} from "@/lib/notifications-api";
+import { useNotificationStore } from "@/lib/notifications-store";
 import {
   isNotificationVisibleToUser,
   notificationSeverityClassName,
@@ -34,28 +30,29 @@ const severityIcons: Record<NotificationSeverity, React.ElementType> = {
   success: CheckCircle2,
 };
 
+/**
+ * 상단 글로벌 네비게이션 헤더의 알림 드롭다운 컴포넌트
+ *
+ * 전역 useNotificationStore와 연동되어 실시간 미읽음 뱃지 카운트 및 알림 목록을 표시합니다.
+ */
 export function NotificationDropdown() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const [isOpen, setIsOpen] = useState(false);
-  const [notificationList, setNotificationList] = useState<AppNotification[]>(
-    [],
-  );
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const fetchNotifications = useCallback(async () => {
-    if (!user) return;
-    try {
-      const data = await getNotificationsApi();
-      setNotificationList(data);
-    } catch {
-      // Graceful fallback
-    }
-  }, [user]);
+  const notificationList = useNotificationStore((state) => state.notifications);
+  const fetchNotifications = useNotificationStore(
+    (state) => state.fetchNotifications,
+  );
+  const markAsRead = useNotificationStore((state) => state.markAsRead);
+  const markAllAsRead = useNotificationStore((state) => state.markAllAsRead);
 
   useEffect(() => {
-    void fetchNotifications();
-  }, [fetchNotifications]);
+    if (user) {
+      void fetchNotifications();
+    }
+  }, [user, fetchNotifications]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -68,7 +65,7 @@ export function NotificationDropdown() {
     }
     if (isOpen) {
       document.addEventListener("mousedown", handleClickOutside);
-      void fetchNotifications();
+      void fetchNotifications(true);
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
@@ -80,20 +77,6 @@ export function NotificationDropdown() {
     : notificationList;
 
   const unreadCount = visibleNotifications.filter((item) => !item.read).length;
-
-  const markAsRead = useCallback((id: string) => {
-    setNotificationList((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, read: true } : item)),
-    );
-    void markNotificationAsReadApi(id).catch(() => {});
-  }, []);
-
-  const markAllAsRead = useCallback(() => {
-    setNotificationList((prev) =>
-      prev.map((item) => ({ ...item, read: true })),
-    );
-    void markAllNotificationsAsReadApi().catch(() => {});
-  }, []);
 
   const handleNotificationClick = (item: AppNotification) => {
     markAsRead(item.id);
