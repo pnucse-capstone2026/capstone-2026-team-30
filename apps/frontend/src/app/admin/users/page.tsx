@@ -187,11 +187,18 @@ export default function AdminUsersPage() {
       setCreateForm({ email: "", password: "", role: "REQUESTER" });
       setMessage("사용자를 추가했습니다.");
     } catch (createError) {
-      setError(
-        createError instanceof Error
-          ? createError.message
-          : "사용자를 추가하지 못했습니다.",
-      );
+      if (
+        createError instanceof ApiError &&
+        createError.code === "USER_EMAIL_ALREADY_EXISTS"
+      ) {
+        setError("이미 등록된 이메일 주소입니다.");
+      } else {
+        setError(
+          createError instanceof Error
+            ? createError.message
+            : "사용자를 추가하지 못했습니다.",
+        );
+      }
     } finally {
       setSaving(null);
     }
