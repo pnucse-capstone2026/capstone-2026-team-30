@@ -43,12 +43,44 @@ export class CreateNotebookDto {
   clusterId: string;
 
   @ApiProperty({
-    description: "하드웨어 티어 프리셋 ID (e.g. CPU_SMALL, GPU_T4_STANDARD)",
+    description:
+      "하드웨어 티어 프리셋 ID (e.g. CPU_SMALL, GPU_T4_STANDARD, CUSTOM)",
     example: "CPU_MEDIUM",
   })
   @IsString()
   @IsNotEmpty()
   hardwareTier: string;
+
+  @ApiPropertyOptional({
+    description: "커스텀 CPU 코어 수 (hardwareTier가 'CUSTOM'일 때 적용, 1~16)",
+    example: 4,
+  })
+  @IsInt()
+  @Min(1)
+  @Max(16)
+  @IsOptional()
+  customCpu?: number;
+
+  @ApiPropertyOptional({
+    description:
+      "커스텀 메모리 용량 (GB 단위, hardwareTier가 'CUSTOM'일 때 적용, 2~64)",
+    example: 8,
+  })
+  @IsInt()
+  @Min(2)
+  @Max(64)
+  @IsOptional()
+  customMemoryGb?: number;
+
+  @ApiPropertyOptional({
+    description: "커스텀 GPU 개수 (hardwareTier가 'CUSTOM'일 때 적용, 0~4)",
+    example: 1,
+  })
+  @IsInt()
+  @Min(0)
+  @Max(4)
+  @IsOptional()
+  customGpu?: number;
 
   @ApiProperty({
     description:

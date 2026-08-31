@@ -191,11 +191,52 @@ export class NotebooksService {
       throw new BusinessException(MLOPS_ERROR.NOTEBOOK_ALREADY_EXISTS);
     }
 
-    // 2. 프리셋 유효성 검증
-    const hwPreset = HARDWARE_PRESETS[dto.hardwareTier];
+    // 2. 프레임워크 이미지 프리셋 및 하드웨어 사양 유효성 검증
     const fwPreset = FRAMEWORK_PRESETS[dto.frameworkImage];
-    if (!hwPreset || !fwPreset) {
+    if (!fwPreset) {
       throw new BusinessException(MLOPS_ERROR.INVALID_PRESET);
+    }
+
+    let resourcesLimits: Record<string, string>;
+    let resourcesRequests: Record<string, string>;
+
+    if (dto.hardwareTier === "CUSTOM") {
+      const cpu = dto.customCpu ?? 2;
+      const mem = dto.customMemoryGb ?? 4;
+      const gpu = dto.customGpu ?? 0;
+
+      resourcesLimits = {
+        cpu: `${cpu}`,
+        memory: `${mem}Gi`,
+      };
+      resourcesRequests = {
+        cpu: `${Math.max(0.5, cpu / 2)}`,
+        memory: `${Math.max(1, Math.floor(mem / 2))}Gi`,
+      };
+
+      if (gpu > 0) {
+        resourcesLimits["nvidia.com/gpu"] = `${gpu}`;
+        resourcesRequests["nvidia.com/gpu"] = `${gpu}`;
+      }
+    } else {
+      const hwPreset = HARDWARE_PRESETS[dto.hardwareTier];
+      if (!hwPreset) {
+        throw new BusinessException(MLOPS_ERROR.INVALID_PRESET);
+      }
+
+      resourcesLimits = {
+        cpu: hwPreset.cpuLimit,
+        memory: hwPreset.memoryLimit,
+      };
+      resourcesRequests = {
+        cpu: hwPreset.cpuRequest,
+        memory: hwPreset.memoryRequest,
+      };
+
+      if (hwPreset.isGpuRequired && Number(hwPreset.gpuLimit) > 0) {
+        resourcesLimits["nvidia.com/gpu"] = hwPreset.gpuLimit;
+        resourcesRequests["nvidia.com/gpu"] = hwPreset.gpuLimit;
+      }
     }
 
     // 3. 사용자 전용 홈 디렉토리 PVC 보장 (/home/jovyan/work)
@@ -210,21 +251,6 @@ export class NotebooksService {
       );
     } catch {
       throw new BusinessException(MLOPS_ERROR.NOTEBOOK_CREATION_FAILED);
-    }
-
-    // 4. Kubeflow Notebook CRD Manifest 빌드
-    const resourcesLimits: Record<string, string> = {
-      cpu: hwPreset.cpuLimit,
-      memory: hwPreset.memoryLimit,
-    };
-    const resourcesRequests: Record<string, string> = {
-      cpu: hwPreset.cpuRequest,
-      memory: hwPreset.memoryRequest,
-    };
-
-    if (hwPreset.isGpuRequired && Number(hwPreset.gpuLimit) > 0) {
-      resourcesLimits["nvidia.com/gpu"] = hwPreset.gpuLimit;
-      resourcesRequests["nvidia.com/gpu"] = hwPreset.gpuLimit;
     }
 
     const manifest: KubeflowNotebookManifest = {

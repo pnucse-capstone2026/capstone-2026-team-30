@@ -46,6 +46,9 @@ export type CreateNotebookInput = {
   hardwareTier: string;
   frameworkImage: string;
   storageGb?: number;
+  customCpu?: number;
+  customMemoryGb?: number;
+  customGpu?: number;
 };
 
 export async function getNotebookPresets(): Promise<NotebookPresets> {

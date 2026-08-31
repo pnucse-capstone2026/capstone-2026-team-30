@@ -145,6 +145,40 @@ describe("NotebooksService", () => {
       expect(mockAdapter.createNotebook).toHaveBeenCalled();
     });
 
+    it("should create notebook successfully with CUSTOM hardware tier", async () => {
+      mockAdapter.getNotebook.mockResolvedValue(null);
+      mockAdapter.ensureWorkspacePvc.mockResolvedValue();
+      mockAdapter.createNotebook.mockImplementation(
+        async (_, __, manifest) => manifest,
+      );
+
+      const dto = {
+        name: "custom-nb",
+        namespace: "default",
+        clusterId: "cluster-1",
+        hardwareTier: "CUSTOM",
+        frameworkImage: "JUPYTER_PYTORCH",
+        customCpu: 4,
+        customMemoryGb: 16,
+        customGpu: 1,
+        storageGb: 50,
+      };
+
+      const result = await service.createNotebook(dto, mockNormalUser);
+
+      expect(result.name).toBe("custom-nb");
+      expect(result.cpuLimit).toBe("4");
+      expect(result.memoryLimit).toBe("16Gi");
+      expect(result.gpuLimit).toBe("1");
+      expect(mockAdapter.ensureWorkspacePvc).toHaveBeenCalledWith(
+        "cluster-1",
+        "default",
+        "custom-nb-workspace-pvc",
+        50,
+      );
+      expect(mockAdapter.createNotebook).toHaveBeenCalled();
+    });
+
     it("should throw error if notebook name already exists", async () => {
       mockAdapter.getNotebook.mockResolvedValue({
         apiVersion: "kubeflow.org/v1",

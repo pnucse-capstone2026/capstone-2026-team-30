@@ -29,6 +29,10 @@ export function CreateNotebookDialog({
   const [name, setName] = useState("");
   const [hardwareTier, setHardwareTier] = useState("CPU_SMALL");
   const [frameworkImage, setFrameworkImage] = useState("JUPYTER_PYTORCH");
+  const [specMode, setSpecMode] = useState<"preset" | "custom">("preset");
+  const [customCpu, setCustomCpu] = useState(2);
+  const [customMemoryGb, setCustomMemoryGb] = useState(4);
+  const [customGpu, setCustomGpu] = useState(0);
   const [storageGb, setStorageGb] = useState(10);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -49,14 +53,25 @@ export function CreateNotebookDialog({
         name: name.trim().toLowerCase(),
         clusterId,
         namespace,
-        hardwareTier,
+        hardwareTier: specMode === "custom" ? "CUSTOM" : hardwareTier,
         frameworkImage,
         storageGb,
+        ...(specMode === "custom"
+          ? {
+              customCpu,
+              customMemoryGb,
+              customGpu,
+            }
+          : {}),
       });
 
       setOpen(false);
       setName("");
+      setSpecMode("preset");
       setHardwareTier("CPU_SMALL");
+      setCustomCpu(2);
+      setCustomMemoryGb(4);
+      setCustomGpu(0);
       setFrameworkImage("JUPYTER_PYTORCH");
       setStorageGb(10);
     } catch (err: any) {
@@ -74,7 +89,7 @@ export function CreateNotebookDialog({
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-[560px]">
+      <DialogContent className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl">
@@ -82,8 +97,8 @@ export function CreateNotebookDialog({
               JupyterLab / RStudio 개발 환경 프로비저닝
             </DialogTitle>
             <DialogDescription>
-              Kubernetes 복잡성 없이 3단계 선택만으로 격리된 MLOps 노트북
-              인스턴스를 즉시 생성합니다.
+              Kubernetes 복잡성 없이 간편하게 격리된 MLOps 노트북 인스턴스를
+              프로비저닝합니다.
             </DialogDescription>
           </DialogHeader>
 
@@ -111,52 +126,179 @@ export function CreateNotebookDialog({
               </p>
             </div>
 
-            {/* 2. 하드웨어 리소스 티어 선택 */}
-            <div className="grid gap-2">
-              <Label className="font-semibold flex items-center gap-1.5">
-                <Cpu className="h-4 w-4 text-indigo-500" />
-                2. 하드웨어 사양 (Tier)
-              </Label>
-              {isPresetsLoading ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
-                  <Loader2 className="h-4 w-4 animate-spin" /> 프리셋 로딩 중...
+            {/* 2. 하드웨어 리소스 사양 설정 (프리셋 / 직접 입력 모드) */}
+            <div className="grid gap-3">
+              <div className="flex items-center justify-between">
+                <Label className="font-semibold flex items-center gap-1.5">
+                  <Cpu className="h-4 w-4 text-indigo-500" />
+                  2. 하드웨어 사양
+                </Label>
+                <div className="flex items-center rounded-lg bg-slate-100 p-0.5 text-xs font-medium">
+                  <button
+                    type="button"
+                    onClick={() => setSpecMode("preset")}
+                    className={`px-2.5 py-1 rounded-md transition-all ${
+                      specMode === "preset"
+                        ? "bg-white text-slate-900 shadow-xs font-semibold"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    기본 프리셋
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSpecMode("custom")}
+                    className={`px-2.5 py-1 rounded-md transition-all ${
+                      specMode === "custom"
+                        ? "bg-white text-slate-900 shadow-xs font-semibold"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    직접 입력 (Custom Spec)
+                  </button>
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-2">
-                  {presets?.hardwareTiers.map((tier) => (
-                    <label
-                      key={tier.id}
-                      className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${
-                        hardwareTier === tier.id
-                          ? "border-indigo-500 bg-indigo-500/5 ring-1 ring-indigo-500"
-                          : "border-border hover:bg-muted/50"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="radio"
-                          name="hardwareTier"
-                          value={tier.id}
-                          checked={hardwareTier === tier.id}
-                          onChange={(e) => setHardwareTier(e.target.value)}
-                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <div>
-                          <p className="text-sm font-medium">{tier.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Limit: CPU {tier.cpuLimit} / RAM {tier.memoryLimit}
-                            {tier.isGpuRequired && ` / GPU ${tier.gpuLimit}ea`}
-                          </p>
-                        </div>
-                      </div>
+              </div>
 
-                      {tier.isGpuRequired && (
-                        <span className="px-2 py-0.5 text-xs font-semibold rounded bg-amber-500/10 text-amber-600 border border-amber-500/20">
-                          NVIDIA GPU
+              {specMode === "preset" ? (
+                isPresetsLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                    <Loader2 className="h-4 w-4 animate-spin" /> 프리셋 로딩
+                    중...
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-2">
+                    {presets?.hardwareTiers.map((tier) => (
+                      <label
+                        key={tier.id}
+                        className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${
+                          hardwareTier === tier.id
+                            ? "border-indigo-500 bg-indigo-500/5 ring-1 ring-indigo-500"
+                            : "border-border hover:bg-muted/50"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="radio"
+                            name="hardwareTier"
+                            value={tier.id}
+                            checked={hardwareTier === tier.id}
+                            onChange={(e) => setHardwareTier(e.target.value)}
+                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <div>
+                            <p className="text-sm font-medium">{tier.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Limit: CPU {tier.cpuLimit} / RAM{" "}
+                              {tier.memoryLimit}
+                              {tier.isGpuRequired &&
+                                ` / GPU ${tier.gpuLimit}ea`}
+                            </p>
+                          </div>
+                        </div>
+
+                        {tier.isGpuRequired && (
+                          <span className="px-2 py-0.5 text-xs font-semibold rounded bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                            NVIDIA GPU
+                          </span>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                )
+              ) : (
+                <div className="p-4 rounded-xl border border-indigo-100 bg-indigo-50/30 space-y-4">
+                  {/* CPU 코어 수 */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-slate-700">
+                        CPU 코어 수:{" "}
+                        <span className="text-indigo-600 font-bold">
+                          {customCpu} Cores
                         </span>
-                      )}
-                    </label>
-                  ))}
+                      </span>
+                      <span className="text-muted-foreground">
+                        1 ~ 16 Cores
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={1}
+                      max={16}
+                      step={1}
+                      value={customCpu}
+                      onChange={(e) => setCustomCpu(Number(e.target.value))}
+                      className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                    />
+                  </div>
+
+                  {/* 메모리 크기 */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-slate-700">
+                        메모리 (RAM):{" "}
+                        <span className="text-indigo-600 font-bold">
+                          {customMemoryGb} GB
+                        </span>
+                      </span>
+                      <span className="text-muted-foreground">2 ~ 64 GB</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={2}
+                      max={64}
+                      step={2}
+                      value={customMemoryGb}
+                      onChange={(e) =>
+                        setCustomMemoryGb(Number(e.target.value))
+                      }
+                      className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                    />
+                  </div>
+
+                  {/* GPU 개수 */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-slate-700">
+                        NVIDIA GPU 가속기:{" "}
+                        <span
+                          className={
+                            customGpu > 0
+                              ? "text-amber-600 font-bold"
+                              : "text-slate-500 font-bold"
+                          }
+                        >
+                          {customGpu > 0
+                            ? `${customGpu} GPU`
+                            : "사용 안 함 (0)"}
+                        </span>
+                      </span>
+                      <span className="text-muted-foreground">0 ~ 4 GPUs</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {[0, 1, 2, 4].map((g) => (
+                        <button
+                          key={g}
+                          type="button"
+                          onClick={() => setCustomGpu(g)}
+                          className={`flex-1 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                            customGpu === g
+                              ? "border-amber-500 bg-amber-500/10 text-amber-700 font-semibold ring-1 ring-amber-500"
+                              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                          }`}
+                        >
+                          {g === 0 ? "None" : `${g} GPU`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-indigo-100/60 flex items-center justify-between text-[11px] text-slate-500 font-mono">
+                    <span>적용 사양:</span>
+                    <span>
+                      CPU {customCpu} Core / RAM {customMemoryGb}GiB{" "}
+                      {customGpu > 0 && `/ GPU ${customGpu}ea`}
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
