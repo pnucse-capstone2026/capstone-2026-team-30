@@ -26,10 +26,12 @@ export default function PipelinesPage() {
   const user = useAuthStore((state) => state.user);
   const liveClusters = useDataStore((state) => state.clusters);
   const fetchClusters = useDataStore((state) => state.fetchClusters);
-
-  const [selectedClusterId, setSelectedClusterId] = useState<string>(
-    () => useDataStore.getState().clusters?.[0]?.id || "default",
+  const globalClusterId = useDataStore((state) => state.selectedClusterId);
+  const setGlobalClusterId = useDataStore(
+    (state) => state.setSelectedClusterId,
   );
+
+  const selectedClusterId = globalClusterId || liveClusters?.[0]?.id || "";
   const [selectedNamespace, setSelectedNamespace] =
     useState<string>("kubeflow");
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
@@ -41,14 +43,7 @@ export default function PipelinesPage() {
   } | null>(null);
 
   useEffect(() => {
-    void (async () => {
-      const data = await fetchClusters();
-      if (Array.isArray(data) && data.length > 0) {
-        setSelectedClusterId((prev) =>
-          prev === "default" ? data[0].id : prev,
-        );
-      }
-    })();
+    void fetchClusters();
   }, [fetchClusters]);
 
   const clusters = liveClusters ?? [];
@@ -105,7 +100,7 @@ export default function PipelinesPage() {
               <span className="text-sm font-medium">대상 클러스터:</span>
               <select
                 value={selectedClusterId}
-                onChange={(e) => setSelectedClusterId(e.target.value)}
+                onChange={(e) => setGlobalClusterId(e.target.value)}
                 className="h-9 px-3 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 {clusters.map((c) => (
