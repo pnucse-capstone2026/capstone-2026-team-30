@@ -17,6 +17,7 @@ describe("PoliciesController", () => {
   it.each([
     ["list", "policies.read"],
     ["getDetail", "policies.read"],
+    ["create", "policies.write"],
   ])("declares %s permission as %s", (method, permission) => {
     expect(
       Reflect.getMetadata(
@@ -68,5 +69,32 @@ describe("PoliciesController", () => {
       user,
       "payments",
     );
+  });
+
+  it("delegates create call to service", async () => {
+    const service = {
+      list: jest.fn(),
+      getDetail: jest.fn(),
+      create: jest.fn().mockResolvedValue({ name: "require-resource-limits" }),
+    };
+    const controller = new PoliciesController(service as never);
+    const user: AuthenticatedUser = {
+      id: "user-1",
+      email: "user@example.com",
+      role: Role.ADMIN,
+      clusterIds: ["cluster-1"],
+    };
+    const dto = {
+      name: "require-resource-limits",
+      clusterId: "cluster-1",
+      scope: "ClusterPolicy" as const,
+      type: "validate" as const,
+      mode: "enforce" as const,
+      ruleName: "check-limits",
+      matchKinds: "Pod",
+    };
+
+    await controller.create(user, dto);
+    expect(service.create).toHaveBeenCalledWith(dto, user);
   });
 });

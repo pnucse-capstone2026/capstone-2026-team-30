@@ -1,4 +1,12 @@
-import { Controller, Get, Param, Query, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from "@nestjs/common";
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -10,6 +18,7 @@ import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import { RequirePermissions } from "../auth/decorators/require-permissions.decorator";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { PermissionsGuard } from "../auth/guards/permissions.guard";
+import { CreatePolicyDto } from "./dto/create-policy.dto";
 import { ListPoliciesQueryDto } from "./dto/list-policies-query.dto";
 import { PolicyDetailDto } from "./dto/policy-detail.dto";
 import { PolicySummaryDto } from "./dto/policy-summary.dto";
@@ -71,5 +80,27 @@ export class PoliciesController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<PolicyDetailDto> {
     return this.service.getDetail(clusterId, name, user, namespace);
+  }
+
+  /**
+   * 신규 Kyverno 정책을 클러스터에 배포(생성)합니다.
+   *
+   * @param user 인증된 요청자 정보
+   * @param dto 정책 생성 요청 DTO
+   * @returns 생성된 정책 상세 명세 DTO
+   */
+  @Post()
+  @RequirePermissions("policies.write")
+  @ApiOperation({ summary: "신규 Kyverno 정책 배포(생성)" })
+  @ApiResponse({
+    status: 201,
+    description: "정책 생성 성공",
+    type: PolicyDetailDto,
+  })
+  create(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CreatePolicyDto,
+  ): Promise<PolicyDetailDto> {
+    return this.service.create(dto, user);
   }
 }

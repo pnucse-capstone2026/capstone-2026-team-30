@@ -13,4 +13,16 @@ export const POLICY_ERROR = {
     code: "POLICY_LOOKUP_FAILED",
     message: "Failed to retrieve Kyverno policies from Kubernetes cluster.",
   },
+  ALREADY_EXISTS: {
+    code: "POLICY_ALREADY_EXISTS",
+    message: "A policy with the same name already exists in the cluster.",
+  },
+  INVALID_SPEC: {
+    code: "POLICY_INVALID_SPEC",
+    message: "The provided Kyverno policy specification is invalid.",
+  },
+  CREATE_FAILED: {
+    code: "POLICY_CREATE_FAILED",
+    message: "Failed to create Kyverno policy in Kubernetes cluster.",
+  },
 } as const satisfies Record<string, BusinessErrorDefinition>;

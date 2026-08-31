@@ -220,6 +220,52 @@ export class KyvernoAdapter {
   }
 
   /**
+   * 대상 클러스터에 신규 ClusterPolicy 리소스를 생성합니다.
+   *
+   * @param clusterId 대상 클러스터 식별자
+   * @param manifest ClusterPolicy K8s 매니페스트 객체
+   * @returns 생성된 ClusterPolicy K8s 리소스 객체
+   */
+  async createClusterPolicy(
+    clusterId: string,
+    manifest: Record<string, unknown>,
+  ): Promise<KubeObject> {
+    const connection = this.clusters.get(clusterId);
+    const result = await connection.customObjectsApi.createClusterCustomObject({
+      group: KYVERNO_GROUP,
+      version: POLICY_VERSION,
+      plural: POLICY_PLURAL,
+      body: manifest,
+    });
+    return result as KubeObject;
+  }
+
+  /**
+   * 대상 클러스터의 특정 네임스페이스에 신규 Policy 리소스를 생성합니다.
+   *
+   * @param clusterId 대상 클러스터 식별자
+   * @param namespace 네임스페이스
+   * @param manifest Policy K8s 매니페스트 객체
+   * @returns 생성된 Policy K8s 리소스 객체
+   */
+  async createNamespacedPolicy(
+    clusterId: string,
+    namespace: string,
+    manifest: Record<string, unknown>,
+  ): Promise<KubeObject> {
+    const connection = this.clusters.get(clusterId);
+    const result =
+      await connection.customObjectsApi.createNamespacedCustomObject({
+        group: KYVERNO_GROUP,
+        version: POLICY_VERSION,
+        namespace,
+        plural: "policies",
+        body: manifest,
+      });
+    return result as KubeObject;
+  }
+
+  /**
    * 대상 클러스터의 모든 ClusterPolicy(클러스터 전체 범위 정책) 목록을 조회합니다.
    *
    * @param clusterId 조회 대상 클러스터 식별자

@@ -6,6 +6,7 @@ import {
   ClusterProvider,
 } from "../kubernetes/cluster-provider";
 import { KyvernoAdapter } from "../kubernetes/kyverno.adapter";
+import { CreatePolicyDto } from "./dto/create-policy.dto";
 import {
   ListPoliciesQueryDto,
   PolicyScopeFilter,
@@ -179,6 +180,123 @@ export class PoliciesService {
       ...summary,
       spec: rawPolicy.spec ?? {},
       autogenRules,
+      rawJson: rawPolicy,
+    };
+  }
+
+  /**
+   * 신규 Kyverno 정책을 클러스터에 배포(생성)합니다.
+   *
+   * @param dto 정책 생성 요청 DTO
+   * @param user 인증된 요청자 정보
+   * @returns 생성된 정책 상세 정보 DTO
+   * @throws {BusinessException} 클러스터 미인가, 필수값 누락, 이미 존재하는 정책, 생성 실패 시
+   */
+  async create(
+    dto: CreatePolicyDto,
+    user: AuthenticatedUser,
+  ): Promise<PolicyDetailDto> {
+    const cluster = this.validateClusterAccess(user, dto.clusterId);
+
+    if (dto.scope === "Policy" && !dto.namespace?.trim()) {
+      throw new BusinessException(POLICY_ERROR.INVALID_SPEC, {
+        context: { reason: "Namespace is required for namespaced Policy." },
+      });
+    }
+
+    const kinds = dto.matchKinds
+      .split(",")
+      .map((kind) => kind.trim())
+      .filter(Boolean);
+
+    const manifest: Record<string, unknown> = {
+      apiVersion: "kyverno.io/v1",
+      kind: dto.scope,
+      metadata: {
+        name: dto.name.trim(),
+        ...(dto.scope === "Policy" && dto.namespace
+          ? { namespace: dto.namespace.trim() }
+          : {}),
+        annotations: {
+          ...(dto.description?.trim()
+            ? { "policies.kyverno.io/description": dto.description.trim() }
+            : {}),
+        },
+      },
+      spec: {
+        validationFailureAction: dto.mode === "enforce" ? "Enforce" : "Audit",
+        background: true,
+        rules: [
+          {
+            name: dto.ruleName.trim(),
+            match: {
+              any: [
+                {
+                  resources: {
+                    kinds: kinds.length > 0 ? kinds : ["Pod"],
+                  },
+                },
+              ],
+            },
+            [dto.type]: {
+              message:
+                dto.message?.trim() ||
+                dto.description?.trim() ||
+                "Policy rule condition not satisfied",
+              pattern: {
+                metadata: {
+                  labels: {
+                    app: "?*",
+                  },
+                },
+              },
+            },
+          },
+        ],
+      },
+    };
+
+    let rawPolicy: KubePolicyRaw;
+    try {
+      if (dto.scope === "Policy") {
+        rawPolicy = (await this.kyvernoAdapter.createNamespacedPolicy(
+          dto.clusterId,
+          dto.namespace!.trim(),
+          manifest,
+        )) as KubePolicyRaw;
+      } else {
+        rawPolicy = (await this.kyvernoAdapter.createClusterPolicy(
+          dto.clusterId,
+          manifest,
+        )) as KubePolicyRaw;
+      }
+    } catch (error) {
+      const code = (error as { code?: number })?.code;
+      if (code === 409) {
+        throw new BusinessException(POLICY_ERROR.ALREADY_EXISTS, {
+          cause: error,
+          context: { clusterId: dto.clusterId, name: dto.name },
+        });
+      }
+      if (code === 400) {
+        throw new BusinessException(POLICY_ERROR.INVALID_SPEC, {
+          cause: error,
+          context: { clusterId: dto.clusterId, name: dto.name },
+        });
+      }
+      throw new BusinessException(POLICY_ERROR.CREATE_FAILED, {
+        cause: error,
+        context: { clusterId: dto.clusterId, name: dto.name },
+      });
+    }
+
+    const summary = this.mapToSummary(rawPolicy, cluster, dto.scope);
+    return {
+      ...summary,
+      spec:
+        (rawPolicy.spec as Record<string, unknown>) ??
+        (manifest.spec as Record<string, unknown>),
+      autogenRules: [],
       rawJson: rawPolicy,
     };
   }

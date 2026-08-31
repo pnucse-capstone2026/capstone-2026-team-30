@@ -81,6 +81,10 @@ describe("PoliciesService", () => {
         .mockResolvedValue([mockNamespacedPolicyRaw]),
       getClusterPolicy: jest.fn().mockResolvedValue(mockClusterPolicyRaw),
       getNamespacedPolicy: jest.fn().mockResolvedValue(mockNamespacedPolicyRaw),
+      createClusterPolicy: jest.fn().mockResolvedValue(mockClusterPolicyRaw),
+      createNamespacedPolicy: jest
+        .fn()
+        .mockResolvedValue(mockNamespacedPolicyRaw),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -178,6 +182,102 @@ describe("PoliciesService", () => {
       await expect(
         service.getDetail("cluster-1", "non-existent-policy", mockUser),
       ).rejects.toThrow(new BusinessException(POLICY_ERROR.NOT_FOUND));
+    });
+  });
+
+  describe("create", () => {
+    it("ClusterPolicy 신규 생성을 정상 수행하고 상세 정보를 반환한다", async () => {
+      const result = await service.create(
+        {
+          name: "disallow-latest-tag",
+          clusterId: "cluster-1",
+          scope: "ClusterPolicy",
+          type: "validate",
+          mode: "enforce",
+          ruleName: "require-image-tag",
+          matchKinds: "Pod, Deployment",
+          description: "Disallow latest tag",
+        },
+        mockUser,
+      );
+
+      expect(result).toBeDefined();
+      expect(result.name).toBe("disallow-latest-tag");
+      expect(mockKyvernoAdapter.createClusterPolicy).toHaveBeenCalled();
+    });
+
+    it("Policy(Namespaced) 신규 생성을 정상 수행한다", async () => {
+      const result = await service.create(
+        {
+          name: "require-team-label",
+          clusterId: "cluster-1",
+          scope: "Policy",
+          namespace: "payments",
+          type: "validate",
+          mode: "audit",
+          ruleName: "check-team-label",
+          matchKinds: "Pod",
+        },
+        mockUser,
+      );
+
+      expect(result).toBeDefined();
+      expect(mockKyvernoAdapter.createNamespacedPolicy).toHaveBeenCalled();
+    });
+
+    it("Namespaced Policy에서 namespace가 누락된 경우 BusinessException(INVALID_SPEC)을 던진다", async () => {
+      await expect(
+        service.create(
+          {
+            name: "require-team-label",
+            clusterId: "cluster-1",
+            scope: "Policy",
+            type: "validate",
+            mode: "audit",
+            ruleName: "check-team-label",
+            matchKinds: "Pod",
+          },
+          mockUser,
+        ),
+      ).rejects.toThrow(new BusinessException(POLICY_ERROR.INVALID_SPEC));
+    });
+
+    it("인가되지 않은 클러스터에 정책 생성 시도 시 BusinessException을 던진다", async () => {
+      await expect(
+        service.create(
+          {
+            name: "require-team-label",
+            clusterId: "cluster-3",
+            scope: "ClusterPolicy",
+            type: "validate",
+            mode: "audit",
+            ruleName: "check-team-label",
+            matchKinds: "Pod",
+          },
+          mockUser,
+        ),
+      ).rejects.toThrow(BusinessException);
+    });
+
+    it("클러스터에 동일 이름의 정책이 이미 존재할 경우 ALREADY_EXISTS를 던진다", async () => {
+      (mockKyvernoAdapter.createClusterPolicy as jest.Mock).mockRejectedValue({
+        code: 409,
+      });
+
+      await expect(
+        service.create(
+          {
+            name: "disallow-latest-tag",
+            clusterId: "cluster-1",
+            scope: "ClusterPolicy",
+            type: "validate",
+            mode: "enforce",
+            ruleName: "require-image-tag",
+            matchKinds: "Pod",
+          },
+          mockUser,
+        ),
+      ).rejects.toThrow(new BusinessException(POLICY_ERROR.ALREADY_EXISTS));
     });
   });
 });
