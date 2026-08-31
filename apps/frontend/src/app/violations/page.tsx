@@ -1,15 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
+  ArrowRight,
   CheckCircle2,
   Clock3,
-  ArrowRight,
   FilePlus2,
   Filter,
+  RefreshCw,
   Search,
   ShieldAlert,
   XCircle,
@@ -20,14 +21,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuthStore } from "@/lib/auth-store";
+import { useDataStore } from "@/lib/data-store";
 import {
   exceptionClassName,
-  getViolations,
   policyViolations,
   severityClassName,
   statusClassName,
   type ExceptionStatus,
-  type PolicyViolation,
   type ViolationSeverity,
   type ViolationStatus,
 } from "@/lib/policy-violations";
@@ -129,8 +130,6 @@ function MyViolationsContent() {
     (searchParams.get("exceptionStatus") as "all" | ExceptionStatus) || "all";
   const initialQuery = searchParams.get("query") || "";
 
-  const [violations, setViolations] =
-    useState<PolicyViolation[]>(policyViolations);
   const [query, setQuery] = useState(initialQuery);
   const [cluster, setCluster] = useState(initialCluster);
   const [policy, setPolicy] = useState(initialPolicy);
@@ -142,6 +141,13 @@ function MyViolationsContent() {
   const [exceptionStatus, setExceptionStatus] = useState<
     "all" | ExceptionStatus
   >(initialExceptionStatus);
+
+  const liveViolations = useDataStore((state) => state.violations);
+  const fetchViolations = useDataStore((state) => state.fetchViolations);
+  const violationsLoading = useDataStore((state) => state.violationsLoading);
+
+  const authStatus = useAuthStore((state) => state.status);
+  const initializeAuth = useAuthStore((state) => state.initialize);
 
   // URL 쿼리 파라미터 변경 시 필터 상태를 동기화합니다.
   useEffect(() => {
@@ -171,17 +177,24 @@ function MyViolationsContent() {
     }
   }, [searchParams]);
 
+  /**
+   * 백엔드 API에서 실시간 정책 위반 목록을 조회합니다.
+   * 세션 복원 후 최신 위반 이력을 갱신합니다.
+   */
+  const loadViolations = useCallback(async () => {
+    try {
+      await initializeAuth();
+      await fetchViolations(true);
+    } catch {
+      // 백엔드 연동 실패 시 fallback 처리
+    }
+  }, [fetchViolations, initializeAuth]);
+
   useEffect(() => {
-    let isMounted = true;
-    getViolations().then((data) => {
-      if (isMounted && data.length > 0) {
-        setViolations(data);
-      }
-    });
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    void loadViolations();
+  }, [authStatus, loadViolations]);
+
+  const violations = liveViolations ?? policyViolations;
 
   const clusters = useMemo(() => {
     const list = Array.from(
@@ -263,6 +276,9 @@ function MyViolationsContent() {
     (item) => item.status === "resolved",
   ).length;
 
+  /**
+   * 모든 필터 검색 조건을 기본값으로 초기화합니다.
+   */
   function resetFilters() {
     setQuery("");
     setCluster("all");
@@ -279,15 +295,29 @@ function MyViolationsContent() {
       title="내 리소스 위반"
       description="내가 배포한 리소스가 어떤 정책을 위반했는지 확인합니다."
       actions={
-        <Button
-          asChild
-          className="hidden h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b] sm:inline-flex"
-        >
-          <Link href="/exceptions/new">
-            <FilePlus2 className="size-4" />
-            예외 신청
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="hidden h-10 rounded-xl border-slate-200 bg-white text-slate-700 sm:inline-flex"
+            onClick={() => void loadViolations()}
+            disabled={violationsLoading}
+          >
+            <RefreshCw
+              className={`size-4 ${violationsLoading ? "animate-spin" : ""}`}
+            />
+            새로고침
+          </Button>
+          <Button
+            asChild
+            className="hidden h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b] sm:inline-flex"
+          >
+            <Link href="/exceptions/new">
+              <FilePlus2 className="size-4" />
+              예외 신청
+            </Link>
+          </Button>
+        </div>
       }
     >
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -297,6 +327,7 @@ function MyViolationsContent() {
           detail="내 리소스 기준"
           icon={ShieldAlert}
           className="bg-amber-50 text-amber-600"
+          loading={liveViolations === null}
         />
         <SummaryCard
           label="우선 확인"
@@ -304,6 +335,7 @@ function MyViolationsContent() {
           detail="긴급 또는 높음"
           icon={AlertTriangle}
           className="bg-rose-50 text-rose-600"
+          loading={liveViolations === null}
         />
         <SummaryCard
           label="예외 진행"
@@ -311,6 +343,7 @@ function MyViolationsContent() {
           detail="요청 또는 승인됨"
           icon={Clock3}
           className="bg-blue-50 text-blue-600"
+          loading={liveViolations === null}
         />
         <SummaryCard
           label="해결 완료"
@@ -318,6 +351,7 @@ function MyViolationsContent() {
           detail={`수정 필요 ${openCount}건`}
           icon={CheckCircle2}
           className="bg-emerald-50 text-emerald-600"
+          loading={liveViolations === null}
         />
       </section>
 
@@ -438,107 +472,144 @@ function MyViolationsContent() {
         </div>
 
         <div className="divide-y divide-slate-100">
-          {filteredViolations.map((violation) => {
-            const copy = violationCopy[violation.id];
-
-            return (
-              <article
-                key={violation.id}
-                className="grid gap-4 px-5 py-5 hover:bg-slate-50/70 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.85fr)_auto] sm:px-6"
-              >
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge className={severityClassName[violation.severity]}>
-                      {severityLabel[violation.severity]}
-                    </Badge>
-                    <Badge className={statusClassName[violation.status]}>
-                      {violation.status === "resolved" ? (
-                        <CheckCircle2 className="size-3" />
-                      ) : violation.status === "open" ? (
-                        <XCircle className="size-3" />
-                      ) : (
-                        <Clock3 className="size-3" />
-                      )}
-                      {statusLabel[violation.status]}
-                    </Badge>
-                    <Badge
-                      className={exceptionClassName[violation.exceptionStatus]}
-                    >
-                      {exceptionLabel[violation.exceptionStatus]}
-                    </Badge>
+          {liveViolations === null
+            ? [1, 2, 3].map((key) => (
+                <article
+                  key={key}
+                  className="grid gap-4 px-5 py-5 sm:px-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.85fr)_auto]"
+                >
+                  <div className="min-w-0 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-5 w-16 rounded-lg" />
+                      <Skeleton className="h-5 w-20 rounded-lg" />
+                      <Skeleton className="h-5 w-20 rounded-lg" />
+                    </div>
+                    <Skeleton className="h-6 w-3/4 rounded-lg" />
+                    <Skeleton className="h-4 w-1/2 rounded-lg" />
+                    <Skeleton className="h-10 w-full rounded-lg" />
                   </div>
-                  <h3 className="mt-3 truncate text-base font-semibold text-slate-950">
-                    {violation.policyName}
-                  </h3>
-                  <p className="mt-1 text-xs text-slate-400">
-                    {violation.ruleName} · {violation.detectedAt}
-                  </p>
-                  <p className="mt-3 text-sm leading-6 text-slate-600">
-                    {copy?.message ?? violation.message}
-                  </p>
-                </div>
 
-                <dl className="grid content-start gap-2 text-xs">
-                  <InfoRow
-                    label="대상 리소스"
-                    value={`${violation.resourceKind} / ${violation.resourceName}`}
-                  />
-                  <InfoRow
-                    label="위치"
-                    value={`${violation.clusterName} / ${violation.namespace}`}
-                  />
-                  <InfoRow label="문제 경로" value={violation.resourcePath} />
-                  <div className="rounded-xl bg-slate-50 px-3 py-2">
-                    <dt className="text-slate-500">권장 조치</dt>
-                    <dd className="mt-1 leading-5 text-slate-800">
-                      {copy?.recommendation ?? violation.recommendation}
-                    </dd>
+                  <div className="grid content-start gap-2">
+                    <Skeleton className="h-8 w-full rounded-xl" />
+                    <Skeleton className="h-8 w-full rounded-xl" />
+                    <Skeleton className="h-8 w-full rounded-xl" />
+                    <Skeleton className="h-14 w-full rounded-xl" />
                   </div>
-                </dl>
 
-                <div className="flex flex-wrap items-start gap-2 xl:justify-end">
-                  <Button
-                    asChild
-                    variant="outline"
-                    className="h-9 rounded-xl border-slate-200 bg-white"
+                  <div className="flex flex-wrap items-start gap-2 xl:justify-end">
+                    <Skeleton className="h-9 w-24 rounded-xl" />
+                    <Skeleton className="h-9 w-24 rounded-xl" />
+                  </div>
+                </article>
+              ))
+            : filteredViolations.map((violation) => {
+                const copy = violationCopy[violation.id];
+
+                return (
+                  <article
+                    key={violation.id}
+                    className="grid gap-4 px-5 py-5 hover:bg-slate-50/70 sm:px-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.85fr)_auto]"
                   >
-                    <Link href={`/violations/${violation.id}`}>
-                      상세 보기
-                      <ArrowRight className="size-3.5" />
-                    </Link>
-                  </Button>
-                  {violation.relatedExceptionId ? (
-                    <Button
-                      asChild
-                      variant="outline"
-                      className="h-9 rounded-xl border-slate-200 bg-white"
-                    >
-                      <Link
-                        href={`/exceptions/${violation.relatedExceptionId}`}
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge
+                          className={severityClassName[violation.severity]}
+                        >
+                          {severityLabel[violation.severity]}
+                        </Badge>
+                        <Badge className={statusClassName[violation.status]}>
+                          {violation.status === "resolved" ? (
+                            <CheckCircle2 className="size-3" />
+                          ) : violation.status === "open" ? (
+                            <XCircle className="size-3" />
+                          ) : (
+                            <Clock3 className="size-3" />
+                          )}
+                          {statusLabel[violation.status]}
+                        </Badge>
+                        <Badge
+                          className={
+                            exceptionClassName[violation.exceptionStatus]
+                          }
+                        >
+                          {exceptionLabel[violation.exceptionStatus]}
+                        </Badge>
+                      </div>
+                      <h3 className="mt-3 truncate text-base font-semibold text-slate-950">
+                        {violation.policyName}
+                      </h3>
+                      <p className="mt-1 text-xs text-slate-400">
+                        {violation.ruleName} · {violation.detectedAt}
+                      </p>
+                      <p className="mt-3 text-sm leading-6 text-slate-600">
+                        {copy?.message ?? violation.message}
+                      </p>
+                    </div>
+
+                    <dl className="grid content-start gap-2 text-xs">
+                      <InfoRow
+                        label="대상 리소스"
+                        value={`${violation.resourceKind} / ${violation.resourceName}`}
+                      />
+                      <InfoRow
+                        label="위치"
+                        value={`${violation.clusterName} / ${violation.namespace}`}
+                      />
+                      <InfoRow
+                        label="문제 경로"
+                        value={violation.resourcePath}
+                      />
+                      <div className="rounded-xl bg-slate-50 px-3 py-2">
+                        <dt className="text-slate-500">권장 조치</dt>
+                        <dd className="mt-1 leading-5 text-slate-800">
+                          {copy?.recommendation ?? violation.recommendation}
+                        </dd>
+                      </div>
+                    </dl>
+
+                    <div className="flex flex-wrap items-start gap-2 xl:justify-end">
+                      <Button
+                        asChild
+                        variant="outline"
+                        className="h-9 rounded-xl border-slate-200 bg-white"
                       >
-                        내 신청 보기
-                      </Link>
-                    </Button>
-                  ) : (
-                    <Button
-                      asChild
-                      className="h-9 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]"
-                    >
-                      <Link
-                        href={`/exceptions/new?policy=${encodeURIComponent(violation.policyName)}&rule=${encodeURIComponent(violation.ruleName)}&cluster=${encodeURIComponent(violation.clusterId || violation.clusterName)}&resource=${encodeURIComponent(violation.resourceName)}&kind=${encodeURIComponent(violation.resourceKind)}&namespace=${encodeURIComponent(violation.namespace || "")}`}
-                      >
-                        <FilePlus2 className="size-4" />
-                        예외 신청
-                      </Link>
-                    </Button>
-                  )}
-                </div>
-              </article>
-            );
-          })}
+                        <Link href={`/violations/${violation.id}`}>
+                          상세 보기
+                          <ArrowRight className="size-3.5" />
+                        </Link>
+                      </Button>
+                      {violation.relatedExceptionId ? (
+                        <Button
+                          asChild
+                          variant="outline"
+                          className="h-9 rounded-xl border-slate-200 bg-white"
+                        >
+                          <Link
+                            href={`/exceptions/${violation.relatedExceptionId}`}
+                          >
+                            내 신청 보기
+                          </Link>
+                        </Button>
+                      ) : (
+                        <Button
+                          asChild
+                          className="h-9 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]"
+                        >
+                          <Link
+                            href={`/exceptions/new?policy=${encodeURIComponent(violation.policyName)}&rule=${encodeURIComponent(violation.ruleName)}&cluster=${encodeURIComponent(violation.clusterId || violation.clusterName)}&resource=${encodeURIComponent(violation.resourceName)}&kind=${encodeURIComponent(violation.resourceKind)}&namespace=${encodeURIComponent(violation.namespace || "")}`}
+                          >
+                            <FilePlus2 className="size-4" />
+                            예외 신청
+                          </Link>
+                        </Button>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
         </div>
 
-        {filteredViolations.length === 0 ? (
+        {liveViolations !== null && filteredViolations.length === 0 ? (
           <div className="border-t border-slate-100 px-5 py-10 text-center text-sm text-slate-500">
             조건에 맞는 위반 리소스가 없습니다.
           </div>
@@ -578,18 +649,23 @@ export default function MyViolationsPage() {
   );
 }
 
+/**
+ * 요약 지표 카드 컴포넌트입니다.
+ */
 function SummaryCard({
   label,
   value,
   detail,
   icon: Icon,
   className,
+  loading,
 }: {
   label: string;
   value: string;
   detail: string;
   icon: typeof ShieldAlert;
   className: string;
+  loading?: boolean;
 }) {
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
@@ -601,12 +677,19 @@ function SummaryCard({
         </div>
       </div>
       <p className="mt-5 text-[13px] text-slate-500">{label}</p>
-      <p className="mt-1 text-3xl font-semibold tracking-tight">{value}</p>
+      {loading ? (
+        <Skeleton className="mt-1 h-9 w-20 rounded-lg" />
+      ) : (
+        <p className="mt-1 text-3xl font-semibold tracking-tight">{value}</p>
+      )}
       <p className="mt-2 text-[11px] text-slate-400">{detail}</p>
     </article>
   );
 }
 
+/**
+ * 드롭다운 필터 선택 컴포넌트입니다.
+ */
 function FilterSelect({
   label,
   value,
@@ -632,6 +715,9 @@ function FilterSelect({
   );
 }
 
+/**
+ * 상세 정보 항목 라인 컴포넌트입니다.
+ */
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-4 rounded-xl bg-slate-50 px-3 py-2">
