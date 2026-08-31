@@ -20,7 +20,8 @@ export function useNotebookPresets() {
   return useQuery({
     queryKey: ["notebook-presets"],
     queryFn: () => getNotebookPresets(),
-    staleTime: 1000 * 60 * 30, // 30 minutes
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -75,7 +76,8 @@ export function useNotebooks(clusterId: string, namespace: string = "default") {
     queryKey: ["notebooks", clusterId, namespace],
     queryFn: () => getNotebooks(clusterId, namespace),
     enabled: Boolean(clusterId),
-    staleTime: 1000 * 60 * 5, // 5분 동안 캐시 데이터를 fresh 상태로 유지하여 무분별한 리페치 방지
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
     placeholderData: keepPreviousData,
   });
 }

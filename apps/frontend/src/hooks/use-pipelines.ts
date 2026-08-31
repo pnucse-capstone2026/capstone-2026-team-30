@@ -22,7 +22,8 @@ export function usePipelineTemplates(clusterId: string = "default") {
   return useQuery({
     queryKey: ["pipeline-templates", clusterId],
     queryFn: () => getPipelineTemplates(clusterId),
-    staleTime: 1000 * 60 * 10,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -56,7 +57,8 @@ export function usePipelineRuns(
     queryKey: ["pipeline-runs", clusterId, namespace],
     queryFn: () => getPipelineRuns(clusterId, namespace),
     enabled: Boolean(clusterId),
-    staleTime: 1000 * 60 * 5,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
     placeholderData: keepPreviousData,
   });
 }
@@ -92,7 +94,8 @@ export function usePipelineRunDetail(
     queryKey: ["pipeline-run-detail", runId, clusterId, namespace],
     queryFn: () => getPipelineRunDetail(runId!, clusterId, namespace),
     enabled: Boolean(runId),
-    staleTime: 1000 * 60 * 5,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
     placeholderData: keepPreviousData,
   });
 }

@@ -54,7 +54,8 @@ export function useServingEndpoints(
     queryKey: ["serving-endpoints", clusterId, namespace],
     queryFn: () => getServingEndpoints(clusterId, namespace),
     enabled: Boolean(clusterId),
-    staleTime: 1000 * 60 * 5,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
     placeholderData: keepPreviousData,
   });
 }
