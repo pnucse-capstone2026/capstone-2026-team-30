@@ -313,7 +313,11 @@ describe("ViolationsService", () => {
       expect(result.status).toBe("inReview");
       expect(mockPrismaService.violationHistory.update).toHaveBeenCalledWith({
         where: { id: "existing-vio-1" },
-        data: { status: "inReview" },
+        data: {
+          status: "inReview",
+          resourceKind: "Pod",
+          resourceName: "payment-api-pod",
+        },
       });
       expect(mockPrismaService.auditLog.create).toHaveBeenCalled();
     });

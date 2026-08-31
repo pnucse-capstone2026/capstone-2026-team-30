@@ -123,7 +123,7 @@ function AdminViolationsContent() {
   const loadViolations = useCallback(async () => {
     try {
       await initializeAuth();
-      await fetchViolations();
+      await fetchViolations(true);
     } catch {
       // Graceful fallback
     }

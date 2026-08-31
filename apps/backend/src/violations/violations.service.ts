@@ -230,6 +230,63 @@ export class ViolationsService {
           cluster?.displayName ??
           dbRecord.targetClusterDisplayName ??
           dbRecord.targetClusterId;
+
+        let resourceKind = dbRecord.resourceKind ?? "Unknown";
+        let resourceName = dbRecord.resourceName ?? "Unknown";
+        let message = dbRecord.message;
+        let resourceSpec: Record<string, unknown> = {};
+        let rawResult: Record<string, unknown> = {};
+
+        // DB에 리소스명이 Unknown인 경우 K8s 라이브 리포트에서 일치하는 실제 리소스 정보 조회 보정
+        if (resourceName === "Unknown" || resourceKind === "Unknown") {
+          try {
+            const liveReports = [
+              ...(await this.kyvernoAdapter.listNamespacedPolicyReports(
+                dbRecord.targetClusterId,
+                dbRecord.namespace !== "cluster-wide"
+                  ? dbRecord.namespace
+                  : undefined,
+              )),
+              ...(await this.kyvernoAdapter.listClusterPolicyReports(
+                dbRecord.targetClusterId,
+              )),
+            ];
+
+            for (const rep of liveReports) {
+              const repRaw = rep as PolicyReportRaw;
+              const matchedResult = repRaw.results?.find(
+                (r) =>
+                  r.policy === dbRecord.policyName &&
+                  (r.rule === dbRecord.ruleName ||
+                    r.rule?.includes(dbRecord.ruleName) ||
+                    dbRecord.ruleName.includes(r.rule ?? "")),
+              );
+              if (matchedResult) {
+                const targetRes = matchedResult.resources?.[0];
+                if (targetRes?.name) resourceName = targetRes.name;
+                if (targetRes?.kind) resourceKind = targetRes.kind;
+                if (matchedResult.message) message = matchedResult.message;
+                rawResult = matchedResult as Record<string, unknown>;
+                resourceSpec = (targetRes as Record<string, unknown>) ?? {};
+                break;
+              }
+            }
+          } catch {
+            // 라이브 보정 실패 시 DB 기본값 유지
+          }
+        }
+
+        if (resourceKind === "Unknown") resourceKind = "Pod";
+        if (resourceName === "Unknown") {
+          const matchKindName = message?.match(
+            /(?:on|in|target|resource)\s+([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)/i,
+          );
+          if (matchKindName) {
+            resourceKind = matchKindName[1];
+            resourceName = matchKindName[2];
+          }
+        }
+
         const summary: ViolationSummaryDto = {
           id: dbRecord.id,
           clusterId: dbRecord.targetClusterId,
@@ -237,8 +294,8 @@ export class ViolationsService {
           namespace: dbRecord.namespace ?? "cluster-wide",
           policyName: dbRecord.policyName,
           ruleName: dbRecord.ruleName,
-          resourceKind: dbRecord.resourceKind ?? "Unknown",
-          resourceName: dbRecord.resourceName ?? "Unknown",
+          resourceKind,
+          resourceName,
           severity:
             (dbRecord.severity as
               | "critical"
@@ -249,7 +306,7 @@ export class ViolationsService {
           status:
             (dbRecord.status as "open" | "inReview" | "resolved") ?? "open",
           message:
-            dbRecord.message ??
+            message ??
             `[DB Fallback] Policy '${dbRecord.policyName}' rule '${dbRecord.ruleName}' violation recorded in cluster '${clusterDisplayName}'.`,
           detectedAt: dbRecord.occurredAt.toISOString(),
           reportName: "db-fallback",
@@ -262,8 +319,8 @@ export class ViolationsService {
         return {
           ...summary,
           recommendation: this.generateDefaultRecommendation(summary),
-          resourceSpec: {},
-          rawResult: {},
+          resourceSpec,
+          rawResult,
           events,
         };
       }
@@ -434,11 +491,19 @@ export class ViolationsService {
         where: { id: existing.id },
         data: {
           status: dto.status,
+          ...(currentDetail.resourceName &&
+          currentDetail.resourceName !== "Unknown"
+            ? {
+                resourceName: currentDetail.resourceName,
+                resourceKind: currentDetail.resourceKind,
+              }
+            : {}),
         },
       });
     } else {
       await this.prisma.violationHistory.create({
         data: {
+          id: normalizedId,
           targetClusterId,
           targetClusterDisplayName,
           policyName: currentDetail.policyName,
@@ -678,10 +743,37 @@ export class ViolationsService {
     const ruleName = result.rule ?? "unknown-rule";
 
     const targetResource = result.resources?.[0];
-    const resourceKind = targetResource?.kind ?? "Unknown";
-    const resourceName = targetResource?.name ?? "Unknown";
+    const properties = (result.properties as Record<string, string>) ?? {};
+
+    let resourceKind =
+      targetResource?.kind ||
+      properties["resource.kind"] ||
+      properties["kind"] ||
+      "";
+    let resourceName =
+      targetResource?.name ||
+      properties["resource.name"] ||
+      properties["name"] ||
+      "";
+
+    const rawMessage = result.message ?? "";
+    if (!resourceKind || !resourceName) {
+      const matchKindName = rawMessage.match(
+        /(?:on|in|target|resource)\s+([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)/i,
+      );
+      if (matchKindName) {
+        if (!resourceKind) resourceKind = matchKindName[1];
+        if (!resourceName) resourceName = matchKindName[2];
+      }
+    }
+    if (!resourceKind) resourceKind = "Pod";
+    if (!resourceName) resourceName = "Unknown";
+
     const namespace =
-      targetResource?.namespace ?? report.metadata?.namespace ?? "cluster-wide";
+      targetResource?.namespace ??
+      properties["resource.namespace"] ??
+      report.metadata?.namespace ??
+      "cluster-wide";
 
     let severity: "critical" | "high" | "medium" | "low" | "info" = "medium";
     const rawSev = result.severity?.toLowerCase();

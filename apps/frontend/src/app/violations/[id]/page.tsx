@@ -111,18 +111,18 @@ export default function MyViolationDetailPage({
     setIsLoading(true);
     try {
       await initializeAuth();
-      const freshViolations = await fetchViolations();
-      const foundInStore = freshViolations.find((v) => v.id === id);
-      if (foundInStore) {
-        setViolation(foundInStore);
-        setIsLoading(false);
-        return;
-      }
-
       const clusterIdFromKey = id.includes(":") ? id.split(":")[0] : "";
       const detailFromApi = await getViolationDetail(clusterIdFromKey, id);
       if (detailFromApi) {
         setViolation(detailFromApi);
+        setIsLoading(false);
+        return;
+      }
+
+      const freshViolations = await fetchViolations(true);
+      const foundInStore = freshViolations.find((v) => v.id === id);
+      if (foundInStore) {
+        setViolation(foundInStore);
         setIsLoading(false);
         return;
       }

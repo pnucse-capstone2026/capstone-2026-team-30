@@ -603,10 +603,36 @@ export class KyvernoAdapter {
         const resources =
           (result.resources as Array<Record<string, unknown>>) ?? [];
         const targetResource = resources[0];
-        const resourceKind = (targetResource?.kind as string) ?? "Unknown";
-        const resourceName = (targetResource?.name as string) ?? "Unknown";
+        const properties = (result.properties as Record<string, string>) ?? {};
+
+        // 리소스명 및 종류 파싱 (resources 배열 -> properties -> 메시지 정규식 fallback)
+        let resourceKind =
+          (targetResource?.kind as string) ||
+          properties["resource.kind"] ||
+          properties["kind"] ||
+          "";
+        let resourceName =
+          (targetResource?.name as string) ||
+          properties["resource.name"] ||
+          properties["name"] ||
+          "";
+
+        const rawMessage = (result.message as string) ?? "";
+        if (!resourceKind || !resourceName) {
+          const matchKindName = rawMessage.match(
+            /(?:on|in|target|resource)\s+([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)/i,
+          );
+          if (matchKindName) {
+            if (!resourceKind) resourceKind = matchKindName[1];
+            if (!resourceName) resourceName = matchKindName[2];
+          }
+        }
+        if (!resourceKind) resourceKind = "Pod";
+        if (!resourceName) resourceName = "Unknown";
+
         const namespace =
           (targetResource?.namespace as string) ??
+          properties["resource.namespace"] ??
           (metadata.namespace as string) ??
           "cluster-wide";
 
