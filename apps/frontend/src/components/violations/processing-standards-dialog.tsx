@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Clock, RotateCcw, Save, Sliders, Users } from "lucide-react";
+import {
+  Clock,
+  RotateCcw,
+  Save,
+  ShieldCheck,
+  Sliders,
+  Users,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -25,23 +32,28 @@ import {
 interface ProcessingStandardsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  defaultTab?: "sla" | "assignment" | "approval";
 }
 
 export function ProcessingStandardsDialog({
   open,
   onOpenChange,
+  defaultTab = "sla",
 }: ProcessingStandardsDialogProps) {
   const [config, setConfig] = useState<ProcessingStandardsConfig>(
     DEFAULT_PROCESSING_STANDARDS,
   );
-  const [activeTab, setActiveTab] = useState<"sla" | "assignment">("sla");
+  const [activeTab, setActiveTab] = useState<"sla" | "assignment" | "approval">(
+    defaultTab,
+  );
 
-  // 모달이 열릴 때 저장된 설정값 불러오기
+  // 모달이 열릴 때 저장된 설정값 불러오기 및 기본 탭 적용
   useEffect(() => {
     if (open) {
       setConfig(loadProcessingStandards());
+      setActiveTab(defaultTab);
     }
-  }, [open]);
+  }, [open, defaultTab]);
 
   const handleSLAChange = (
     key: keyof ProcessingStandardsConfig["sla"],
@@ -69,9 +81,22 @@ export function ProcessingStandardsDialog({
     }));
   };
 
+  const handleApprovalChange = (
+    key: keyof ProcessingStandardsConfig["approval"],
+    val: number | boolean | string,
+  ) => {
+    setConfig((prev) => ({
+      ...prev,
+      approval: {
+        ...prev.approval,
+        [key]: val,
+      },
+    }));
+  };
+
   const handleSave = () => {
     saveProcessingStandards(config);
-    toast.success("정책 오류 처리 기준이 성공적으로 저장되었습니다.");
+    toast.success("처리 및 승인 기준이 성공적으로 저장되었습니다.");
     onOpenChange(false);
   };
 
@@ -90,10 +115,11 @@ export function ProcessingStandardsDialog({
             </div>
             <div>
               <DialogTitle className="text-lg font-semibold">
-                정책 오류 처리 기준 설정
+                정책 오류 및 예외 처리 기준 설정
               </DialogTitle>
               <DialogDescription className="mt-0.5 text-xs text-slate-500">
-                심각도별 조치 권장 시간(SLA) 및 기본 담당 그룹을 관리합니다.
+                심각도별 조치 기한(SLA), 담당 그룹 및 예외 승인 판정 기준을
+                관리합니다.
               </DialogDescription>
             </div>
           </div>
@@ -124,6 +150,18 @@ export function ProcessingStandardsDialog({
           >
             <Users className="size-3.5" />
             담당 그룹 및 에스컬레이션
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("approval")}
+            className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 transition-colors ${
+              activeTab === "approval"
+                ? "border-[#0b2342] font-semibold text-[#0b2342] dark:border-blue-400 dark:text-blue-400"
+                : "border-transparent text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            <ShieldCheck className="size-3.5" />
+            예외 승인 기준
           </button>
         </div>
 
@@ -224,6 +262,141 @@ export function ProcessingStandardsDialog({
                     </p>
                   </div>
                 </label>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "approval" && (
+            <div className="space-y-4">
+              <p className="text-xs text-slate-500">
+                정책 예외 신청의 승인 요건, 최대 허용 유효기간 및 자동 승인
+                기준을 설정합니다.
+              </p>
+              <div className="space-y-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-900/50">
+                  <label className="block text-xs font-semibold text-slate-800 dark:text-slate-200">
+                    최대 허용 유효기간 (Maximum Validity Days)
+                  </label>
+                  <p className="mt-0.5 text-[11px] text-slate-500">
+                    예외 신청 시 설정 가능한 최대 허용 기간입니다.
+                  </p>
+                  <div className="mt-2.5 flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min={1}
+                      max={365}
+                      value={config.approval.maxValidityDays}
+                      onChange={(e) =>
+                        handleApprovalChange(
+                          "maxValidityDays",
+                          Math.max(1, parseInt(e.target.value, 10) || 1),
+                        )
+                      }
+                      className="h-9 w-28 rounded-lg bg-white text-xs dark:bg-slate-950"
+                    />
+                    <span className="text-xs text-slate-500">일</span>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3 dark:border-slate-800 dark:bg-slate-900/50">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-800 dark:text-slate-200">
+                      고위험(High/Critical) 승인 권한 역할
+                    </label>
+                    <p className="mt-0.5 text-[11px] text-slate-500">
+                      고위험 예외 신청 건을 최종 승인할 수 있는 최소 관리자 역할
+                    </p>
+                    <select
+                      value={config.approval.criticalRiskApprovalRole}
+                      onChange={(e) =>
+                        handleApprovalChange(
+                          "criticalRiskApprovalRole",
+                          e.target.value,
+                        )
+                      }
+                      className="mt-2 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200"
+                    >
+                      <option value="Security Admin">
+                        보안 관리자 (Security Admin)
+                      </option>
+                      <option value="Platform Lead">
+                        플랫폼 엔지니어링 리드 (Platform Lead)
+                      </option>
+                      <option value="CISO Group">
+                        CISO / 정보보호 책임 그룹 (CISO Group)
+                      </option>
+                    </select>
+                  </div>
+
+                  <label className="flex items-center gap-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+                    <input
+                      type="checkbox"
+                      checked={config.approval.requireCompensatingControl}
+                      onChange={(e) =>
+                        handleApprovalChange(
+                          "requireCompensatingControl",
+                          e.target.checked,
+                        )
+                      }
+                      className="size-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div>
+                      <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+                        필수 보안 통제(Compensating Control) 기재 의무화
+                      </span>
+                      <p className="text-[11px] text-slate-500">
+                        예외 신청 시 대체 보안 통제 대책이 작성되어야만 승인
+                        검토가 가능합니다.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+                    <input
+                      type="checkbox"
+                      checked={config.approval.autoApproveLowRisk}
+                      onChange={(e) =>
+                        handleApprovalChange(
+                          "autoApproveLowRisk",
+                          e.target.checked,
+                        )
+                      }
+                      className="size-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div>
+                      <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+                        낮음(Low) 위험도 예외 자동 승인
+                      </span>
+                      <p className="text-[11px] text-slate-500">
+                        위험도 등급이 낮음인 신청 건에 대해 관리자 수동 승인
+                        없이 즉시 활성화합니다.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+                    <input
+                      type="checkbox"
+                      checked={config.approval.allowEmergencyApproval}
+                      onChange={(e) =>
+                        handleApprovalChange(
+                          "allowEmergencyApproval",
+                          e.target.checked,
+                        )
+                      }
+                      className="size-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div>
+                      <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+                        긴급 승인(Emergency Approval) 권한 활성화
+                      </span>
+                      <p className="text-[11px] text-slate-500">
+                        서비스 장애 등 긴급 상황 시 사전 심의 절차를 단축하여
+                        승인할 수 있습니다.
+                      </p>
+                    </div>
+                  </label>
+                </div>
               </div>
             </div>
           )}

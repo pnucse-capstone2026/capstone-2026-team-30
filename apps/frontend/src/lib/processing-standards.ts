@@ -20,11 +20,21 @@ export interface AssignmentCriteria {
   autoAssignByNamespace: boolean;
 }
 
-// 3. 전체 처리 기준 설정 (Composite Config)
+// 3. 예외 승인 기준 설정 (Approval Criteria)
+export interface ApprovalCriteria {
+  maxValidityDays: number;
+  requireCompensatingControl: boolean;
+  allowEmergencyApproval: boolean;
+  autoApproveLowRisk: boolean;
+  criticalRiskApprovalRole: string;
+}
+
+// 4. 전체 처리 기준 설정 (Composite Config)
 // 추후 [key: string]: unknown 또는 새로운 섹션을 손쉽게 추가 가능
 export interface ProcessingStandardsConfig {
   sla: SLACriteria;
   assignment: AssignmentCriteria;
+  approval: ApprovalCriteria;
   // 향후 확장용 동적 메타데이터/추가 설정 레지스트리
   extraSettings?: Record<string, unknown>;
 }
@@ -42,6 +52,13 @@ export const DEFAULT_PROCESSING_STANDARDS: ProcessingStandardsConfig = {
   assignment: {
     defaultAssigneeGroup: "SecOps Team",
     autoAssignByNamespace: true,
+  },
+  approval: {
+    maxValidityDays: 30,
+    requireCompensatingControl: true,
+    allowEmergencyApproval: false,
+    autoApproveLowRisk: false,
+    criticalRiskApprovalRole: "Security Admin",
   },
 };
 
@@ -69,6 +86,10 @@ export function loadProcessingStandards(): ProcessingStandardsConfig {
       assignment: {
         ...DEFAULT_PROCESSING_STANDARDS.assignment,
         ...parsed.assignment,
+      },
+      approval: {
+        ...DEFAULT_PROCESSING_STANDARDS.approval,
+        ...parsed.approval,
       },
     };
   } catch {

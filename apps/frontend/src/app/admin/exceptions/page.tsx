@@ -8,10 +8,10 @@ import {
   Bell,
   CheckCircle2,
   Clock3,
-  Download,
   FileClock,
   Filter,
   Menu,
+  RefreshCw,
   Search,
   ShieldCheck,
   SlidersHorizontal,
@@ -20,6 +20,7 @@ import {
 
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar";
 import { NotificationDropdown } from "@/components/dashboard/notification-dropdown";
+import { ProcessingStandardsDialog } from "@/components/violations/processing-standards-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -85,6 +86,7 @@ export default function AdminExceptionsPage() {
   const [cluster, setCluster] = useState("all");
   const [namespace, setNamespace] = useState("all");
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isStandardsOpen, setIsStandardsOpen] = useState(false);
 
   const loadRequests = useCallback(async () => {
     setErrorMessage(null);
@@ -279,12 +281,15 @@ export default function AdminExceptionsPage() {
                 disabled={isRefreshing}
                 onClick={() => void loadRequests()}
               >
-                <Download
+                <RefreshCw
                   className={`size-4 ${isRefreshing ? "animate-spin" : ""}`}
                 />
                 {isRefreshing ? "불러오는 중..." : "새로고침"}
               </Button>
-              <Button className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]">
+              <Button
+                onClick={() => setIsStandardsOpen(true)}
+                className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]"
+              >
                 <SlidersHorizontal className="size-4" />
                 승인 기준 설정
               </Button>
@@ -609,6 +614,12 @@ export default function AdminExceptionsPage() {
           </section>
         </div>
       </div>
+
+      <ProcessingStandardsDialog
+        open={isStandardsOpen}
+        onOpenChange={setIsStandardsOpen}
+        defaultTab="approval"
+      />
     </main>
   );
 }
