@@ -15,6 +15,7 @@ import { getViolations, type PolicyViolation } from "@/lib/policy-violations";
 
 type DataState = {
   clusters: ClusterMetadata[] | null;
+  selectedClusterId: string | null;
   policies: KyvernoPolicy[] | null;
   violations: PolicyViolation[] | null;
   exceptions: ExceptionRequest[] | null;
@@ -26,6 +27,7 @@ type DataState = {
   exceptionsLoading: boolean;
   auditLogsLoading: boolean;
 
+  setSelectedClusterId: (id: string) => void;
   fetchClusters: (force?: boolean) => Promise<ClusterMetadata[]>;
   fetchPolicies: (force?: boolean) => Promise<KyvernoPolicy[]>;
   fetchViolations: (force?: boolean) => Promise<PolicyViolation[]>;
@@ -41,6 +43,7 @@ let auditLogsPromise: Promise<AuditLog[]> | null = null;
 
 export const useDataStore = create<DataState>((set, get) => ({
   clusters: null,
+  selectedClusterId: null,
   policies: null,
   violations: null,
   exceptions: null,
@@ -52,6 +55,10 @@ export const useDataStore = create<DataState>((set, get) => ({
   exceptionsLoading: false,
   auditLogsLoading: false,
 
+  setSelectedClusterId(id: string) {
+    set({ selectedClusterId: id });
+  },
+
   async fetchClusters(force = false) {
     const { clusters } = get();
     if (clusters !== null && !force) {
@@ -60,7 +67,12 @@ export const useDataStore = create<DataState>((set, get) => ({
         try {
           const fresh = await listClusterCatalog().catch(() => listClusters());
           if (Array.isArray(fresh)) {
-            set({ clusters: fresh });
+            set((state) => ({
+              clusters: fresh,
+              selectedClusterId:
+                state.selectedClusterId ||
+                (fresh.length > 0 ? fresh[0].id : null),
+            }));
           }
         } catch {
           // ignore background errors
@@ -79,7 +91,12 @@ export const useDataStore = create<DataState>((set, get) => ({
       try {
         const fresh = await listClusterCatalog().catch(() => listClusters());
         if (Array.isArray(fresh)) {
-          set({ clusters: fresh });
+          set((state) => ({
+            clusters: fresh,
+            selectedClusterId:
+              state.selectedClusterId ||
+              (fresh.length > 0 ? fresh[0].id : null),
+          }));
           return fresh;
         }
         return get().clusters ?? [];
