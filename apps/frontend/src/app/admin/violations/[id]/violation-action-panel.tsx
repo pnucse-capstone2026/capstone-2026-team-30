@@ -1,19 +1,29 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { CheckCircle2, Clock3, RefreshCw, XCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  CheckCircle2,
+  Clock3,
+  Loader2,
+  RefreshCw,
+  XCircle,
+} from "lucide-react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   statusClassName,
   statusLabel,
+  updateViolationStatus,
   type PolicyViolation,
   type ViolationStatus,
 } from "@/lib/policy-violations";
+import { useDataStore } from "@/lib/data-store";
 
 type ViolationActionPanelProps = {
   violation: PolicyViolation;
+  onStatusChange?: (updatedViolation: PolicyViolation) => void;
 };
 
 const statusIcon: Record<ViolationStatus, typeof XCircle> = {
@@ -22,34 +32,83 @@ const statusIcon: Record<ViolationStatus, typeof XCircle> = {
   resolved: CheckCircle2,
 };
 
-export function ViolationActionPanel({ violation }: ViolationActionPanelProps) {
+export function ViolationActionPanel({
+  violation,
+  onStatusChange,
+}: ViolationActionPanelProps) {
   const [status, setStatus] = useState<ViolationStatus>(violation.status);
-  const [checkedAt, setCheckedAt] = useState<string | null>(null);
+  const [events, setEvents] = useState(violation.events);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const fetchViolations = useDataStore((state) => state.fetchViolations);
+  const fetchAuditLogs = useDataStore((state) => state.fetchAuditLogs);
+
+  useEffect(() => {
+    setStatus(violation.status);
+    setEvents(violation.events);
+  }, [violation]);
 
   const StatusIcon = statusIcon[status];
-  const events = useMemo(
-    () => [
-      ...violation.events,
-      ...(checkedAt
-        ? [
-            {
-              label:
-                status === "resolved" ? "해결 완료 처리" : "검토 상태 변경",
-              at: checkedAt,
-              description:
-                status === "resolved"
-                  ? "관리자가 권장 조치 적용 후 해결 완료로 표시했습니다."
-                  : "관리자가 위반 항목을 검토 중 상태로 표시했습니다.",
-            },
-          ]
-        : []),
-    ],
-    [checkedAt, status, violation.events],
-  );
 
-  function updateStatus(nextStatus: ViolationStatus) {
-    setStatus(nextStatus);
-    setCheckedAt("2026-07-09");
+  async function handleStatusChange(
+    nextStatus: ViolationStatus,
+    note?: string,
+  ) {
+    if (isUpdating) return;
+    setIsUpdating(true);
+
+    try {
+      const updated = await updateViolationStatus(
+        violation.id,
+        nextStatus,
+        note,
+        violation.clusterId,
+      );
+
+      setStatus(updated.status);
+      setEvents(updated.events);
+      onStatusChange?.(updated);
+
+      // 글로벌 스토어 배경 동기화
+      void fetchViolations(true);
+      void fetchAuditLogs(true);
+
+      const actionText =
+        nextStatus === "resolved"
+          ? "해결 완료"
+          : nextStatus === "inReview"
+            ? "검토 중"
+            : "미처리(초기 상태)";
+      toast.success(
+        `정책 위반 상태가 '${actionText}'(으)로 업데이트되었습니다.`,
+      );
+    } catch (error) {
+      // API 실패 시 로컬 상태 업데이트 fallback
+      setStatus(nextStatus);
+      const nowStr = new Date().toLocaleString("ko-KR");
+      const fallbackEvents = [
+        ...events,
+        {
+          label:
+            nextStatus === "resolved"
+              ? "해결 완료 처리 (로컬)"
+              : nextStatus === "inReview"
+                ? "검토 상태 변경 (로컬)"
+                : "초기 상태 되돌리기 (로컬)",
+          at: nowStr,
+          description: `상태가 '${statusLabel[nextStatus]}'으로 변경되었습니다.`,
+        },
+      ];
+      setEvents(fallbackEvents);
+
+      const errMessage =
+        error instanceof Error
+          ? error.message
+          : "상태 변경 중 오류가 발생했습니다.";
+      toast.info(`화면 상태가 변경되었습니다. (${errMessage})`);
+    } finally {
+      setIsUpdating(false);
+    }
   }
 
   return (
@@ -59,7 +118,7 @@ export function ViolationActionPanel({ violation }: ViolationActionPanelProps) {
           <div>
             <h3 className="text-sm font-semibold">처리 상태 변경</h3>
             <p className="mt-1 text-xs text-slate-400">
-              현재 단계에서는 화면 상태만 변경됩니다.
+              상태 변경 시 감사 로그가 기록되고 백엔드에 즉시 영속화됩니다.
             </p>
           </div>
           <Badge className={statusClassName[status]}>
@@ -72,33 +131,50 @@ export function ViolationActionPanel({ violation }: ViolationActionPanelProps) {
           <Button
             variant="outline"
             className="h-10 justify-start rounded-xl border-slate-200 bg-white text-slate-700"
-            disabled={status === "inReview"}
-            onClick={() => updateStatus("inReview")}
+            disabled={status === "inReview" || isUpdating}
+            onClick={() => handleStatusChange("inReview", "관리자 검토 진행")}
           >
-            <Clock3 className="size-4" />
+            {isUpdating && status !== "inReview" ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Clock3 className="size-4" />
+            )}
             검토 중으로 변경
           </Button>
           <Button
             className="h-10 justify-start rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]"
-            disabled={status === "resolved"}
-            onClick={() => updateStatus("resolved")}
+            disabled={status === "resolved" || isUpdating}
+            onClick={() =>
+              handleStatusChange("resolved", "조치 완료 후 정책 재검사 확인")
+            }
           >
-            <CheckCircle2 className="size-4" />
+            {isUpdating && status !== "resolved" ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <CheckCircle2 className="size-4" />
+            )}
             해결 완료 처리
           </Button>
           <Button
             variant="outline"
             className="h-10 justify-start rounded-xl border-slate-200 bg-white text-slate-700"
-            onClick={() => updateStatus(violation.status)}
+            disabled={status === "open" || isUpdating}
+            onClick={() =>
+              handleStatusChange("open", "초기 미처리 상태로 환원")
+            }
           >
-            <RefreshCw className="size-4" />
-            초기 상태로 되돌리기
+            {isUpdating && status === "open" ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <RefreshCw className="size-4" />
+            )}
+            초기 상태(미처리)로 되돌리기
           </Button>
         </div>
       </article>
 
       <article className="rounded-2xl border border-slate-200 bg-white p-5">
-        <h3 className="text-sm font-semibold">처리 이력</h3>
+        <h3 className="text-sm font-semibold">처리 및 감사 이력</h3>
         <div className="mt-5 space-y-5">
           {events.map((event, index) => (
             <div

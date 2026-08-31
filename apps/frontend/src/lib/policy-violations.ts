@@ -168,7 +168,29 @@ export async function getViolationDetail(
       recommendation: string;
       resourceSpec: Record<string, unknown>;
       rawResult: Record<string, unknown>;
-    }>(`/violations/${targetClusterId}/${id}`);
+      events?: Array<{
+        label: string;
+        at: string;
+        description: string;
+      }>;
+    }>(`/violations/${targetClusterId}/${encodeURIComponent(id)}`);
+
+    const formattedEvents =
+      item.events && item.events.length > 0
+        ? item.events.map((e) => ({
+            label: e.label,
+            at: e.at ? new Date(e.at).toLocaleString("ko-KR") : "최근",
+            description: e.description,
+          }))
+        : [
+            {
+              label: "탐지됨",
+              at: item.detectedAt
+                ? new Date(item.detectedAt).toLocaleString("ko-KR")
+                : "최근",
+              description: item.message,
+            },
+          ];
 
     return {
       id: item.id,
@@ -197,21 +219,109 @@ export async function getViolationDetail(
         Object.keys(item.resourceSpec ?? {}).length > 0
           ? JSON.stringify(item.resourceSpec, null, 2)
           : `apiVersion: v1\nkind: ${item.resourceKind || "Unknown"}\nmetadata:\n  name: ${item.resourceName || "Unknown"}\n  namespace: ${item.namespace || "default"}`,
-      events: [
-        {
-          label: "탐지됨",
-          at: item.detectedAt
-            ? new Date(item.detectedAt).toLocaleString("ko-KR")
-            : "최근",
-          description: item.message,
-        },
-      ],
+      events: formattedEvents,
       rawResult: item.rawResult,
       resourceSpec: item.resourceSpec,
     };
   } catch {
     return null;
   }
+}
+
+/**
+ * 백엔드 API를 호출하여 정책 위반의 처리 상태를 변경하고 감사 로그를 기록합니다.
+ *
+ * @param id 위반 고유 식별자
+ * @param status 변경할 상태 ("open" | "inReview" | "resolved")
+ * @param note 상태 변경 사유 메모 (선택)
+ * @param clusterId 클러스터 식별자 (선택)
+ * @returns 갱신된 정책 위반 상세 객체
+ */
+export async function updateViolationStatus(
+  id: string,
+  status: ViolationStatus,
+  note?: string,
+  clusterId?: string,
+): Promise<PolicyViolation> {
+  const targetClusterId =
+    clusterId || (id.includes(":") ? id.split(":")[0] : "default");
+  const path = `/violations/${targetClusterId}/${encodeURIComponent(id)}/status`;
+
+  const item = await requestWithAuth<{
+    id: string;
+    clusterId: string;
+    clusterDisplayName: string;
+    namespace: string;
+    policyName: string;
+    ruleName: string;
+    resourceKind: string;
+    resourceName: string;
+    severity: ViolationSeverity;
+    status: ViolationStatus;
+    message: string;
+    detectedAt: string;
+    reportName: string;
+    recommendation: string;
+    resourceSpec: Record<string, unknown>;
+    rawResult: Record<string, unknown>;
+    events?: Array<{
+      label: string;
+      at: string;
+      description: string;
+    }>;
+  }>(path, {
+    method: "PATCH",
+    body: { status, note },
+  });
+
+  const formattedEvents =
+    item.events && item.events.length > 0
+      ? item.events.map((e) => ({
+          label: e.label,
+          at: e.at ? new Date(e.at).toLocaleString("ko-KR") : "최근",
+          description: e.description,
+        }))
+      : [
+          {
+            label: "탐지됨",
+            at: item.detectedAt
+              ? new Date(item.detectedAt).toLocaleString("ko-KR")
+              : "최근",
+            description: item.message,
+          },
+        ];
+
+  return {
+    id: item.id,
+    clusterId: item.clusterId,
+    clusterDisplayName: item.clusterDisplayName,
+    policyName: item.policyName,
+    policyType: "validate",
+    clusterName: item.clusterDisplayName || item.clusterId,
+    namespace: item.namespace,
+    resourceKind: item.resourceKind,
+    resourceName: item.resourceName,
+    severity: item.severity,
+    status: item.status,
+    exceptionStatus: "none",
+    detectedAt: item.detectedAt
+      ? new Date(item.detectedAt).toLocaleString("ko-KR")
+      : "최근",
+    assignee: "담당 보안팀",
+    message: item.message,
+    ruleName: item.ruleName,
+    engineResponse: "fail",
+    admissionReviewId: item.id,
+    resourcePath: `spec.template.spec`,
+    recommendation: item.recommendation,
+    manifest:
+      Object.keys(item.resourceSpec ?? {}).length > 0
+        ? JSON.stringify(item.resourceSpec, null, 2)
+        : `apiVersion: v1\nkind: ${item.resourceKind || "Unknown"}\nmetadata:\n  name: ${item.resourceName || "Unknown"}\n  namespace: ${item.namespace || "default"}`,
+    events: formattedEvents,
+    rawResult: item.rawResult,
+    resourceSpec: item.resourceSpec,
+  };
 }
 
 export const policyViolations: PolicyViolation[] = [
