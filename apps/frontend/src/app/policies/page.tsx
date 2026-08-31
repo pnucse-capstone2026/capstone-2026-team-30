@@ -273,97 +273,132 @@ export default function PoliciesPage() {
         </div>
 
         <div className="grid gap-4 p-5 lg:grid-cols-2 xl:grid-cols-3 sm:p-6">
-          {filteredPolicies.map((policy) => {
-            const relatedExceptions = exceptionRequests.filter(
-              (request) => request.policyName === policy.name,
-            );
-
-            return (
-              <article
-                key={policy.id}
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge className={policyTypeClassName[policy.type]}>
-                        {policyTypeLabel[policy.type]}
-                      </Badge>
-                      <Badge className={policyStatusClassName[policy.status]}>
-                        {policyStatusLabel[policy.status]}
-                      </Badge>
+          {livePolicies === null
+            ? [1, 2, 3, 4, 5, 6].map((key) => (
+                <article
+                  key={key}
+                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="h-5 w-16 rounded-lg" />
+                        <Skeleton className="h-5 w-16 rounded-lg" />
+                      </div>
+                      <Skeleton className="h-5 w-3/4 rounded-lg" />
+                      <Skeleton className="h-4 w-full rounded-lg" />
                     </div>
-                    <h3
-                      className="mt-3 truncate text-sm font-semibold text-slate-950"
-                      title={policy.name}
-                    >
-                      {policy.name}
-                    </h3>
-                    <p
-                      className="mt-1 truncate text-xs text-slate-500"
-                      title={policy.description}
-                    >
-                      {policy.description}
-                    </p>
                   </div>
-                </div>
 
-                <dl className="mt-5 grid gap-3 text-xs">
-                  <InfoRow
-                    label="적용 범위"
-                    value={`${policy.scope} · ${policy.namespace ?? "cluster-wide"}`}
-                  />
-                  <InfoRow label="클러스터" value={policy.clusterName} />
-                  <InfoRow
-                    label="적용 모드"
-                    value={policyModeLabel[policy.mode]}
-                  />
-                  <InfoRow
-                    label="관련 오류"
-                    value={`${policy.violationCount}건`}
-                  />
-                </dl>
+                  <div className="mt-5 space-y-2">
+                    <Skeleton className="h-7 w-full rounded-xl" />
+                    <Skeleton className="h-7 w-full rounded-xl" />
+                    <Skeleton className="h-7 w-full rounded-xl" />
+                    <Skeleton className="h-7 w-full rounded-xl" />
+                  </div>
 
-                {relatedExceptions.length > 0 ? (
-                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                    <p className="text-[11px] font-medium text-slate-500">
-                      관련 예외 신청
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {relatedExceptions.slice(0, 2).map((request) => (
-                        <Badge
-                          key={request.id}
-                          className={exceptionStatusClassName[request.status]}
+                  <div className="mt-5 flex items-center gap-2">
+                    <Skeleton className="h-9 w-28 rounded-xl" />
+                    <Skeleton className="h-9 w-24 rounded-xl" />
+                  </div>
+                </article>
+              ))
+            : filteredPolicies.map((policy) => {
+                const relatedExceptions = exceptionRequests.filter(
+                  (request) => request.policyName === policy.name,
+                );
+
+                return (
+                  <article
+                    key={policy.id}
+                    className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge className={policyTypeClassName[policy.type]}>
+                            {policyTypeLabel[policy.type]}
+                          </Badge>
+                          <Badge
+                            className={policyStatusClassName[policy.status]}
+                          >
+                            {policyStatusLabel[policy.status]}
+                          </Badge>
+                        </div>
+                        <h3
+                          className="mt-3 truncate text-sm font-semibold text-slate-950"
+                          title={policy.name}
                         >
-                          {request.id} · {exceptionStatusLabel[request.status]}
-                        </Badge>
-                      ))}
+                          {policy.name}
+                        </h3>
+                        <p
+                          className="mt-1 truncate text-xs text-slate-500"
+                          title={policy.description}
+                        >
+                          {policy.description}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ) : null}
 
-                <div className="mt-5 flex flex-wrap items-center gap-2">
-                  <Button
-                    asChild
-                    variant="outline"
-                    className="h-9 rounded-xl border-slate-200 bg-white"
-                  >
-                    <Link href="/violations">관련 위반 보기</Link>
-                  </Button>
-                  <Button
-                    asChild
-                    variant="outline"
-                    className="h-9 rounded-xl border-slate-200 bg-white"
-                  >
-                    <Link href="/exceptions">내 신청 보기</Link>
-                  </Button>
-                </div>
-              </article>
-            );
-          })}
+                    <dl className="mt-5 grid gap-3 text-xs">
+                      <InfoRow
+                        label="적용 범위"
+                        value={`${policy.scope} · ${policy.namespace ?? "cluster-wide"}`}
+                      />
+                      <InfoRow label="클러스터" value={policy.clusterName} />
+                      <InfoRow
+                        label="적용 모드"
+                        value={policyModeLabel[policy.mode]}
+                      />
+                      <InfoRow
+                        label="관련 오류"
+                        value={`${policy.violationCount}건`}
+                      />
+                    </dl>
+
+                    {relatedExceptions.length > 0 ? (
+                      <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <p className="text-[11px] font-medium text-slate-500">
+                          관련 예외 신청
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {relatedExceptions.slice(0, 2).map((request) => (
+                            <Badge
+                              key={request.id}
+                              className={
+                                exceptionStatusClassName[request.status]
+                              }
+                            >
+                              {request.id} ·{" "}
+                              {exceptionStatusLabel[request.status]}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <div className="mt-5 flex flex-wrap items-center gap-2">
+                      <Button
+                        asChild
+                        variant="outline"
+                        className="h-9 rounded-xl border-slate-200 bg-white"
+                      >
+                        <Link href="/violations">관련 위반 보기</Link>
+                      </Button>
+                      <Button
+                        asChild
+                        variant="outline"
+                        className="h-9 rounded-xl border-slate-200 bg-white"
+                      >
+                        <Link href="/exceptions">내 신청 보기</Link>
+                      </Button>
+                    </div>
+                  </article>
+                );
+              })}
         </div>
 
-        {filteredPolicies.length === 0 ? (
+        {livePolicies !== null && filteredPolicies.length === 0 ? (
           <div className="border-t border-slate-100 px-5 py-10 text-center text-sm text-slate-500">
             조건에 맞는 정책이 없습니다.
           </div>

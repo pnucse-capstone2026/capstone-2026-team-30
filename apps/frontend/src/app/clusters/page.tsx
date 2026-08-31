@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   Filter,
   Layers3,
+  RefreshCw,
   Search,
   Server,
   ShieldCheck,
@@ -23,6 +24,7 @@ import { DashboardPageShell } from "@/components/dashboard/dashboard-page-shell"
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/lib/auth-store";
 import {
   clusters,
@@ -85,6 +87,7 @@ export default function ClustersPage() {
   const [liveViolations, setLiveViolations] = useState<
     PolicyViolation[] | null
   >(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const authStatus = useAuthStore((state) => state.status);
   const initializeAuth = useAuthStore((state) => state.initialize);
@@ -93,6 +96,7 @@ export default function ClustersPage() {
    * 백엔드 API에서 라이브 클러스터, 실시간 정책, 정책 위반 내역을 병렬 조회합니다.
    */
   const loadDashboardData = useCallback(async () => {
+    setIsRefreshing(true);
     try {
       await initializeAuth();
 
@@ -136,6 +140,8 @@ export default function ClustersPage() {
       }
     } catch {
       // 백엔드 연동 불가 시 graceful fallback 유지
+    } finally {
+      setIsRefreshing(false);
     }
   }, [initializeAuth]);
 
@@ -286,6 +292,20 @@ export default function ClustersPage() {
       activeHref="/clusters"
       title="클러스터"
       description="내가 접근 가능한 클러스터와 정책 적용 상태를 확인합니다."
+      actions={
+        <Button
+          type="button"
+          variant="outline"
+          className="hidden h-10 rounded-xl border-slate-200 bg-white text-slate-700 sm:inline-flex"
+          disabled={isRefreshing}
+          onClick={() => void loadDashboardData()}
+        >
+          <RefreshCw
+            className={`size-4 ${isRefreshing ? "animate-spin" : ""}`}
+          />
+          {isRefreshing ? "불러오는 중..." : "새로고침"}
+        </Button>
+      }
     >
       <section className="grid gap-4 md:grid-cols-4">
         <SummaryCard
@@ -294,6 +314,7 @@ export default function ClustersPage() {
           detail="조회 가능한 클러스터"
           icon={Server}
           className="bg-blue-50 text-blue-600"
+          loading={liveClusters === null}
         />
         <SummaryCard
           label="정상 운영"
@@ -301,6 +322,7 @@ export default function ClustersPage() {
           detail="Kyverno 준비 완료"
           icon={CheckCircle2}
           className="bg-emerald-50 text-emerald-600"
+          loading={liveClusters === null}
         />
         <SummaryCard
           label="동기화 중"
@@ -308,6 +330,7 @@ export default function ClustersPage() {
           detail="상태 갱신 진행"
           icon={Wifi}
           className="bg-cyan-50 text-cyan-600"
+          loading={liveClusters === null}
         />
         <SummaryCard
           label="미해결 위반"
@@ -315,6 +338,7 @@ export default function ClustersPage() {
           detail="정책 확인 필요"
           icon={AlertTriangle}
           className="bg-amber-50 text-amber-600"
+          loading={liveClusters === null}
         />
       </section>
 
@@ -400,90 +424,126 @@ export default function ClustersPage() {
         </div>
 
         <div className="grid gap-4 p-5 lg:grid-cols-2 xl:grid-cols-3 sm:p-6">
-          {filteredClusters.map((cluster) => (
-            <article
-              key={cluster.id}
-              className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge className="bg-blue-50 text-blue-700 ring-1 ring-blue-100">
-                      {clusterEnvironmentLabel[cluster.environment]}
-                    </Badge>
-                    <Badge className={clusterStatusClassName[cluster.status]}>
-                      {clusterStatusLabel[cluster.status]}
-                    </Badge>
-                    <Badge
-                      className={kyvernoStatusClassName[cluster.kyvernoStatus]}
-                    >
-                      Kyverno {kyvernoStatusLabel[cluster.kyvernoStatus]}
-                    </Badge>
-                  </div>
-                  <h3 className="mt-4 truncate text-base font-semibold text-slate-950">
-                    {cluster.name}
-                  </h3>
-                  <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">
-                    {cluster.description}
-                  </p>
-                </div>
-                <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
-                  <Server className="size-5" />
-                </div>
-              </div>
-
-              <dl className="mt-5 grid gap-3 text-xs">
-                <InfoRow label="리전" value={cluster.region} />
-                <InfoRow
-                  label="노드/네임스페이스"
-                  value={`${cluster.nodeCount} / ${cluster.namespaceCount}`}
-                />
-                <InfoRow
-                  label="적용 정책"
-                  value={`${cluster.policies.length}개`}
-                />
-                <InfoRow
-                  label="미해결 위반"
-                  value={`${cluster.unresolvedViolations.length}건`}
-                />
-                <InfoRow label="최근 동기화" value={cluster.lastSyncedAt} />
-              </dl>
-
-              {cluster.policies.length > 0 ? (
-                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <p className="text-[11px] font-medium text-slate-500">
-                    주요 적용 정책
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {cluster.policies.slice(0, 3).map((policy) => (
-                      <Badge
-                        key={policy.id}
-                        className="bg-white text-slate-700 ring-1 ring-slate-200"
-                      >
-                        {policy.name}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="mt-5 flex flex-wrap items-center gap-2">
-                <Button
-                  asChild
-                  variant="outline"
-                  className="h-9 rounded-xl border-slate-200 bg-white"
+          {liveClusters === null
+            ? [1, 2, 3].map((key) => (
+                <article
+                  key={key}
+                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
                 >
-                  <Link href="/policies">
-                    <ShieldCheck className="size-4" />
-                    정책 보기
-                  </Link>
-                </Button>
-              </div>
-            </article>
-          ))}
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="h-5 w-16 rounded-lg" />
+                        <Skeleton className="h-5 w-16 rounded-lg" />
+                        <Skeleton className="h-5 w-24 rounded-lg" />
+                      </div>
+                      <Skeleton className="h-5 w-3/4 rounded-lg" />
+                      <Skeleton className="h-4 w-full rounded-lg" />
+                    </div>
+                    <Skeleton className="size-11 rounded-2xl" />
+                  </div>
+
+                  <div className="mt-5 space-y-2">
+                    <Skeleton className="h-7 w-full rounded-xl" />
+                    <Skeleton className="h-7 w-full rounded-xl" />
+                    <Skeleton className="h-7 w-full rounded-xl" />
+                    <Skeleton className="h-7 w-full rounded-xl" />
+                    <Skeleton className="h-7 w-full rounded-xl" />
+                  </div>
+
+                  <div className="mt-5 flex items-center gap-2">
+                    <Skeleton className="h-9 w-24 rounded-xl" />
+                  </div>
+                </article>
+              ))
+            : filteredClusters.map((cluster) => (
+                <article
+                  key={cluster.id}
+                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className="bg-blue-50 text-blue-700 ring-1 ring-blue-100">
+                          {clusterEnvironmentLabel[cluster.environment]}
+                        </Badge>
+                        <Badge
+                          className={clusterStatusClassName[cluster.status]}
+                        >
+                          {clusterStatusLabel[cluster.status]}
+                        </Badge>
+                        <Badge
+                          className={
+                            kyvernoStatusClassName[cluster.kyvernoStatus]
+                          }
+                        >
+                          Kyverno {kyvernoStatusLabel[cluster.kyvernoStatus]}
+                        </Badge>
+                      </div>
+                      <h3 className="mt-4 truncate text-base font-semibold text-slate-950">
+                        {cluster.name}
+                      </h3>
+                      <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">
+                        {cluster.description}
+                      </p>
+                    </div>
+                    <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
+                      <Server className="size-5" />
+                    </div>
+                  </div>
+
+                  <dl className="mt-5 grid gap-3 text-xs">
+                    <InfoRow label="리전" value={cluster.region} />
+                    <InfoRow
+                      label="노드/네임스페이스"
+                      value={`${cluster.nodeCount} / ${cluster.namespaceCount}`}
+                    />
+                    <InfoRow
+                      label="적용 정책"
+                      value={`${cluster.policies.length}개`}
+                    />
+                    <InfoRow
+                      label="미해결 위반"
+                      value={`${cluster.unresolvedViolations.length}건`}
+                    />
+                    <InfoRow label="최근 동기화" value={cluster.lastSyncedAt} />
+                  </dl>
+
+                  {cluster.policies.length > 0 ? (
+                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-[11px] font-medium text-slate-500">
+                        주요 적용 정책
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {cluster.policies.slice(0, 3).map((policy) => (
+                          <Badge
+                            key={policy.id}
+                            className="bg-white text-slate-700 ring-1 ring-slate-200"
+                          >
+                            {policy.name}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-5 flex flex-wrap items-center gap-2">
+                    <Button
+                      asChild
+                      variant="outline"
+                      className="h-9 rounded-xl border-slate-200 bg-white"
+                    >
+                      <Link href="/policies">
+                        <ShieldCheck className="size-4" />
+                        정책 보기
+                      </Link>
+                    </Button>
+                  </div>
+                </article>
+              ))}
         </div>
 
-        {filteredClusters.length === 0 ? (
+        {liveClusters !== null && filteredClusters.length === 0 ? (
           <div className="border-t border-slate-100 px-5 py-10 text-center text-sm text-slate-500">
             조건에 맞는 클러스터가 없습니다.
           </div>
@@ -493,18 +553,23 @@ export default function ClustersPage() {
   );
 }
 
+/**
+ * 요약 지표 카드 컴포넌트입니다.
+ */
 function SummaryCard({
   label,
   value,
   detail,
   icon: Icon,
   className,
+  loading,
 }: {
   label: string;
   value: string;
   detail: string;
   icon: typeof Server;
   className: string;
+  loading?: boolean;
 }) {
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
@@ -517,7 +582,11 @@ function SummaryCard({
         <Layers3 className="size-4 text-slate-300" />
       </div>
       <p className="mt-5 text-[13px] text-slate-500">{label}</p>
-      <p className="mt-1 text-3xl font-semibold tracking-tight">{value}</p>
+      {loading ? (
+        <Skeleton className="mt-1 h-9 w-20 rounded-lg" />
+      ) : (
+        <p className="mt-1 text-3xl font-semibold tracking-tight">{value}</p>
+      )}
       <p className="mt-2 text-[11px] text-slate-400">{detail}</p>
     </article>
   );
