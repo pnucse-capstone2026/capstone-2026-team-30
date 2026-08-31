@@ -39,6 +39,9 @@ const toneStyles = {
   cyan: "bg-cyan-50 text-cyan-600",
 };
 
+/**
+ * 사용자 메인 대시보드 페이지 컴포넌트입니다.
+ */
 export default function UserDashboardPage() {
   const user = useAuthStore((state) => state.user);
   const authStatus = useAuthStore((state) => state.status);
@@ -52,6 +55,9 @@ export default function UserDashboardPage() {
   const fetchPolicies = useDataStore((state) => state.fetchPolicies);
   const fetchViolations = useDataStore((state) => state.fetchViolations);
 
+  /**
+   * 사용자 할당 클러스터, 정책, 위반 목록을 병렬로 조회합니다.
+   */
   const loadUserData = useCallback(async () => {
     try {
       await initializeAuth();
@@ -67,18 +73,12 @@ export default function UserDashboardPage() {
 
   useEffect(() => {
     void loadUserData();
-  }, [loadUserData]);
+  }, [authStatus, loadUserData]);
 
   const isLoading =
     liveClusters === null && livePolicies === null && liveViolations === null;
 
-  const clustersList = liveClusters ?? [
-    { id: "kyverno-eks-hub", displayName: "Primary Hub Cluster (us-east-1)" },
-    {
-      id: "kyverno-eks-spoke-01",
-      displayName: "Remote Spoke Cluster 01 (us-east-1)",
-    },
-  ];
+  const clustersList = liveClusters ?? [];
   const policiesList = livePolicies ?? [];
   const violationsList = liveViolations ?? [];
 
@@ -96,7 +96,10 @@ export default function UserDashboardPage() {
     {
       label: "내 클러스터",
       value: String(clustersList.length),
-      detail: clustersList.map((c) => c.displayName).join(", "),
+      detail:
+        clustersList.length > 0
+          ? clustersList.map((c) => c.displayName).join(", ")
+          : "할당된 클러스터 없음",
       icon: Server,
       tone: "blue",
       trend: "+1",
@@ -297,37 +300,43 @@ export default function UserDashboardPage() {
                 </p>
               </div>
               <div className="space-y-1 p-3">
-                {isLoading
-                  ? [1, 2].map((key) => (
-                      <div key={key} className="flex items-center gap-3 p-3">
-                        <Skeleton className="size-9 rounded-xl" />
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <Skeleton className="h-4 w-28 rounded-lg" />
-                          <Skeleton className="h-3 w-40 rounded-lg" />
-                        </div>
+                {isLoading ? (
+                  [1, 2].map((key) => (
+                    <div key={key} className="flex items-center gap-3 p-3">
+                      <Skeleton className="size-9 rounded-xl" />
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <Skeleton className="h-4 w-28 rounded-lg" />
+                        <Skeleton className="h-3 w-40 rounded-lg" />
                       </div>
-                    ))
-                  : clustersList.map((cluster) => (
-                      <div
-                        key={cluster.id}
-                        className="flex items-center gap-3 rounded-xl px-3 py-3 hover:bg-slate-50"
-                      >
-                        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-                          <CheckCircle2 className="size-4.5" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-xs font-medium">
-                            {cluster.displayName}
-                          </p>
-                          <p className="mt-1 text-[10px] text-slate-400">
-                            연결 ID: {cluster.id}
-                          </p>
-                        </div>
-                        <span className="text-[10px] font-medium text-emerald-600">
-                          정상 연결
-                        </span>
+                    </div>
+                  ))
+                ) : clustersList.length > 0 ? (
+                  clustersList.map((cluster) => (
+                    <div
+                      key={cluster.id}
+                      className="flex items-center gap-3 rounded-xl px-3 py-3 hover:bg-slate-50"
+                    >
+                      <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                        <CheckCircle2 className="size-4.5" />
                       </div>
-                    ))}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-medium">
+                          {cluster.displayName}
+                        </p>
+                        <p className="mt-1 text-[10px] text-slate-400">
+                          연결 ID: {cluster.id}
+                        </p>
+                      </div>
+                      <span className="text-[10px] font-medium text-emerald-600">
+                        정상 연결
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="px-5 py-8 text-center text-xs text-slate-400">
+                    접근 가능한 클러스터가 없습니다.
+                  </div>
+                )}
               </div>
             </article>
           </section>
