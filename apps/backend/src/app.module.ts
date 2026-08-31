@@ -14,6 +14,7 @@ import { AiAgentModule } from "./ai-agent/ai-agent.module";
 import { HealthModule } from "./health/health.module";
 import { GitOpsModule } from "./gitops/gitops.module";
 import { MlopsModule } from "./mlops/mlops.module";
+import { NotificationsModule } from "./notifications/notifications.module";
 import { createPinoHttpConfig } from "./logging/pino-http.config";
 
 /**
@@ -32,6 +33,7 @@ import { createPinoHttpConfig } from "./logging/pino-http.config";
     PoliciesModule,
     ViolationsModule,
     AuditLogsModule,
+    NotificationsModule,
     AiAgentModule,
     HealthModule,
     GitOpsModule,

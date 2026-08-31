@@ -28,6 +28,12 @@ describe("ClustersController", () => {
         ClustersController.prototype.catalog,
       ),
     ).toEqual(["users.assign_clusters"]);
+    expect(
+      Reflect.getMetadata(
+        REQUIRED_PERMISSIONS_KEY,
+        ClustersController.prototype.get,
+      ),
+    ).toEqual(["exception_requests.read"]);
   });
 
   const metadata = [
@@ -38,6 +44,14 @@ describe("ClustersController", () => {
   function controllerWith() {
     const clusters = {
       list: jest.fn(() => metadata),
+      getMetadata: jest.fn(
+        (id: string) =>
+          metadata.find((m) => m.id === id) ?? {
+            id,
+            displayName: id,
+            exceptionNamespace: "kyverno",
+          },
+      ),
     } as unknown as ClusterProvider;
     return { controller: new ClustersController(clusters), clusters };
   }
@@ -71,5 +85,24 @@ describe("ClustersController", () => {
     const { controller } = controllerWith();
 
     expect(controller.catalog()).toEqual(metadata);
+  });
+
+  it("returns cluster metadata by id when assigned or having permissions", () => {
+    const { controller, clusters } = controllerWith();
+
+    expect(controller.get("staging", user(Role.VIEWER, ["staging"]))).toEqual(
+      metadata[1],
+    );
+    expect(clusters.getMetadata).toHaveBeenCalledWith("staging");
+
+    expect(controller.get("prod", user(Role.ADMIN, []))).toEqual(metadata[0]);
+  });
+
+  it("throws when accessing cluster without assignment and permission", () => {
+    const { controller } = controllerWith();
+
+    expect(() =>
+      controller.get("prod", user(Role.VIEWER, ["staging"])),
+    ).toThrow();
   });
 });

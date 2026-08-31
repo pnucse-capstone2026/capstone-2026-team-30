@@ -12,7 +12,6 @@ import { AuthenticatedUser } from "../../auth/auth.types";
 describe("MlGovernanceService", () => {
   let service: MlGovernanceService;
   let kyvernoAdapter: jest.Mocked<KyvernoAdapter>;
-  let kubeflowAdapter: jest.Mocked<KubeflowAdapter>;
   let eventBus: MlGovernanceEventBus;
 
   const mockUser: AuthenticatedUser = {
@@ -111,7 +110,6 @@ describe("MlGovernanceService", () => {
 
     service = module.get<MlGovernanceService>(MlGovernanceService);
     kyvernoAdapter = module.get(KyvernoAdapter);
-    kubeflowAdapter = module.get(KubeflowAdapter);
     eventBus = module.get<MlGovernanceEventBus>(MlGovernanceEventBus);
   });
 

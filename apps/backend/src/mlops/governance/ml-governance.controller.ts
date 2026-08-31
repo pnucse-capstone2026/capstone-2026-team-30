@@ -88,11 +88,7 @@ export class MlGovernanceController {
     @CurrentUser() user: AuthenticatedUser,
   ): Observable<MessageEvent> {
     this.validateClusterAccess(user, clusterId);
-    return this.mlGovernanceService.subscribeEvents(
-      clusterId,
-      namespace,
-      user,
-    );
+    return this.mlGovernanceService.subscribeEvents(clusterId, namespace, user);
   }
 
   /**

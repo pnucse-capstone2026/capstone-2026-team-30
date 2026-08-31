@@ -312,7 +312,9 @@ export class MlGovernanceService {
       filter((e) => {
         const clusterMatch = !e.clusterId || e.clusterId === clusterId;
         const nsMatch =
-          !e.namespace || e.namespace === namespace || e.namespace === "default";
+          !e.namespace ||
+          e.namespace === namespace ||
+          e.namespace === "default";
         return clusterMatch && nsMatch;
       }),
       map(
