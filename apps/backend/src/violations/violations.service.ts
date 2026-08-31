@@ -613,6 +613,19 @@ export class ViolationsService {
     return events;
   }
 
+  /**
+   * Kyverno 자동 생성 규칙 접두사(autogen-, autogen-cronjob-)를 제거하여 정규화된 룰 이름을 반환합니다.
+   *
+   * @param ruleName 원본 규칙 이름
+   * @returns 정규화된 규칙 이름
+   */
+  private normalizeRuleName(ruleName: string): string {
+    return ruleName
+      .replace(/^autogen-cronjob-/, "")
+      .replace(/^autogen-/, "")
+      .trim();
+  }
+
   private async getSavedStatusMap(): Promise<
     Map<string, "open" | "inReview" | "resolved">
   > {
@@ -634,16 +647,42 @@ export class ViolationsService {
         const validStatus =
           (rec.status as "open" | "inReview" | "resolved") || "open";
         map.set(rec.id, validStatus);
-        // 리소스명이 유효한 경우 복합 키 매핑을 등록하여 인덱스 변동 시에도 상태 보존
-        if (rec.resourceName && rec.resourceName !== "Unknown") {
-          const ns = rec.namespace || "cluster-wide";
-          const key = `${rec.targetClusterId}:${rec.policyName}:${rec.ruleName}:${rec.resourceName}:${ns}`;
-          map.set(key, validStatus);
 
-          // 네임스페이스 생략 또는 cluster-wide 호환 키도 함께 등록
-          if (ns !== "cluster-wide") {
+        const rawRule = rec.ruleName;
+        const normalizedRule = this.normalizeRuleName(rawRule);
+        const ruleVariants = Array.from(
+          new Set([rawRule, normalizedRule, `autogen-${normalizedRule}`]),
+        );
+        const ns = rec.namespace || "cluster-wide";
+
+        // 1. 리소스명이 유효한 경우 복합 키 매핑을 등록하여 인덱스/접두사 변동 시에도 상태 보존
+        if (rec.resourceName && rec.resourceName !== "Unknown") {
+          for (const r of ruleVariants) {
             map.set(
-              `${rec.targetClusterId}:${rec.policyName}:${rec.ruleName}:${rec.resourceName}:cluster-wide`,
+              `${rec.targetClusterId}:${rec.policyName}:${r}:${rec.resourceName}:${ns}`,
+              validStatus,
+            );
+            // 네임스페이스 생략 또는 cluster-wide 호환 키도 함께 등록
+            if (ns !== "cluster-wide") {
+              map.set(
+                `${rec.targetClusterId}:${rec.policyName}:${r}:${rec.resourceName}:cluster-wide`,
+                validStatus,
+              );
+            }
+          }
+        } else {
+          // 2. 리소스명이 Unknown인 경우 정책/룰/네임스페이스 단위의 2차 Fallback 키 등록
+          for (const r of ruleVariants) {
+            map.set(
+              `${rec.targetClusterId}:${rec.policyName}:${r}:${ns}`,
+              validStatus,
+            );
+            map.set(
+              `${rec.targetClusterId}:${rec.policyName}:${r}:cluster-wide`,
+              validStatus,
+            );
+            map.set(
+              `${rec.targetClusterId}:${rec.policyName}:${r}`,
               validStatus,
             );
           }
@@ -805,12 +844,45 @@ export class ViolationsService {
     const exc = exceptionsMap?.get(excKey);
 
     const isNamedResource = resourceName && resourceName !== "Unknown";
-    const statusKey = isNamedResource
-      ? `${cluster.id}:${policyName}:${ruleName}:${resourceName}:${namespace}`
-      : null;
-    const savedStatus =
-      savedStatusesMap?.get(id) ??
-      (statusKey ? savedStatusesMap?.get(statusKey) : undefined);
+    const normalizedRule = this.normalizeRuleName(ruleName);
+
+    let savedStatus: ("open" | "inReview" | "resolved") | undefined =
+      savedStatusesMap?.get(id);
+
+    if (!savedStatus && isNamedResource) {
+      savedStatus =
+        savedStatusesMap?.get(
+          `${cluster.id}:${policyName}:${ruleName}:${resourceName}:${namespace}`,
+        ) ??
+        savedStatusesMap?.get(
+          `${cluster.id}:${policyName}:${normalizedRule}:${resourceName}:${namespace}`,
+        ) ??
+        savedStatusesMap?.get(
+          `${cluster.id}:${policyName}:${ruleName}:${resourceName}:cluster-wide`,
+        ) ??
+        savedStatusesMap?.get(
+          `${cluster.id}:${policyName}:${normalizedRule}:${resourceName}:cluster-wide`,
+        );
+    }
+
+    // 2차 Fallback: 리소스명 미일치 또는 Unknown인 경우 규칙/정책 단위 상태 조회
+    if (!savedStatus) {
+      savedStatus =
+        savedStatusesMap?.get(
+          `${cluster.id}:${policyName}:${ruleName}:${namespace}`,
+        ) ??
+        savedStatusesMap?.get(
+          `${cluster.id}:${policyName}:${normalizedRule}:${namespace}`,
+        ) ??
+        savedStatusesMap?.get(
+          `${cluster.id}:${policyName}:${ruleName}:cluster-wide`,
+        ) ??
+        savedStatusesMap?.get(
+          `${cluster.id}:${policyName}:${normalizedRule}:cluster-wide`,
+        ) ??
+        savedStatusesMap?.get(`${cluster.id}:${policyName}:${ruleName}`) ??
+        savedStatusesMap?.get(`${cluster.id}:${policyName}:${normalizedRule}`);
+    }
 
     let status: "open" | "inReview" | "resolved" = savedStatus ?? "open";
     let exceptionStatus: "none" | "requested" | "approved" = "none";

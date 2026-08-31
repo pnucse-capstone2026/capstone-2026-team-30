@@ -480,5 +480,110 @@ describe("ViolationsService", () => {
         },
       });
     });
+
+    it("autogen- 접두사가 붙은 K8s 리포트 규칙에 대해서도 DB의 정규화된 상태를 올바르게 매핑한다", async () => {
+      // K8s 라이브 리포트에는 autogen-require-image-tag 로 규칙명이 들어옴
+      mockKyvernoAdapter.listNamespacedPolicyReports = jest
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            metadata: {
+              name: "polr-ns-payments",
+              namespace: "payments",
+              creationTimestamp: "2026-08-19T05:30:00Z",
+            },
+            results: [
+              {
+                policy: "disallow-latest-tag",
+                rule: "autogen-require-image-tag",
+                severity: "high",
+                result: "fail",
+                message: "Using the :latest tag is prohibited.",
+                resources: [
+                  {
+                    apiVersion: "v1",
+                    kind: "Pod",
+                    name: "payment-api-pod",
+                    namespace: "payments",
+                  },
+                ],
+              },
+            ],
+          },
+        ]);
+      mockKyvernoAdapter.listClusterPolicyReports = jest
+        .fn()
+        .mockResolvedValueOnce([]);
+
+      // DB에는 autogen 접두사 없는 require-image-tag 로 'resolved' 저장되어 있음
+      mockPrismaService.violationHistory.findMany.mockResolvedValueOnce([
+        {
+          id: "db-uuid-1234",
+          targetClusterId: "cluster-1",
+          policyName: "disallow-latest-tag",
+          ruleName: "require-image-tag",
+          resourceName: "payment-api-pod",
+          namespace: "payments",
+          status: "resolved",
+        },
+      ]);
+
+      const result = await service.list(mockUser, { clusterId: "cluster-1" });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].status).toBe("resolved");
+    });
+
+    it("DB의 resourceName이 Unknown인 경우에도 정책/규칙 Fallback을 통해 처리 상태를 매핑한다", async () => {
+      mockKyvernoAdapter.listNamespacedPolicyReports = jest
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            metadata: {
+              name: "polr-ns-payments",
+              namespace: "payments",
+              creationTimestamp: "2026-08-19T05:30:00Z",
+            },
+            results: [
+              {
+                policy: "disallow-latest-tag",
+                rule: "require-image-tag",
+                severity: "high",
+                result: "fail",
+                message: "Using the :latest tag is prohibited.",
+                resources: [
+                  {
+                    apiVersion: "v1",
+                    kind: "Pod",
+                    name: "payment-api-pod",
+                    namespace: "payments",
+                  },
+                ],
+              },
+            ],
+          },
+        ]);
+      mockKyvernoAdapter.listClusterPolicyReports = jest
+        .fn()
+        .mockResolvedValueOnce([]);
+
+      // DB 레코드에 알림 등을 통해 resourceName이 Unknown으로 저장된 경우
+      mockPrismaService.violationHistory.findMany.mockResolvedValueOnce([
+        {
+          id: "db-uuid-unknown",
+          targetClusterId: "cluster-1",
+          policyName: "disallow-latest-tag",
+          ruleName: "require-image-tag",
+          resourceName: "Unknown",
+          namespace: "payments",
+          status: "inReview",
+        },
+      ]);
+
+      const result = await service.list(mockUser, { clusterId: "cluster-1" });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].status).toBe("inReview");
+    });
   });
 });
