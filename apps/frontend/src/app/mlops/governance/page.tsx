@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { DashboardPageShell } from "@/components/dashboard/dashboard-page-shell";
-import { Badge } from "@/components/ui/badge";
 import { useAuthStore } from "@/lib/auth-store";
 import { useDataStore } from "@/lib/data-store";
 import {
@@ -114,13 +113,6 @@ export default function MlGovernancePage() {
               />
             </div>
           </div>
-
-          <Badge
-            variant="outline"
-            className="bg-indigo-500/10 text-indigo-600 border-indigo-500/20"
-          >
-            Phase 2 Active
-          </Badge>
         </div>
 
         {/* Widget 1: FinOps & Resource Summary */}

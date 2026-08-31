@@ -310,8 +310,9 @@ export default function ServingPage() {
           </div>
         )}
 
-        {/* MLOps Copilot Drawer */}
+        {/* MLOps Copilot Drawer (현재 비활성화됨) */}
         <CopilotDrawer
+          enabled={false}
           activePageName="MLOps 모델 서빙 센터 (KServe)"
           onRefreshList={() => refetch()}
         />

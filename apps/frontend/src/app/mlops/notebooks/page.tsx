@@ -275,8 +275,9 @@ export default function NotebooksPage() {
           </div>
         )}
 
-        {/* MLOps Copilot Drawer */}
+        {/* MLOps Copilot Drawer (현재 비활성화됨) */}
         <CopilotDrawer
+          enabled={false}
           activePageName="MLOps 노트북 센터"
           onRefreshList={() => refetch()}
         />

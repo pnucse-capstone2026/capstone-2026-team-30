@@ -329,8 +329,9 @@ export default function PipelinesPage() {
           />
         )}
 
-        {/* MLOps Copilot Drawer */}
+        {/* MLOps Copilot Drawer (현재 비활성화됨) */}
         <CopilotDrawer
+          enabled={false}
           activePageName="MLOps 파이프라인 스튜디오"
           onRefreshList={() => refetch()}
         />

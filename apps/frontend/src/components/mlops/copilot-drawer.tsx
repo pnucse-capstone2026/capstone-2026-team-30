@@ -36,6 +36,7 @@ type Message = {
 };
 
 type CopilotDrawerProps = {
+  enabled?: boolean;
   activePageName?: string;
   onOpenCreateNotebookModal?: (prefill: Record<string, any>) => void;
   onRefreshList?: () => void;
@@ -46,6 +47,7 @@ type CopilotDrawerProps = {
  * 하이브리드 원클릭 액션(즉시 실행 및 폼 자동입력 Pre-fill)을 지원합니다.
  */
 export function CopilotDrawer({
+  enabled = false,
   activePageName = "MLOps Workspace",
   onOpenCreateNotebookModal,
   onRefreshList,
@@ -55,7 +57,6 @@ export function CopilotDrawer({
   const [loading, setLoading] = useState(false);
   const [actionExecuting, setActionExecuting] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
-
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
@@ -71,6 +72,10 @@ export function CopilotDrawer({
       }),
     },
   ]);
+
+  if (!enabled) {
+    return null;
+  }
 
   const handleSend = async (textToSend?: string) => {
     const query = textToSend || inputMessage;
