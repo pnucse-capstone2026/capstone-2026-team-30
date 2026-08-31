@@ -149,7 +149,10 @@ export async function getViolationDetail(
   clusterId: string,
   id: string,
 ): Promise<PolicyViolation | null> {
-  const targetClusterId = clusterId || "default";
+  const normalizedId = decodeURIComponent(id);
+  const targetClusterId =
+    clusterId ||
+    (normalizedId.includes(":") ? normalizedId.split(":")[0] : "default");
   try {
     const item = await requestWithAuth<{
       id: string;
@@ -173,7 +176,7 @@ export async function getViolationDetail(
         at: string;
         description: string;
       }>;
-    }>(`/violations/${targetClusterId}/${encodeURIComponent(id)}`);
+    }>(`/violations/${targetClusterId}/${encodeURIComponent(normalizedId)}`);
 
     const formattedEvents =
       item.events && item.events.length > 0
@@ -243,9 +246,11 @@ export async function updateViolationStatus(
   note?: string,
   clusterId?: string,
 ): Promise<PolicyViolation> {
+  const normalizedId = decodeURIComponent(id);
   const targetClusterId =
-    clusterId || (id.includes(":") ? id.split(":")[0] : "default");
-  const path = `/violations/${targetClusterId}/${encodeURIComponent(id)}/status`;
+    clusterId ||
+    (normalizedId.includes(":") ? normalizedId.split(":")[0] : "default");
+  const path = `/violations/${targetClusterId}/${encodeURIComponent(normalizedId)}/status`;
 
   const item = await requestWithAuth<{
     id: string;

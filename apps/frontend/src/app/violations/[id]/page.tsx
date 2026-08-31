@@ -99,7 +99,8 @@ const violationCopy: Record<
 export default function MyViolationDetailPage({
   params,
 }: MyViolationDetailPageProps) {
-  const { id } = use(params);
+  const { id: rawId } = use(params);
+  const id = decodeURIComponent(rawId);
   const [violation, setViolation] = useState<PolicyViolation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 

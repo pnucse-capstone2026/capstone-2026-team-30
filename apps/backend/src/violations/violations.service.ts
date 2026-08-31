@@ -214,10 +214,12 @@ export class ViolationsService {
     id: string,
     user: AuthenticatedUser,
   ): Promise<ViolationDetailDto> {
+    const normalizedId = decodeURIComponent(id);
+
     // 1. ID가 UUID 형식(또는 ':' 미포함)일 경우 DB Fallback (violationHistory) 조회 시도
-    if (!id.includes(":")) {
+    if (!normalizedId.includes(":")) {
       const dbRecord = await this.prisma.violationHistory.findUnique({
-        where: { id },
+        where: { id: normalizedId },
       });
       if (dbRecord) {
         const cluster = this.validateClusterAccess(
@@ -253,7 +255,7 @@ export class ViolationsService {
           reportName: "db-fallback",
         };
         const events = await this.getViolationAuditEvents(
-          id,
+          normalizedId,
           summary.detectedAt,
           summary.message,
         );
@@ -270,10 +272,10 @@ export class ViolationsService {
     const cluster = this.validateClusterAccess(user, clusterId);
 
     // ID 포맷: clusterId:reportName:index
-    const parts = id.split(":");
+    const parts = normalizedId.split(":");
     if (parts.length < 3) {
       const dbRecord = await this.prisma.violationHistory.findUnique({
-        where: { id },
+        where: { id: normalizedId },
       });
       if (dbRecord) {
         this.validateClusterAccess(user, dbRecord.targetClusterId);
@@ -304,7 +306,7 @@ export class ViolationsService {
           reportName: "db-fallback",
         };
         const events = await this.getViolationAuditEvents(
-          id,
+          normalizedId,
           summary.detectedAt,
           summary.message,
         );
@@ -319,8 +321,8 @@ export class ViolationsService {
       throw new BusinessException(VIOLATION_ERROR.NOT_FOUND);
     }
 
-    const reportName = parts[1];
-    const index = parseInt(parts[2], 10);
+    const index = parseInt(parts[parts.length - 1], 10);
+    const reportName = parts.slice(1, -1).join(":");
 
     if (isNaN(index)) {
       throw new BusinessException(VIOLATION_ERROR.NOT_FOUND);
@@ -396,7 +398,8 @@ export class ViolationsService {
     dto: UpdateViolationStatusDto,
     user: AuthenticatedUser,
   ): Promise<ViolationDetailDto> {
-    const currentDetail = await this.getDetail(clusterId, id, user);
+    const normalizedId = decodeURIComponent(id);
+    const currentDetail = await this.getDetail(clusterId, normalizedId, user);
     const previousStatus = currentDetail.status;
 
     const targetClusterId = currentDetail.clusterId || clusterId;
@@ -407,7 +410,7 @@ export class ViolationsService {
     const existing = await this.prisma.violationHistory.findFirst({
       where: {
         OR: [
-          { id },
+          { id: normalizedId },
           {
             targetClusterId,
             policyName: currentDetail.policyName,
@@ -449,7 +452,7 @@ export class ViolationsService {
       data: {
         action: "VIOLATION_STATUS_UPDATED",
         entityType: "POLICY_VIOLATION",
-        entityId: id,
+        entityId: normalizedId,
         actorType: "USER",
         userId: user.id,
         metadata: {
@@ -469,7 +472,7 @@ export class ViolationsService {
 
     // 3. 최신 감사 이력 타임라인 조회 후 반환
     const updatedEvents = await this.getViolationAuditEvents(
-      id,
+      normalizedId,
       currentDetail.detectedAt,
       currentDetail.message,
     );

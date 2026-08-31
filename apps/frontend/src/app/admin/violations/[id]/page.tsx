@@ -56,7 +56,8 @@ const statusIcon = {
 export default function AdminViolationDetailPage({
   params,
 }: AdminViolationDetailPageProps) {
-  const { id } = use(params);
+  const { id: rawId } = use(params);
+  const id = decodeURIComponent(rawId);
   const router = useRouter();
   const [violation, setViolation] = useState<PolicyViolation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
