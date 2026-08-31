@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -18,6 +19,7 @@ import { DashboardPageShell } from "@/components/dashboard/dashboard-page-shell"
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   exceptionClassName,
   getViolations,
@@ -109,18 +111,65 @@ const exceptionOptions: Array<"all" | ExceptionStatus> = [
   "approved",
 ];
 
-export default function MyViolationsPage() {
+/**
+ * 사용자용 정책 위반 오류 목록 본문 컴포넌트입니다.
+ * URL 쿼리 파라미터(policy, cluster 등)를 감지하여 초기 필터 상태로 자동 적용합니다.
+ */
+function MyViolationsContent() {
+  const searchParams = useSearchParams();
+
+  const initialPolicy = searchParams.get("policy") || "all";
+  const initialCluster = searchParams.get("cluster") || "all";
+  const initialNamespace = searchParams.get("namespace") || "all";
+  const initialSeverity =
+    (searchParams.get("severity") as "all" | ViolationSeverity) || "all";
+  const initialStatus =
+    (searchParams.get("status") as "all" | ViolationStatus) || "all";
+  const initialExceptionStatus =
+    (searchParams.get("exceptionStatus") as "all" | ExceptionStatus) || "all";
+  const initialQuery = searchParams.get("query") || "";
+
   const [violations, setViolations] =
     useState<PolicyViolation[]>(policyViolations);
-  const [query, setQuery] = useState("");
-  const [cluster, setCluster] = useState("all");
-  const [policy, setPolicy] = useState("all");
-  const [namespace, setNamespace] = useState("all");
-  const [severity, setSeverity] = useState<"all" | ViolationSeverity>("all");
-  const [status, setStatus] = useState<"all" | ViolationStatus>("all");
+  const [query, setQuery] = useState(initialQuery);
+  const [cluster, setCluster] = useState(initialCluster);
+  const [policy, setPolicy] = useState(initialPolicy);
+  const [namespace, setNamespace] = useState(initialNamespace);
+  const [severity, setSeverity] = useState<"all" | ViolationSeverity>(
+    initialSeverity,
+  );
+  const [status, setStatus] = useState<"all" | ViolationStatus>(initialStatus);
   const [exceptionStatus, setExceptionStatus] = useState<
     "all" | ExceptionStatus
-  >("all");
+  >(initialExceptionStatus);
+
+  // URL 쿼리 파라미터 변경 시 필터 상태를 동기화합니다.
+  useEffect(() => {
+    const p = searchParams.get("policy");
+    if (p !== null) setPolicy(p || "all");
+    const c = searchParams.get("cluster");
+    if (c !== null) setCluster(c || "all");
+    const ns = searchParams.get("namespace");
+    if (ns !== null) setNamespace(ns || "all");
+    const q = searchParams.get("query");
+    if (q !== null) setQuery(q || "");
+    const sev = searchParams.get("severity") as
+      | ("all" | ViolationSeverity)
+      | null;
+    if (sev !== null && (sev === "all" || severityOptions.includes(sev))) {
+      setSeverity(sev);
+    }
+    const st = searchParams.get("status") as ("all" | ViolationStatus) | null;
+    if (st !== null && (st === "all" || statusOptions.includes(st))) {
+      setStatus(st);
+    }
+    const ex = searchParams.get("exceptionStatus") as
+      | ("all" | ExceptionStatus)
+      | null;
+    if (ex !== null && (ex === "all" || exceptionOptions.includes(ex))) {
+      setExceptionStatus(ex);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     let isMounted = true;
@@ -134,18 +183,31 @@ export default function MyViolationsPage() {
     };
   }, []);
 
-  const clusters = useMemo(
-    () => Array.from(new Set(violations.map((item) => item.clusterName))),
-    [violations],
-  );
-  const policies = useMemo(
-    () => Array.from(new Set(violations.map((item) => item.policyName))),
-    [violations],
-  );
-  const namespaces = useMemo(
-    () => Array.from(new Set(violations.map((item) => item.namespace))),
-    [violations],
-  );
+  const clusters = useMemo(() => {
+    const list = Array.from(
+      new Set(violations.map((item) => item.clusterName)),
+    );
+    if (cluster !== "all" && !list.includes(cluster)) {
+      list.push(cluster);
+    }
+    return list;
+  }, [violations, cluster]);
+
+  const policies = useMemo(() => {
+    const list = Array.from(new Set(violations.map((item) => item.policyName)));
+    if (policy !== "all" && !list.includes(policy)) {
+      list.push(policy);
+    }
+    return list;
+  }, [violations, policy]);
+
+  const namespaces = useMemo(() => {
+    const list = Array.from(new Set(violations.map((item) => item.namespace)));
+    if (namespace !== "all" && !list.includes(namespace)) {
+      list.push(namespace);
+    }
+    return list;
+  }, [violations, namespace]);
 
   const filteredViolations = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -481,6 +543,36 @@ export default function MyViolationsPage() {
         ) : null}
       </section>
     </DashboardPageShell>
+  );
+}
+
+/**
+ * 사용자용 정책 오류/위반 내역 페이지 컴포넌트입니다.
+ * useSearchParams 훅을 사용하는 하위 컨텐츠 컴포넌트를 Suspense로 래핑합니다.
+ */
+export default function MyViolationsPage() {
+  return (
+    <Suspense
+      fallback={
+        <DashboardPageShell
+          activeHref="/violations"
+          title="내 위반 리소스"
+          description="내 리소스에서 발생한 정책 위반 이력을 확인하고 조치합니다."
+        >
+          <div className="space-y-6">
+            <Skeleton className="h-28 w-full rounded-2xl" />
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {[1, 2, 3, 4].map((i) => (
+                <Skeleton key={i} className="h-32 rounded-2xl" />
+              ))}
+            </div>
+            <Skeleton className="h-96 w-full rounded-2xl" />
+          </div>
+        </DashboardPageShell>
+      }
+    >
+      <MyViolationsContent />
+    </Suspense>
   );
 }
 

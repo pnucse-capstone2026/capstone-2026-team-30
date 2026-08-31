@@ -265,7 +265,9 @@ export default function AdminPolicyDetailPage() {
             variant="outline"
             className="h-10 rounded-xl border-slate-200 bg-white text-slate-700"
           >
-            <Link href="/admin/violations">
+            <Link
+              href={`/admin/violations?policy=${encodeURIComponent(policy.name)}`}
+            >
               <ShieldAlert className="size-4" />
               오류 보기
             </Link>
@@ -370,7 +372,11 @@ export default function AdminPolicyDetailPage() {
                 size="sm"
                 className="rounded-lg border-slate-200 bg-white"
               >
-                <Link href="/admin/violations">전체 보기</Link>
+                <Link
+                  href={`/admin/violations?policy=${encodeURIComponent(policy.name)}`}
+                >
+                  전체 보기
+                </Link>
               </Button>
             </div>
             <div className="divide-y divide-slate-100">
