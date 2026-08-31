@@ -407,17 +407,24 @@ export class ViolationsService {
       currentDetail.clusterDisplayName || targetClusterId;
 
     // 1. ViolationHistory DB 레코드 upsert
+    const isNamedResource =
+      currentDetail.resourceName && currentDetail.resourceName !== "Unknown";
+
     const existing = await this.prisma.violationHistory.findFirst({
       where: {
         OR: [
           { id: normalizedId },
-          {
-            targetClusterId,
-            policyName: currentDetail.policyName,
-            ruleName: currentDetail.ruleName,
-            resourceName: currentDetail.resourceName,
-            namespace: currentDetail.namespace,
-          },
+          ...(isNamedResource
+            ? [
+                {
+                  targetClusterId,
+                  policyName: currentDetail.policyName,
+                  ruleName: currentDetail.ruleName,
+                  resourceName: currentDetail.resourceName,
+                  namespace: currentDetail.namespace,
+                },
+              ]
+            : []),
         ],
       },
     });
@@ -562,8 +569,11 @@ export class ViolationsService {
         const validStatus =
           (rec.status as "open" | "inReview" | "resolved") || "open";
         map.set(rec.id, validStatus);
-        const key = `${rec.targetClusterId}:${rec.policyName}:${rec.ruleName}:${rec.resourceName}:${rec.namespace ?? "cluster-wide"}`;
-        map.set(key, validStatus);
+        // 리소스명이 유효한 경우에만 복합 키 매핑을 추가하여 Unknown에 의한 상태 오염 방지
+        if (rec.resourceName && rec.resourceName !== "Unknown") {
+          const key = `${rec.targetClusterId}:${rec.policyName}:${rec.ruleName}:${rec.resourceName}:${rec.namespace ?? "cluster-wide"}`;
+          map.set(key, validStatus);
+        }
       }
       return map;
     } catch {
@@ -693,9 +703,13 @@ export class ViolationsService {
     const excKey = `${cluster.id}:${policyName}:${resourceName}:${namespace}`;
     const exc = exceptionsMap?.get(excKey);
 
-    const statusKey = `${cluster.id}:${policyName}:${ruleName}:${resourceName}:${namespace}`;
+    const isNamedResource = resourceName && resourceName !== "Unknown";
+    const statusKey = isNamedResource
+      ? `${cluster.id}:${policyName}:${ruleName}:${resourceName}:${namespace}`
+      : null;
     const savedStatus =
-      savedStatusesMap?.get(id) ?? savedStatusesMap?.get(statusKey);
+      savedStatusesMap?.get(id) ??
+      (statusKey ? savedStatusesMap?.get(statusKey) : undefined);
 
     let status: "open" | "inReview" | "resolved" = savedStatus ?? "open";
     let exceptionStatus: "none" | "requested" | "approved" = "none";
@@ -820,6 +834,8 @@ export class ViolationsService {
             targetClusterId: violation.clusterId,
             policyName: violation.policyName,
             ruleName: violation.ruleName,
+            resourceName: violation.resourceName,
+            namespace: violation.namespace,
             occurredAt,
           },
         });
