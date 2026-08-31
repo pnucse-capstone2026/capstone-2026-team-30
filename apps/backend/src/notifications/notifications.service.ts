@@ -136,12 +136,30 @@ export class NotificationsService {
 
     for (const vio of recentViolations) {
       const id = `noti-vio-${vio.id}`;
+      const rawSev = (vio.severity ?? "medium").toLowerCase();
+      let notiSeverity: NotificationSeverity = "warning";
+      let title = "정책 오류가 감지되었습니다";
+
+      if (rawSev === "critical") {
+        notiSeverity = "critical";
+        title = "긴급 정책 오류가 발생했습니다";
+      } else if (rawSev === "high") {
+        notiSeverity = "warning";
+        title = "높은 위험도의 정책 오류가 감지되었습니다";
+      } else if (rawSev === "medium") {
+        notiSeverity = "warning";
+        title = "정책 오류가 감지되었습니다";
+      } else {
+        notiSeverity = "info";
+        title = "경미한 정책 오류가 감지되었습니다";
+      }
+
       notifications.push({
         id,
-        title: "긴급 정책 오류가 발생했습니다",
+        title,
         message: `${vio.targetClusterDisplayName} 클러스터에서 ${vio.policyName} (${vio.ruleName}) 정책 오류가 감지되었습니다.`,
         type: "violation",
-        severity: "critical",
+        severity: notiSeverity,
         read: readSet.has(id),
         createdAt: this.formatDate(vio.occurredAt),
         href: `/admin/violations/${vio.id}`,
