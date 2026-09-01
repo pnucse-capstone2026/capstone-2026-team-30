@@ -26,9 +26,13 @@ spec:
       serviceAccountName: kyverno-backend-sa
       containers:
         - name: backend
-          image: kyverno-backend:latest
-          # Kind 로컬 이미지 활용을 위해 IfNotPresent 설정
-          imagePullPolicy: IfNotPresent
+          image: 945125812546.dkr.ecr.us-east-1.amazonaws.com/kyverno-backend:latest
+          imagePullPolicy: Always
+          # 호스트의 .env 환경변수를 Secret으로 주입받아 GitHub 토큰 및 설정을 동기화
+          envFrom:
+            - secretRef:
+                name: backend-env-secret
+                optional: true
           env:
             - name: NODE_ENV
               value: "production"
@@ -44,10 +48,14 @@ spec:
             - name: AWS_REGION
               value: "us-east-1"
             - name: BEDROCK_MODEL_ID
-              value: "anthropic.claude-3-5-sonnet-20240620-v1:0"
+              value: "amazon.nova-lite-v1:0"
             # GitOps 게시 배포 전략 및 임시 예외 TTL 필터링 환경 변수
             - name: GITOPS_PUBLISHING_MODE
               value: "DUAL_PATH"
+            - name: GITOPS_STRATEGY
+              value: "GITHUB_PR"
+            - name: GITOPS_GITHUB_BASE_BRANCH
+              value: "main"
             - name: GITOPS_MIN_DURATION_HOURS
               value: "24"
           ports:

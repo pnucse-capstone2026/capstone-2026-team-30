@@ -1,0 +1,22 @@
+apiVersion: kyverno.io/v2
+kind: PolicyException
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: pac-kyverno-dashboard
+    pac.kyverno.io/request-id: 5cb6f69b-6747-459a-bdc3-baea8dbd4934
+  name: pac-exception-5cb6f69b-6747-459a-bdc3-baea8dbd4934
+  namespace: governance-testbed
+spec:
+  exceptions:
+    - policyName: restrict-image-registries
+      ruleNames:
+        - validate-registries
+  match:
+    any:
+      - resources:
+          kinds:
+            - Pod
+          names:
+            - compliant-payment-api
+          namespaces:
+            - governance-testbed

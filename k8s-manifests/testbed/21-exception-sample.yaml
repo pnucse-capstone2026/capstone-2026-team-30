@@ -1,0 +1,31 @@
+# [예외 테스트] PolicyException CRD 샘플 (Kyverno v1.12 규격)
+# [테스트 목적] 'test-tag-violation-latest' 파드가 disallow-latest-tag 정책을 합법적으로 우회할 수 있도록 허용
+# [배포 명령어] kubectl apply -f k8s-manifests/testbed/21-exception-sample.yaml
+# [삭제 명령어] kubectl delete -f k8s-manifests/testbed/21-exception-sample.yaml
+
+apiVersion: kyverno.io/v2beta1
+kind: PolicyException
+metadata:
+  name: test-exception-allow-latest
+  namespace: governance-testbed
+  labels:
+    app.kubernetes.io/managed-by: "pac-kyverno-dashboard"
+    pac.kyverno.io/target-cluster: "default-cluster"
+  annotations:
+    pac.kyverno.io/reason: "긴급 패치 버전 배포 및 latest 태그 임시 테스트용 예외 승인"
+    pac.kyverno.io/expires-at: "2026-09-02T12:00:00Z"
+spec:
+  exceptions:
+    - policyName: disallow-latest-tag
+      ruleNames:
+        - require-image-tag
+        - validate-image-tag
+  match:
+    any:
+      - resources:
+          kinds:
+            - Pod
+          names:
+            - test-tag-violation-latest
+          namespaces:
+            - governance-testbed

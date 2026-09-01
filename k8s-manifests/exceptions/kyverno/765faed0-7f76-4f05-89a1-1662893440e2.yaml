@@ -1,0 +1,30 @@
+apiVersion: kyverno.io/v2
+kind: PolicyException
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: pac-kyverno-dashboard
+    pac.kyverno.io/request-id: 765faed0-7f76-4f05-89a1-1662893440e2
+  name: pac-exception-765faed0-7f76-4f05-89a1-1662893440e2
+  namespace: kyverno
+spec:
+  exceptions:
+    - policyName: require-resource-limits
+      ruleNames:
+        - validate-resource-requests-limits
+        - autogen-validate-resource-requests-limits
+  match:
+    any:
+      - resources:
+          kinds:
+            - Job
+          names:
+            - kyverno-cleanup-cluster-admission-reports-29804470
+          namespaces:
+            - kyverno
+      - resources:
+          kinds:
+            - Pod
+          names:
+            - kyverno-cleanup-cluster-admission-reports-29804470-*
+          namespaces:
+            - kyverno

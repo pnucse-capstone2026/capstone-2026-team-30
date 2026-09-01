@@ -13,7 +13,7 @@ metadata:
       특권(privileged) 모드로 실행되는 컨테이너는 호스트 노드의 모든 장치 및 보안 경계를 우회할 수 있어
       치명적인 보안 위험을 초래합니다. main, init, ephemeral 컨테이너 전반에서 privileged: true 설정을 전면 금지합니다.
 spec:
-  validationFailureAction: Audit
+  validationFailureAction: Enforce
   background: true
   rules:
     - name: disallow-privileged-containers
@@ -22,6 +22,15 @@ spec:
           - resources:
               kinds:
                 - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+                - local-path-storage
+                - kube-public
+                - kube-node-lease
       validate:
         message: "privileged: true 옵션이 설정된 특권 컨테이너는 보안 정책상 실행될 수 없습니다."
         pattern:

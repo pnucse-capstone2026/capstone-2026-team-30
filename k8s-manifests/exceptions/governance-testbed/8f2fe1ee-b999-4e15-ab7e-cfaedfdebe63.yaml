@@ -1,0 +1,22 @@
+apiVersion: kyverno.io/v2
+kind: PolicyException
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: pac-kyverno-dashboard
+    pac.kyverno.io/request-id: 8f2fe1ee-b999-4e15-ab7e-cfaedfdebe63
+  name: pac-exception-8f2fe1ee-b999-4e15-ab7e-cfaedfdebe63
+  namespace: governance-testbed
+spec:
+  exceptions:
+    - policyName: require-resource-limits
+      ruleNames:
+        - validate-resource-requests-limits
+  match:
+    any:
+      - resources:
+          kinds:
+            - Pod
+          names:
+            - user-payment-batch-worker
+          namespaces:
+            - governance-testbed

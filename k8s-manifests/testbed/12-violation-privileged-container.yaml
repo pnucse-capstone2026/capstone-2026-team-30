@@ -1,0 +1,50 @@
+# [위반 테스트 2] disallow-privileged-containers 정책 검증용 워크로드
+# [테스트 목적] 특권(privileged: true) 모드를 가진 보안 위험 컨테이너 배포 시 차단/탐지 검증
+# [배포 명령어] kubectl apply -f k8s-manifests/testbed/12-violation-privileged-container.yaml
+# [삭제 명령어] kubectl delete -f k8s-manifests/testbed/12-violation-privileged-container.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-priv-violation-main
+  namespace: governance-testbed
+  labels:
+    app: test-priv-violation-main
+    policy-target: disallow-privileged-containers
+spec:
+  restartPolicy: Always
+  containers:
+    - name: app
+      image: registry.k8s.io/pause:3.10
+      securityContext:
+        privileged: true
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 50m
+          memory: 64Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-priv-violation-prod-debugger
+  namespace: production
+  labels:
+    app: test-priv-violation-prod-debugger
+    policy-target: disallow-privileged-containers
+spec:
+  restartPolicy: Always
+  containers:
+    - name: debugger
+      image: registry.k8s.io/pause:3.10
+      securityContext:
+        privileged: true
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 50m
+          memory: 64Mi

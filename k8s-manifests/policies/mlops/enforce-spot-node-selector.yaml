@@ -13,7 +13,7 @@ metadata:
       비정기 ML 배치 학습 워크로드(TFJob, PyTorchJob, Job 등)에 Spot 인스턴스 노드 셀렉터와
       Toleration을 자동으로 주입하여 컴퓨팅 비용을 최대 70% 절감합니다.
 spec:
-  validationFailureAction: Audit
+  validationFailureAction: Enforce
   background: true
   rules:
     - name: mutate-spot-node-selector
@@ -23,6 +23,8 @@ spec:
               kinds:
                 - Job
                 - Pod
+              namespaces:
+                - mlops-workspace
       exclude:
         any:
           - resources:
@@ -30,6 +32,9 @@ spec:
                 - kube-system
                 - kyverno
                 - kyverno-platform
+                - local-path-storage
+                - kube-public
+                - kube-node-lease
       mutate:
         patchStrategicMerge:
           spec:

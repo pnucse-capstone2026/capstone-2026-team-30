@@ -1,0 +1,30 @@
+# [위반 테스트 4] MLOps Root 권한 주피터 노트북 위반 워크로드
+# [테스트 목적] ML 워크스페이스에서 root 권한(runAsNonRoot: false)으로 실행되는 보안 취약 노트북 파드 검증
+# [배포 명령어] kubectl apply -f k8s-manifests/testbed/14-violation-mlops-root-jupyter.yaml
+# [삭제 명령어] kubectl delete -f k8s-manifests/testbed/14-violation-mlops-root-jupyter.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-jupyter-root-violating
+  namespace: mlops-workspace
+  labels:
+    app: jupyter-notebook
+    user: researcher-kim
+    security-audit: root-violation
+spec:
+  restartPolicy: Always
+  containers:
+    - name: jupyter-lab
+      image: registry.k8s.io/pause:3.10
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+      securityContext:
+        privileged: false
+        runAsNonRoot: false
+        runAsUser: 0

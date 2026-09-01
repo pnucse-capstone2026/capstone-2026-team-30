@@ -25,9 +25,8 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: kyverno-frontend:latest
-          # Kind 로컬 이미지 활용을 위해 IfNotPresent 설정
-          imagePullPolicy: IfNotPresent
+          image: 945125812546.dkr.ecr.us-east-1.amazonaws.com/kyverno-frontend:latest
+          imagePullPolicy: Always
           env:
             - name: NODE_ENV
               value: "production"

@@ -1,0 +1,22 @@
+apiVersion: kyverno.io/v2
+kind: PolicyException
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: pac-kyverno-dashboard
+    pac.kyverno.io/request-id: c5369b16-7a22-4120-bb4f-ae7d0a762a41
+  name: pac-exception-c5369b16-7a22-4120-bb4f-ae7d0a762a41
+  namespace: governance-testbed
+spec:
+  exceptions:
+    - policyName: disallow-latest-tag
+      ruleNames:
+        - disallow-latest-tag
+  match:
+    any:
+      - resources:
+          kinds:
+            - Pod
+          names:
+            - legacy-batch-worker
+          namespaces:
+            - governance-testbed

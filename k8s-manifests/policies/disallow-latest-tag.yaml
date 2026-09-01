@@ -14,7 +14,7 @@ metadata:
       재현 불가능한 배포 환경 및 보안 취약점을 유발합니다. 모든 Pod 컨테이너(main, init, ephemeral)는
       명시적인 버전/커밋 해시 태그를 사용해야 합니다.
 spec:
-  validationFailureAction: Audit
+  validationFailureAction: Enforce
   background: true
   rules:
     - name: require-image-tag
@@ -23,6 +23,15 @@ spec:
           - resources:
               kinds:
                 - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+                - local-path-storage
+                - kube-public
+                - kube-node-lease
       validate:
         message: "이미지 태그를 반드시 명시해야 합니다. 태그가 없는 이미지는 허용되지 않습니다."
         pattern:
@@ -40,6 +49,15 @@ spec:
           - resources:
               kinds:
                 - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+                - local-path-storage
+                - kube-public
+                - kube-node-lease
       validate:
         message: "':latest' 태그는 이미지 재현성과 안정성을 보장하지 않으므로 사용할 수 없습니다. 커밋 해시 또는 특정 버전 태그를 사용하세요."
         pattern:
