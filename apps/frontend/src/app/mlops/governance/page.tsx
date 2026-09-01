@@ -15,7 +15,9 @@ import {
 import { FinOpsResourceWidget } from "./finops-resource-widget";
 import { MlPolicyCompliancePanel } from "./ml-policy-compliance-panel";
 import { IdleSettingsPanel } from "./idle-settings-panel";
-import { RefreshCw, Server } from "lucide-react";
+import { ArrowLeft, RefreshCw, Server, ShieldAlert } from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 export default function MlGovernancePage() {
   const user = useAuthStore((state) => state.user);
@@ -26,7 +28,11 @@ export default function MlGovernancePage() {
     (state) => state.setSelectedClusterId,
   );
 
-  const selectedClusterId = globalClusterId || liveClusters?.[0]?.id || "";
+  const selectedClusterId =
+    globalClusterId ||
+    user?.clusterIds?.[0] ||
+    liveClusters?.[0]?.id ||
+    "default";
   const [selectedNamespace, setSelectedNamespace] = useState<string>("default");
 
   useEffect(() => {
@@ -55,7 +61,45 @@ export default function MlGovernancePage() {
     refetchOverview();
   };
 
-  const sidebarVariant = user?.role === "ADMIN" ? "admin" : "user";
+  const isAdmin = user?.role === "ADMIN";
+
+  if (user && !isAdmin) {
+    return (
+      <ProtectedRoute>
+        <DashboardPageShell
+          variant="user"
+          activeHref="/mlops/governance"
+          title="접근 제한 (Access Restricted)"
+          description="MLOps 거버넌스 및 FinOps 비용 설정은 관리자 전용 메뉴입니다."
+        >
+          <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
+            <div className="flex size-16 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 mb-4 border border-rose-100 shadow-xs">
+              <ShieldAlert className="size-8" />
+            </div>
+            <h2 className="text-xl font-bold text-slate-900 mb-2">
+              관리자 전용 페이지입니다
+            </h2>
+            <p className="max-w-md text-xs text-slate-500 mb-6 leading-relaxed">
+              MLOps 거버넌스, 클러스터 GPU 쿼터 할당 및 유휴 워크로드 자동 종료
+              설정은 플랫폼 관리자(`ADMIN`) 권한을 가진 사용자만 접근할 수
+              있습니다.
+            </p>
+            <Button
+              asChild
+              className="bg-[#0b2342] hover:bg-[#12325b] text-white text-xs gap-2"
+            >
+              <Link href="/dashboard">
+                <ArrowLeft className="size-3.5" />
+                <span>대시보드로 돌아가기</span>
+              </Link>
+            </Button>
+          </div>
+        </DashboardPageShell>
+      </ProtectedRoute>
+    );
+  }
+
+  const sidebarVariant = "admin";
 
   return (
     <ProtectedRoute>

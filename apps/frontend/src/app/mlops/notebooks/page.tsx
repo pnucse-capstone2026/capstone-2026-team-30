@@ -34,7 +34,11 @@ export default function NotebooksPage() {
     (state) => state.setSelectedClusterId,
   );
 
-  const selectedClusterId = globalClusterId || liveClusters?.[0]?.id || "";
+  const selectedClusterId =
+    globalClusterId ||
+    user?.clusterIds?.[0] ||
+    liveClusters?.[0]?.id ||
+    "default";
   const [selectedNamespace, setSelectedNamespace] = useState<string>("default");
 
   const [isDiagnosticOpen, setIsDiagnosticOpen] = useState(false);

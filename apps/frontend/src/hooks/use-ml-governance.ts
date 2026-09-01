@@ -1,3 +1,4 @@
+import { useDataStore } from "@/lib/data-store";
 import {
   keepPreviousData,
   useMutation,
@@ -72,6 +73,15 @@ export function useMlGovernanceEvents(
   });
 }
 
+function getEffectiveClusterId(clusterId?: string): string {
+  if (clusterId && clusterId !== "default") return clusterId;
+  const storeCluster = useDataStore.getState().selectedClusterId;
+  if (storeCluster && storeCluster !== "default") return storeCluster;
+  const list = useDataStore.getState().clusters;
+  if (list && list.length > 0) return list[0].id;
+  return "k8s-lab";
+}
+
 /**
  * MLOps 리소스 거버넌스 및 FinOps 비용 지표 개요를 조회하며, 실시간 SSE 스트림으로 캐시를 갱신합니다.
  *
@@ -79,15 +89,16 @@ export function useMlGovernanceEvents(
  * @param namespace 대상 네임스페이스
  */
 export function useMlGovernanceOverview(
-  clusterId: string = "default",
+  clusterId?: string,
   namespace: string = "default",
 ) {
-  useMlGovernanceEvents(clusterId, namespace);
+  const effectiveId = getEffectiveClusterId(clusterId);
+  useMlGovernanceEvents(effectiveId, namespace);
 
   return useQuery({
-    queryKey: ["ml-governance-overview", clusterId, namespace],
-    queryFn: () => getMlGovernanceOverview(clusterId, namespace),
-    enabled: Boolean(clusterId),
+    queryKey: ["ml-governance-overview", effectiveId, namespace],
+    queryFn: () => getMlGovernanceOverview(effectiveId, namespace),
+    enabled: Boolean(effectiveId),
     staleTime: Infinity,
     refetchOnWindowFocus: false,
     placeholderData: keepPreviousData,
@@ -101,15 +112,16 @@ export function useMlGovernanceOverview(
  * @param namespace 대상 네임스페이스
  */
 export function useGpuQuotas(
-  clusterId: string = "default",
+  clusterId?: string,
   namespace: string = "default",
 ) {
-  useMlGovernanceEvents(clusterId, namespace);
+  const effectiveId = getEffectiveClusterId(clusterId);
+  useMlGovernanceEvents(effectiveId, namespace);
 
   return useQuery({
-    queryKey: ["gpu-quotas", clusterId, namespace],
-    queryFn: () => getGpuQuotas(clusterId, namespace),
-    enabled: Boolean(clusterId),
+    queryKey: ["gpu-quotas", effectiveId, namespace],
+    queryFn: () => getGpuQuotas(effectiveId, namespace),
+    enabled: Boolean(effectiveId),
     staleTime: Infinity,
     refetchOnWindowFocus: false,
     placeholderData: keepPreviousData,

@@ -76,7 +76,11 @@ export class KubeflowAdapter {
   /**
    * CoreV1Api 인스턴스 팩토리 (PVC 조회/생성용)
    */
-  private getCoreV1Api(): CoreV1Api {
+  private getCoreV1Api(clusterId?: string): CoreV1Api {
+    if (clusterId) {
+      const kubeConfig = this.clusterProvider.getKubeConfig(clusterId);
+      return kubeConfig.makeApiClient(CoreV1Api);
+    }
     const kubeConfig = new KubeConfig();
     kubeConfig.loadFromDefault();
     return kubeConfig.makeApiClient(CoreV1Api);
@@ -256,7 +260,7 @@ export class KubeflowAdapter {
     pvcName: string,
     storageGb: number,
   ): Promise<void> {
-    const coreApi = this.getCoreV1Api();
+    const coreApi = this.getCoreV1Api(clusterId);
 
     try {
       await coreApi.readNamespacedPersistentVolumeClaim({

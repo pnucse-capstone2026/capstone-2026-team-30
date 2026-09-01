@@ -1,3 +1,4 @@
+import { useDataStore } from "@/lib/data-store";
 import {
   keepPreviousData,
   useMutation,
@@ -69,13 +70,26 @@ export function useNotebookEvents(
   });
 }
 
-export function useNotebooks(clusterId: string, namespace: string = "default") {
-  useNotebookEvents(clusterId, namespace);
+function getEffectiveClusterId(clusterId?: string): string {
+  if (clusterId && clusterId !== "default") return clusterId;
+  const storeCluster = useDataStore.getState().selectedClusterId;
+  if (storeCluster && storeCluster !== "default") return storeCluster;
+  const list = useDataStore.getState().clusters;
+  if (list && list.length > 0) return list[0].id;
+  return "k8s-lab";
+}
+
+export function useNotebooks(
+  clusterId?: string,
+  namespace: string = "default",
+) {
+  const effectiveId = getEffectiveClusterId(clusterId);
+  useNotebookEvents(effectiveId, namespace);
 
   return useQuery({
-    queryKey: ["notebooks", clusterId, namespace],
-    queryFn: () => getNotebooks(clusterId, namespace),
-    enabled: Boolean(clusterId),
+    queryKey: ["notebooks", effectiveId, namespace],
+    queryFn: () => getNotebooks(effectiveId, namespace),
+    enabled: Boolean(effectiveId),
     staleTime: Infinity,
     refetchOnWindowFocus: false,
     placeholderData: keepPreviousData,
