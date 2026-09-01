@@ -36,7 +36,6 @@ const navigation: Record<"user" | "admin", NavigationItem[]> = {
   user: [
     { label: "대시보드", href: "/dashboard", icon: LayoutDashboard },
     { label: "MLOps 노트북", href: "/mlops/notebooks", icon: Layers },
-    { label: "MLOps 거버넌스", href: "/mlops/governance", icon: Coins },
     { label: "클러스터", href: "/clusters", icon: Server },
     { label: "정책", href: "/policies", icon: ShieldCheck },
     { label: "내 리소스 위반", href: "/violations", icon: FileWarning },

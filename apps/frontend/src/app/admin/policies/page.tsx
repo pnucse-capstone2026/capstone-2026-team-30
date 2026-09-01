@@ -32,7 +32,6 @@ import { useAuthStore } from "@/lib/auth-store";
 import { useDataStore } from "@/lib/data-store";
 import {
   getPolicies,
-  kyvernoPolicies,
   policyModeLabel,
   policyStatusClassName,
   policyStatusLabel,
@@ -87,7 +86,7 @@ export default function AdminPoliciesPage() {
     void loadPolicies();
   }, [loadPolicies]);
 
-  const policies = livePolicies ?? kyvernoPolicies;
+  const policies = livePolicies ?? [];
   const isLive = livePolicies !== null;
 
   const clusters = useMemo(

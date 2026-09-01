@@ -27,7 +27,6 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/lib/auth-store";
 import {
-  clusters,
   clusterEnvironmentLabel,
   clusterStatusClassName,
   clusterStatusLabel,
@@ -41,16 +40,8 @@ import {
   type KyvernoStatus,
   type ManagedCluster,
 } from "@/lib/clusters";
-import {
-  getPolicies,
-  kyvernoPolicies,
-  type KyvernoPolicy,
-} from "@/lib/policies";
-import {
-  getViolations,
-  policyViolations,
-  type PolicyViolation,
-} from "@/lib/policy-violations";
+import { getPolicies, type KyvernoPolicy } from "@/lib/policies";
+import { getViolations, type PolicyViolation } from "@/lib/policy-violations";
 
 type EnvironmentFilter = "all" | ClusterEnvironment;
 type ClusterStatusFilter = "all" | ClusterStatus;
@@ -66,8 +57,8 @@ const clusterStatusOptions: ClusterStatus[] = ["healthy", "syncing", "warning"];
 const kyvernoStatusOptions: KyvernoStatus[] = ["ready", "syncing", "degraded"];
 
 /**
- * 클러스터 상태 및 정책 적용 현황을 조회하는 메인 페이지 컴포넌트입니다.
- * 백엔드 API로부터 라이브 클러스터 목록을 동적으로 조회하며, 연동 실패 시 기본 mock 데이터를 폴백으로 제공합니다.
+ * 클러스터 관리 목록 페이지 컴포넌트입니다.
+ * 백엔드 API로부터 라이브 클러스터 목록을 동적으로 조회하며, 실시간 정책 및 위반 현황을 종합 제공합니다.
  */
 export default function ClustersPage() {
   const [query, setQuery] = useState("");
@@ -152,19 +143,6 @@ export default function ClustersPage() {
   const activeClusters: ManagedCluster[] = useMemo(() => {
     if (liveClusters && liveClusters.length > 0) {
       return liveClusters.map((item) => {
-        const existing = clusters.find(
-          (c) =>
-            c.id === item.id ||
-            c.name === item.id ||
-            c.name === item.displayName,
-        );
-        if (existing) {
-          return {
-            ...existing,
-            id: item.id,
-            name: item.displayName || existing.name,
-          };
-        }
         return {
           id: item.id,
           name: item.displayName || item.id,
@@ -179,8 +157,8 @@ export default function ClustersPage() {
           provider: "EKS",
           status: "healthy",
           kyvernoStatus: "ready",
-          nodeCount: 3,
-          namespaceCount: 8,
+          nodeCount: 1,
+          namespaceCount: 1,
           policyCount: 0,
           violationCount: 0,
           lastSyncedAt: new Date().toISOString().slice(0, 16).replace("T", " "),
@@ -189,14 +167,11 @@ export default function ClustersPage() {
         };
       });
     }
-    if (liveClusters && liveClusters.length === 0) {
-      return [];
-    }
-    return clusters;
+    return [];
   }, [liveClusters]);
 
-  const policyList = livePolicies ?? kyvernoPolicies;
-  const violationList = liveViolations ?? policyViolations;
+  const policyList = livePolicies ?? [];
+  const violationList = liveViolations ?? [];
 
   const clusterRows = useMemo(
     () =>
@@ -545,7 +520,9 @@ export default function ClustersPage() {
 
         {liveClusters !== null && filteredClusters.length === 0 ? (
           <div className="border-t border-slate-100 px-5 py-10 text-center text-sm text-slate-500">
-            조건에 맞는 클러스터가 없습니다.
+            {liveClusters.length === 0
+              ? "연결된 클러스터가 없거나 현재 스캔 중입니다. 클러스터 등록 및 Kubernetes 연결 상태를 확인하세요."
+              : "조건에 맞는 클러스터가 없습니다."}
           </div>
         ) : null}
       </section>

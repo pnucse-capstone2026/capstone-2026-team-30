@@ -88,11 +88,10 @@ export default function AdminViolationDetailPage({
         return;
       }
     } catch {
-      // Fallback
+      // ignore
     }
 
-    const foundMock = policyViolations.find((item) => item.id === id);
-    setViolation(foundMock ?? null);
+    setViolation(null);
     setIsLoading(false);
   }, [fetchViolations, id, initializeAuth]);
 

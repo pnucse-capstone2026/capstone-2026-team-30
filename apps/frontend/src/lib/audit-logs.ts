@@ -103,83 +103,16 @@ export async function getAuditLogs(
     };
   } catch {
     return {
-      items: auditLogs,
-      total: auditLogs.length,
+      items: [],
+      total: 0,
       page: 1,
       limit: 20,
-      totalPages: 1,
+      totalPages: 0,
     };
   }
 }
 
-export const auditLogs: AuditLog[] = [
-  {
-    id: "audit-001",
-    action: "USER_ROLE_UPDATED",
-    entityType: "USER",
-    entityId: "14bce360-2d2d-40fc-a7a8",
-    actorEmail: "admin@example.com",
-    actorRole: "ADMIN",
-    createdAt: "2026-07-08 11:42",
-    summary: "사용자 역할이 REQUESTER에서 APPROVER로 변경되었습니다.",
-    metadata: "target=ops-reviewer@example.com",
-  },
-  {
-    id: "audit-002",
-    action: "EXCEPTION_APPROVED",
-    entityType: "POLICY_EXCEPTION_REQUEST",
-    entityId: "EXC-2026-0011",
-    actorEmail: "approver@example.com",
-    actorRole: "APPROVER",
-    createdAt: "2026-07-08 11:18",
-    summary: "정책 예외 신청이 승인되었습니다.",
-    metadata: "policy=disallow-latest-tag expiresAt=2026-07-15",
-  },
-  {
-    id: "audit-003",
-    action: "VIOLATION_STATUS_UPDATED",
-    entityType: "VIOLATION_HISTORY",
-    entityId: "vio-002",
-    actorEmail: "admin@example.com",
-    actorRole: "ADMIN",
-    createdAt: "2026-07-08 10:55",
-    summary: "정책 위반 상태가 검토 중으로 변경되었습니다.",
-    metadata: "policy=disallow-latest-tag rule=require-fixed-image-tag",
-  },
-  {
-    id: "audit-004",
-    action: "USER_DISABLED",
-    entityType: "USER",
-    entityId: "6f2f4c8d-9e54-4e21",
-    actorEmail: "admin@example.com",
-    actorRole: "ADMIN",
-    createdAt: "2026-07-08 10:21",
-    summary: "사용자 계정이 비활성화되었습니다.",
-    metadata: "target=former-user@example.com",
-  },
-  {
-    id: "audit-005",
-    action: "POLICY_SYNC_REQUESTED",
-    entityType: "POLICY",
-    entityId: "require-resource-limits",
-    actorEmail: "admin@example.com",
-    actorRole: "ADMIN",
-    createdAt: "2026-07-08 09:48",
-    summary: "정책 동기화가 요청되었습니다.",
-    metadata: "cluster=production namespace=payments",
-  },
-  {
-    id: "audit-006",
-    action: "CLUSTER_HEALTH_CHECKED",
-    entityType: "CLUSTER",
-    entityId: "production",
-    actorEmail: "system@example.com",
-    actorRole: "ADMIN",
-    createdAt: "2026-07-08 09:00",
-    summary: "클러스터 상태 점검이 기록되었습니다.",
-    metadata: "status=healthy source=scheduler",
-  },
-];
+export const auditLogs: AuditLog[] = [];
 
 export const entityTypeLabel: Record<AuditLog["entityType"], string> = {
   USER: "사용자",

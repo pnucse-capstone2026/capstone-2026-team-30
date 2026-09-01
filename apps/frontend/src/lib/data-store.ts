@@ -66,12 +66,14 @@ export const useDataStore = create<DataState>((set, get) => ({
       void (async () => {
         try {
           const fresh = await listClusterCatalog().catch(() => listClusters());
-          if (Array.isArray(fresh)) {
+          if (Array.isArray(fresh) && fresh.length > 0) {
             set((state) => ({
               clusters: fresh,
               selectedClusterId:
-                state.selectedClusterId ||
-                (fresh.length > 0 ? fresh[0].id : null),
+                state.selectedClusterId &&
+                fresh.some((c) => c.id === state.selectedClusterId)
+                  ? state.selectedClusterId
+                  : fresh[0].id,
             }));
           }
         } catch {
@@ -90,12 +92,14 @@ export const useDataStore = create<DataState>((set, get) => ({
     clustersPromise = (async () => {
       try {
         const fresh = await listClusterCatalog().catch(() => listClusters());
-        if (Array.isArray(fresh)) {
+        if (Array.isArray(fresh) && fresh.length > 0) {
           set((state) => ({
             clusters: fresh,
             selectedClusterId:
-              state.selectedClusterId ||
-              (fresh.length > 0 ? fresh[0].id : null),
+              state.selectedClusterId &&
+              fresh.some((c) => c.id === state.selectedClusterId)
+                ? state.selectedClusterId
+                : fresh[0].id,
           }));
           return fresh;
         }

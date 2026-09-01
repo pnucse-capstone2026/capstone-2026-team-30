@@ -25,7 +25,6 @@ import { useAuthStore } from "@/lib/auth-store";
 import { useDataStore } from "@/lib/data-store";
 import {
   exceptionClassName,
-  policyViolations,
   severityClassName,
   statusClassName,
   type ExceptionStatus,
@@ -194,7 +193,7 @@ function MyViolationsContent() {
     void loadViolations();
   }, [authStatus, loadViolations]);
 
-  const violations = liveViolations ?? policyViolations;
+  const violations = liveViolations ?? [];
 
   const clusters = useMemo(() => {
     const list = Array.from(
@@ -573,7 +572,9 @@ function MyViolationsContent() {
                         variant="outline"
                         className="h-9 rounded-xl border-slate-200 bg-white"
                       >
-                        <Link href={`/violations/${violation.id}`}>
+                        <Link
+                          href={`/violations/${encodeURIComponent(violation.id)}`}
+                        >
                           상세 보기
                           <ArrowRight className="size-3.5" />
                         </Link>

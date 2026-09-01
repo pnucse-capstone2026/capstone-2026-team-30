@@ -22,7 +22,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/lib/auth-store";
 import { useDataStore } from "@/lib/data-store";
 import {
-  auditLogs as mockAuditLogs,
   entityTypeClassName,
   entityTypeLabel,
   getAuditLogs,
@@ -34,7 +33,6 @@ import {
   type ClusterMetadata,
 } from "@/lib/clusters";
 import {
-  exceptionRequests as mockExceptionRequests,
   exceptionRiskClassName,
   exceptionRiskLabel,
   type ExceptionRequest,
@@ -42,7 +40,6 @@ import {
 import { listExceptionRequests } from "@/lib/exception-requests-api";
 import {
   getViolations,
-  policyViolations as mockPolicyViolations,
   severityClassName,
   severityLabel,
   statusClassName,
@@ -133,16 +130,10 @@ export default function AdminDashboardPage() {
     liveExceptions === null &&
     liveAuditLogs === null;
 
-  const violations = liveViolations ?? mockPolicyViolations;
-  const exceptions = liveExceptions ?? mockExceptionRequests;
-  const auditLogsList = liveAuditLogs ?? mockAuditLogs;
-  const clusterList = liveClusters ?? [
-    { id: "kyverno-eks-hub", displayName: "Primary Hub Cluster (us-east-1)" },
-    {
-      id: "kyverno-eks-spoke-01",
-      displayName: "Remote Spoke Cluster 01 (us-east-1)",
-    },
-  ];
+  const violations = liveViolations ?? [];
+  const exceptions = liveExceptions ?? [];
+  const auditLogsList = liveAuditLogs ?? [];
+  const clusterList = liveClusters ?? [];
 
   const pendingExceptions = exceptions.filter(
     (request) => request.status === "pending",
@@ -224,6 +215,17 @@ export default function AdminDashboardPage() {
           </p>
         </div>
       </section>
+
+      {!isLoading && clusterList.length === 0 && (
+        <section className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-amber-900">
+          <Server className="size-5 shrink-0 text-amber-600" />
+          <div className="text-sm">
+            <span className="font-semibold">클러스터 연결 상태 확인 필요:</span>{" "}
+            등록된 클러스터가 없거나 현재 상태를 스캔하는 중입니다. Kubernetes
+            클러스터 연결 설정(Kubeconfig)을 확인하세요.
+          </div>
+        </section>
+      )}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {summaryCards.map(

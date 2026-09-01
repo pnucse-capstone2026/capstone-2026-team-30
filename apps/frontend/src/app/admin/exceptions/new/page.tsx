@@ -158,6 +158,22 @@ function AdminNewExceptionContent() {
     },
   ];
 
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [reasonValue, setReasonValue] = useState(
+    "운영 긴급 조치 및 마이그레이션 일정에 따른 임시 예외 등록",
+  );
+  const [endDateValue, setEndDateValue] = useState(defaultEndDate);
+
+  function clearFieldError(field: string) {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  }
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrorMessage(null);
@@ -180,22 +196,37 @@ function AdminNewExceptionContent() {
     ).trim();
     const endDate = String(formData.get("endDate") ?? "").trim();
 
-    if (
-      !formPolicy ||
-      formRules.length === 0 ||
-      !reason ||
-      !formKind ||
-      !formResource ||
-      !targetClusterId ||
-      !endDate
-    ) {
-      setErrorMessage("필수 입력값을 모두 입력하세요.");
+    const errors: Record<string, string> = {};
+    if (!formPolicy) errors.policyName = "대상 정책명을 입력하세요. (필수)";
+    if (formRules.length === 0)
+      errors.ruleNames = "정책 규칙명을 하나 이상 입력하세요. (필수)";
+    if (!targetClusterId)
+      errors.targetClusterId = "대상 클러스터를 선택하세요. (필수)";
+    if (!formKind)
+      errors.resourceKind = "리소스 종류(Kind)를 입력하세요. (필수)";
+    if (!formResource)
+      errors.resourceName = "적용 리소스 이름을 입력하세요. (필수)";
+    if (!endDate) errors.endDate = "예외 종료일을 지정하세요. (필수)";
+    if (!reason) errors.reason = "예외 등록 사유를 입력하세요. (필수)";
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      const missingList = Object.values(errors).join(", ");
+      setErrorMessage(`필수 입력값을 확인해 주세요: ${missingList}`);
+      toast.error("필수 입력 항목이 누락되었습니다.");
       return;
     }
 
+    setFieldErrors({});
+
     const expiresAt = expirationFromDateInput(endDate);
     if (new Date(expiresAt) <= new Date()) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        endDate: "예외 종료일은 오늘 이후여야 합니다.",
+      }));
       setErrorMessage("예외 종료일은 오늘 이후여야 합니다.");
+      toast.error("예외 종료일은 오늘 이후여야 합니다.");
       return;
     }
 
@@ -308,40 +339,96 @@ function AdminNewExceptionContent() {
 
               <div className="space-y-6 p-5 sm:p-6">
                 <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="policyName">대상 정책명</Label>
+                  <div className="space-y-1.5">
+                    <Label
+                      htmlFor="policyName"
+                      className="flex items-center gap-1 text-xs font-semibold"
+                    >
+                      <span>대상 정책명</span>
+                      <span className="text-rose-500 font-bold">*</span>
+                      <span className="text-[10px] text-rose-500 font-normal">
+                        (필수)
+                      </span>
+                    </Label>
                     <Input
                       id="policyName"
                       name="policyName"
                       value={policyName}
-                      onChange={(e) => setPolicyName(e.target.value)}
+                      onChange={(e) => {
+                        setPolicyName(e.target.value);
+                        clearFieldError("policyName");
+                      }}
                       placeholder="예: require-resource-limits"
-                      className="h-11 rounded-xl border-slate-200"
+                      className={`h-11 rounded-xl border-slate-200 ${
+                        fieldErrors.policyName
+                          ? "border-rose-500 ring-2 ring-rose-500/10 bg-rose-50/10"
+                          : ""
+                      }`}
                       required
                     />
+                    {fieldErrors.policyName && (
+                      <p className="text-[11px] text-rose-600 font-medium">
+                        {fieldErrors.policyName}
+                      </p>
+                    )}
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="ruleNames">정책 규칙명</Label>
+                  <div className="space-y-1.5">
+                    <Label
+                      htmlFor="ruleNames"
+                      className="flex items-center gap-1 text-xs font-semibold"
+                    >
+                      <span>정책 규칙명</span>
+                      <span className="text-rose-500 font-bold">*</span>
+                      <span className="text-[10px] text-rose-500 font-normal">
+                        (필수)
+                      </span>
+                    </Label>
                     <Input
                       id="ruleNames"
                       name="ruleNames"
                       value={ruleNames}
-                      onChange={(e) => setRuleNames(e.target.value)}
+                      onChange={(e) => {
+                        setRuleNames(e.target.value);
+                        clearFieldError("ruleNames");
+                      }}
                       placeholder="예: validate-resource-limits (쉼표로 복수 지정)"
-                      className="h-11 rounded-xl border-slate-200"
+                      className={`h-11 rounded-xl border-slate-200 ${
+                        fieldErrors.ruleNames
+                          ? "border-rose-500 ring-2 ring-rose-500/10 bg-rose-50/10"
+                          : ""
+                      }`}
                       required
                     />
+                    {fieldErrors.ruleNames && (
+                      <p className="text-[11px] text-rose-600 font-medium">
+                        {fieldErrors.ruleNames}
+                      </p>
+                    )}
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="targetClusterId">대상 클러스터</Label>
+                  <div className="space-y-1.5">
+                    <Label
+                      htmlFor="targetClusterId"
+                      className="flex items-center gap-1 text-xs font-semibold"
+                    >
+                      <span>대상 클러스터</span>
+                      <span className="text-rose-500 font-bold">*</span>
+                      <span className="text-[10px] text-rose-500 font-normal">
+                        (필수)
+                      </span>
+                    </Label>
                     <select
                       id="targetClusterId"
                       name="targetClusterId"
                       value={selectedClusterId}
-                      onChange={(event) =>
-                        setSelectedClusterId(event.target.value)
-                      }
-                      className={fieldClassName}
+                      onChange={(event) => {
+                        setSelectedClusterId(event.target.value);
+                        clearFieldError("targetClusterId");
+                      }}
+                      className={`${fieldClassName} ${
+                        fieldErrors.targetClusterId
+                          ? "border-rose-500 ring-2 ring-rose-500/10 bg-rose-50/10"
+                          : ""
+                      }`}
                       disabled={isLoadingClusters || clusters.length === 0}
                       required
                     >
@@ -357,94 +444,206 @@ function AdminNewExceptionContent() {
                         ))
                       )}
                     </select>
-                    {clusterErrorMessage && (
+                    {fieldErrors.targetClusterId ? (
+                      <p className="text-[11px] text-rose-600 font-medium">
+                        {fieldErrors.targetClusterId}
+                      </p>
+                    ) : clusterErrorMessage ? (
                       <p className="text-[11px] leading-5 text-rose-500">
                         {clusterErrorMessage}
                       </p>
-                    )}
+                    ) : null}
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="resourceNamespace">Namespace</Label>
+                  <div className="space-y-1.5">
+                    <Label
+                      htmlFor="resourceNamespace"
+                      className="flex items-center gap-1 text-xs font-semibold"
+                    >
+                      <span>Namespace</span>
+                      <span className="text-[10px] text-slate-400 font-normal">
+                        (선택 - 클러스터 전역인 경우 공백)
+                      </span>
+                    </Label>
                     <Input
                       id="resourceNamespace"
                       name="resourceNamespace"
                       value={resourceNamespace}
                       onChange={(e) => setResourceNamespace(e.target.value)}
-                      placeholder="예: payments (클러스터 전역인 경우 비워둠)"
+                      placeholder="예: payments"
                       className="h-11 rounded-xl border-slate-200"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="resourceKind">리소스 종류 (Kind)</Label>
+                  <div className="space-y-1.5">
+                    <Label
+                      htmlFor="resourceKind"
+                      className="flex items-center gap-1 text-xs font-semibold"
+                    >
+                      <span>리소스 종류 (Kind)</span>
+                      <span className="text-rose-500 font-bold">*</span>
+                      <span className="text-[10px] text-rose-500 font-normal">
+                        (필수)
+                      </span>
+                    </Label>
                     <Input
                       id="resourceKind"
                       name="resourceKind"
                       value={resourceKind}
-                      onChange={(e) => setResourceKind(e.target.value)}
+                      onChange={(e) => {
+                        setResourceKind(e.target.value);
+                        clearFieldError("resourceKind");
+                      }}
                       placeholder="예: Deployment, Pod, Service"
-                      className="h-11 rounded-xl border-slate-200"
+                      className={`h-11 rounded-xl border-slate-200 ${
+                        fieldErrors.resourceKind
+                          ? "border-rose-500 ring-2 ring-rose-500/10 bg-rose-50/10"
+                          : ""
+                      }`}
                       required
                     />
+                    {fieldErrors.resourceKind && (
+                      <p className="text-[11px] text-rose-600 font-medium">
+                        {fieldErrors.resourceKind}
+                      </p>
+                    )}
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="resourceName">리소스 이름</Label>
+                  <div className="space-y-1.5">
+                    <Label
+                      htmlFor="resourceName"
+                      className="flex items-center gap-1 text-xs font-semibold"
+                    >
+                      <span>적용 리소스 이름</span>
+                      <span className="text-rose-500 font-bold">*</span>
+                      <span className="text-[10px] text-rose-500 font-normal">
+                        (필수)
+                      </span>
+                    </Label>
                     <Input
                       id="resourceName"
                       name="resourceName"
                       value={resourceName}
-                      onChange={(e) => setResourceName(e.target.value)}
+                      onChange={(e) => {
+                        setResourceName(e.target.value);
+                        clearFieldError("resourceName");
+                      }}
                       placeholder="예: payment-api"
-                      className="h-11 rounded-xl border-slate-200"
+                      className={`h-11 rounded-xl border-slate-200 ${
+                        fieldErrors.resourceName
+                          ? "border-rose-500 ring-2 ring-rose-500/10 bg-rose-50/10"
+                          : ""
+                      }`}
                       required
                     />
+                    {fieldErrors.resourceName && (
+                      <p className="text-[11px] text-rose-600 font-medium">
+                        {fieldErrors.resourceName}
+                      </p>
+                    )}
                   </div>
                 </div>
 
                 <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="startDate">예외 시작일</Label>
+                  <div className="space-y-1.5">
+                    <Label
+                      htmlFor="startDate"
+                      className="flex items-center gap-1 text-xs font-semibold"
+                    >
+                      <span>예외 시작일</span>
+                      <span className="text-[10px] text-slate-400 font-normal">
+                        (자동 오늘 일자)
+                      </span>
+                    </Label>
                     <Input
                       id="startDate"
                       name="startDate"
                       type="date"
                       defaultValue={dateInputValue(0)}
-                      className="h-11 rounded-xl border-slate-200"
+                      className="h-11 rounded-xl border-slate-200 bg-slate-50 text-slate-500"
                       disabled
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="endDate">예외 종료일</Label>
+                  <div className="space-y-1.5">
+                    <Label
+                      htmlFor="endDate"
+                      className="flex items-center gap-1 text-xs font-semibold"
+                    >
+                      <span>예외 종료일</span>
+                      <span className="text-rose-500 font-bold">*</span>
+                      <span className="text-[10px] text-rose-500 font-normal">
+                        (필수)
+                      </span>
+                    </Label>
                     <Input
                       id="endDate"
                       name="endDate"
                       type="date"
-                      defaultValue={defaultEndDate}
-                      className="h-11 rounded-xl border-slate-200"
+                      value={endDateValue}
+                      onChange={(e) => {
+                        setEndDateValue(e.target.value);
+                        clearFieldError("endDate");
+                      }}
+                      className={`h-11 rounded-xl border-slate-200 ${
+                        fieldErrors.endDate
+                          ? "border-rose-500 ring-2 ring-rose-500/10 bg-rose-50/10"
+                          : ""
+                      }`}
                       required
                     />
+                    {fieldErrors.endDate && (
+                      <p className="text-[11px] text-rose-600 font-medium">
+                        {fieldErrors.endDate}
+                      </p>
+                    )}
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="reason">예외 등록 사유</Label>
+                <div className="space-y-1.5">
+                  <Label
+                    htmlFor="reason"
+                    className="flex items-center gap-1 text-xs font-semibold"
+                  >
+                    <span>예외 등록 사유</span>
+                    <span className="text-rose-500 font-bold">*</span>
+                    <span className="text-[10px] text-rose-500 font-normal">
+                      (필수)
+                    </span>
+                  </Label>
                   <textarea
                     id="reason"
                     name="reason"
-                    className={textareaClassName}
+                    className={`${textareaClassName} ${
+                      fieldErrors.reason
+                        ? "border-rose-500 ring-2 ring-rose-500/10 bg-rose-50/10"
+                        : ""
+                    }`}
                     placeholder="예외가 필요한 업무적 배경, 긴급성 및 사유를 입력하세요."
-                    defaultValue="운영 긴급 조치 및 마이그레이션 일정에 따른 임시 예외 등록"
+                    value={reasonValue}
+                    onChange={(e) => {
+                      setReasonValue(e.target.value);
+                      clearFieldError("reason");
+                    }}
                     required
                   />
+                  {fieldErrors.reason && (
+                    <p className="text-[11px] text-rose-600 font-medium">
+                      {fieldErrors.reason}
+                    </p>
+                  )}
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="attachmentNote">
-                    관리자 검토 메모 (선택)
+                <div className="space-y-1.5">
+                  <Label
+                    htmlFor="attachmentNote"
+                    className="flex items-center gap-1 text-xs font-semibold"
+                  >
+                    <span>관리자 검토 메모 및 링크</span>
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      (선택)
+                    </span>
                   </Label>
                   <textarea
                     id="attachmentNote"
                     name="attachmentNote"
-                    className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-3 focus:ring-blue-500/10"
+                    className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-3 focus:ring-blue-500/10"
                     placeholder="티켓 번호, 승인 근거 문서 링크 등을 입력하세요."
                   />
                 </div>

@@ -24,7 +24,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  auditLogs,
   entityTypeClassName,
   entityTypeLabel,
   getAuditLogs,
@@ -68,7 +67,7 @@ export default function AdminAuditLogsPage() {
     void loadLogs();
   }, [loadLogs]);
 
-  const logs = liveLogs ?? auditLogs;
+  const logs = liveLogs ?? [];
   const isLive = liveLogs !== null;
 
   const entityOptions = useMemo(

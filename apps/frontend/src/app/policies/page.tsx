@@ -16,15 +16,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAuthStore } from "@/lib/auth-store";
+import { useDataStore } from "@/lib/data-store";
 import {
-  exceptionRequests,
   exceptionStatusClassName,
   exceptionStatusLabel,
+  type ExceptionRequest,
 } from "@/lib/exception-requests";
 import {
   getPolicies,
-  kyvernoPolicies,
   policyModeLabel,
   policyStatusClassName,
   policyStatusLabel,
@@ -54,29 +53,30 @@ export default function PoliciesPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [clusterFilter, setClusterFilter] = useState("all");
 
-  const authStatus = useAuthStore((state) => state.status);
-  const initializeAuth = useAuthStore((state) => state.initialize);
+  const liveExceptions = useDataStore((state) => state.exceptions);
+  const fetchExceptions = useDataStore((state) => state.fetchExceptions);
+  const exceptionsList: ExceptionRequest[] = liveExceptions ?? [];
 
   /**
-   * 백엔드 API에서 실시간 정책 목록을 조회합니다.
+   * 백엔드 API에서 실시간 정책 및 예외 목록을 조회합니다.
    */
   const loadPolicies = useCallback(async () => {
     try {
-      await initializeAuth();
+      void fetchExceptions();
       const data = await getPolicies();
       if (Array.isArray(data)) {
         setLivePolicies(data);
       }
     } catch {
-      // 백엔드 연동 실패 시 graceful fallback 유지
+      // ignore
     }
-  }, [initializeAuth]);
+  }, [fetchExceptions]);
 
   useEffect(() => {
     void loadPolicies();
-  }, [authStatus, loadPolicies]);
+  }, [loadPolicies]);
 
-  const policies = livePolicies ?? kyvernoPolicies;
+  const policies = livePolicies ?? [];
   const isLive = livePolicies !== null;
 
   const visiblePolicies = policies.filter(
@@ -92,9 +92,6 @@ export default function PoliciesPage() {
     const normalizedQuery = query.trim().toLowerCase();
 
     return visiblePolicies.filter((policy) => {
-      const relatedExceptions = exceptionRequests.filter(
-        (request) => request.policyName === policy.name,
-      );
       const matchesQuery =
         normalizedQuery.length === 0 ||
         [
@@ -103,7 +100,6 @@ export default function PoliciesPage() {
           policy.clusterName,
           policy.namespace ?? "",
           policy.owner,
-          relatedExceptions.map((request) => request.id).join(" "),
         ]
           .join(" ")
           .toLowerCase()
@@ -133,7 +129,7 @@ export default function PoliciesPage() {
     (policy) => policy.mode === "enforce",
   ).length;
   const exceptionLinkedPolicies = visiblePolicies.filter((policy) =>
-    exceptionRequests.some((request) => request.policyName === policy.name),
+    exceptionsList.some((request) => request.policyName === policy.name),
   ).length;
 
   function resetFilters() {
@@ -304,7 +300,7 @@ export default function PoliciesPage() {
                 </article>
               ))
             : filteredPolicies.map((policy) => {
-                const relatedExceptions = exceptionRequests.filter(
+                const relatedExceptions = exceptionsList.filter(
                   (request) => request.policyName === policy.name,
                 );
 

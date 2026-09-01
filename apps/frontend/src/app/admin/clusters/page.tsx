@@ -30,7 +30,6 @@ import {
 import { useAuthStore } from "@/lib/auth-store";
 import { useDataStore } from "@/lib/data-store";
 import {
-  clusters,
   clusterEnvironmentLabel,
   clusterStatusClassName,
   clusterStatusLabel,
@@ -44,16 +43,8 @@ import {
   type KyvernoStatus,
   type ManagedCluster,
 } from "@/lib/clusters";
-import {
-  getPolicies,
-  kyvernoPolicies,
-  type KyvernoPolicy,
-} from "@/lib/policies";
-import {
-  getViolations,
-  policyViolations,
-  type PolicyViolation,
-} from "@/lib/policy-violations";
+import { getPolicies, type KyvernoPolicy } from "@/lib/policies";
+import { getViolations, type PolicyViolation } from "@/lib/policy-violations";
 
 type EnvironmentFilter = "all" | ClusterEnvironment;
 type StatusFilter = "all" | ClusterStatus;
@@ -109,26 +100,13 @@ export default function AdminClustersPage() {
     void loadDashboardData();
   }, [authStatus, loadDashboardData]);
 
-  const policyList = livePolicies ?? kyvernoPolicies;
-  const violationList = liveViolations ?? policyViolations;
+  const policyList = livePolicies ?? [];
+  const violationList = liveViolations ?? [];
 
   const activeClusters: ManagedCluster[] = useMemo(() => {
     const baseList =
       liveClusters && liveClusters.length > 0
         ? liveClusters.map((item) => {
-            const existing = clusters.find(
-              (c) =>
-                c.id === item.id ||
-                c.name === item.id ||
-                c.name === item.displayName,
-            );
-            if (existing) {
-              return {
-                ...existing,
-                id: item.id,
-                name: item.displayName || existing.name,
-              };
-            }
             return {
               id: item.id,
               name: item.displayName || item.id,
@@ -143,8 +121,8 @@ export default function AdminClustersPage() {
               provider: "EKS" as const,
               status: "healthy" as const,
               kyvernoStatus: "ready" as const,
-              nodeCount: 3,
-              namespaceCount: 8,
+              nodeCount: 1,
+              namespaceCount: 1,
               policyCount: 0,
               violationCount: 0,
               lastSyncedAt: new Date()
@@ -155,9 +133,7 @@ export default function AdminClustersPage() {
               description: `${item.displayName || item.id} 클러스터입니다.`,
             };
           })
-        : liveClusters && liveClusters.length === 0
-          ? []
-          : clusters;
+        : [];
 
     return baseList.map((cluster) => {
       const relPolicies = policyList.filter(
@@ -487,7 +463,9 @@ export default function AdminClustersPage() {
 
         {filteredClusters.length === 0 ? (
           <div className="border-t border-slate-100 px-5 py-10 text-center text-sm text-slate-500">
-            조건에 맞는 클러스터가 없습니다.
+            {activeClusters.length === 0
+              ? "등록된 클러스터가 없거나 현재 상태를 스캔하는 중입니다. Kubernetes 클러스터 연결 설정을 확인하세요."
+              : "조건에 맞는 클러스터가 없습니다."}
           </div>
         ) : null}
 

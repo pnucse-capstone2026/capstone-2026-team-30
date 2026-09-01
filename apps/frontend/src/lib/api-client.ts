@@ -30,12 +30,33 @@ export async function requestWithAuth<T>(
         ...(options.body ? { "Content-Type": "application/json" } : {}),
       },
       credentials: "include",
-      body: options.body ? JSON.stringify(options.body) : undefined,
+      body:
+        options.body === undefined
+          ? undefined
+          : typeof options.body === "string"
+            ? options.body
+            : JSON.stringify(options.body),
     });
 
   let response = await makeRequest(token);
 
   if (response.status === 401) {
+    const clone = response.clone();
+    try {
+      const errorData = await clone.json();
+      if (errorData?.code === "AUTH_SESSION_EXPIRED") {
+        await useAuthStore.getState().logout();
+        throw new Error(
+          errorData.message ||
+            "다른 환경에서 로그인되어 세션이 만료되었습니다. 다시 로그인해 주세요.",
+        );
+      }
+    } catch (e) {
+      if (e instanceof Error && e.message.includes("다른 환경에서 로그인")) {
+        throw e;
+      }
+    }
+
     const user = await refreshSession();
     const refreshedToken = user ? useAuthStore.getState().accessToken : null;
 

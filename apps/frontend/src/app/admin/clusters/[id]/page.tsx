@@ -19,14 +19,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  auditLogs as fallbackAuditLogs,
   entityTypeClassName,
   entityTypeLabel,
   type AuditLog,
 } from "@/lib/audit-logs";
 import { useAuthStore } from "@/lib/auth-store";
 import {
-  clusters as fallbackClusters,
   clusterEnvironmentLabel,
   clusterStatusClassName,
   clusterStatusLabel,
@@ -39,7 +37,6 @@ import {
 } from "@/lib/clusters";
 import { useDataStore } from "@/lib/data-store";
 import {
-  kyvernoPolicies as fallbackPolicies,
   policyModeLabel,
   policyStatusClassName,
   policyStatusLabel,
@@ -48,7 +45,6 @@ import {
   type KyvernoPolicy,
 } from "@/lib/policies";
 import {
-  policyViolations as fallbackViolations,
   severityClassName,
   severityLabel,
   statusClassName,
@@ -150,19 +146,7 @@ export default function AdminClusterDetailPage() {
 
     const targetMeta = directCluster ?? foundInStore;
 
-    const foundInFallback = fallbackClusters.find(
-      (c) => c.id === clusterId || c.name === clusterId,
-    );
-
     if (targetMeta) {
-      if (foundInFallback) {
-        return {
-          ...foundInFallback,
-          id: targetMeta.id,
-          name: targetMeta.displayName || foundInFallback.name,
-        };
-      }
-
       const env: ClusterEnvironment = clusterId.includes("stage")
         ? "staging"
         : clusterId.includes("dev")
@@ -179,8 +163,8 @@ export default function AdminClusterDetailPage() {
         provider: "EKS",
         status: "healthy",
         kyvernoStatus: "ready",
-        nodeCount: 3,
-        namespaceCount: 8,
+        nodeCount: 1,
+        namespaceCount: 1,
         policyCount: 0,
         violationCount: 0,
         lastSyncedAt: new Date().toISOString().slice(0, 16).replace("T", " "),
@@ -189,16 +173,12 @@ export default function AdminClusterDetailPage() {
       };
     }
 
-    if (foundInFallback) {
-      return foundInFallback;
-    }
-
     return null;
   }, [clusterId, directCluster, liveClusters]);
 
-  const policyList: KyvernoPolicy[] = livePolicies ?? fallbackPolicies;
-  const violationList: PolicyViolation[] = liveViolations ?? fallbackViolations;
-  const auditLogList: AuditLog[] = liveAuditLogs ?? fallbackAuditLogs;
+  const policyList: KyvernoPolicy[] = livePolicies ?? [];
+  const violationList: PolicyViolation[] = liveViolations ?? [];
+  const auditLogList: AuditLog[] = liveAuditLogs ?? [];
 
   const relatedPolicies = useMemo(() => {
     if (!currentCluster) return [];

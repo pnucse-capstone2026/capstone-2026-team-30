@@ -34,7 +34,6 @@ import {
   exceptionClassName,
   exceptionLabel,
   getViolations,
-  policyViolations,
   severityClassName,
   severityLabel,
   statusClassName,
@@ -133,7 +132,7 @@ function AdminViolationsContent() {
     void loadViolations();
   }, [loadViolations]);
 
-  const violations = liveViolations ?? policyViolations;
+  const violations = liveViolations ?? [];
   const isLive = liveViolations !== null;
 
   const summaryCards = [
@@ -577,7 +576,7 @@ function AdminViolationsContent() {
                     </TableCell>
                     <TableCell className="py-4 pr-5 sm:pr-6">
                       <Link
-                        href={`/admin/violations/${violation.id}`}
+                        href={`/admin/violations/${encodeURIComponent(violation.id)}`}
                         aria-label={`${violation.policyName} 상세 보기`}
                         className="flex size-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                       >

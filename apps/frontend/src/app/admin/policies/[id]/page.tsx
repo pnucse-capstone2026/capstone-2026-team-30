@@ -25,7 +25,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/lib/auth-store";
 import { useDataStore } from "@/lib/data-store";
 import {
-  exceptionRequests as fallbackExceptions,
   exceptionRiskClassName,
   exceptionRiskLabel,
   exceptionStatusClassName,
@@ -41,7 +40,6 @@ import {
   type KyvernoPolicy,
 } from "@/lib/policies";
 import {
-  policyViolations as fallbackViolations,
   severityClassName,
   severityLabel,
   statusClassName,
@@ -89,8 +87,8 @@ export default function AdminPolicyDetailPage() {
     void loadData();
   }, [loadData]);
 
-  const allViolations = liveViolations ?? fallbackViolations;
-  const allExceptions = liveExceptions ?? fallbackExceptions;
+  const allViolations = liveViolations ?? [];
+  const allExceptions = liveExceptions ?? [];
 
   const relatedViolations = useMemo(() => {
     if (!policy) return [];
