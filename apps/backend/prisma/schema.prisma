@@ -35,13 +35,14 @@ enum AuditActorType {
 }
 
 model User {
-  id         String    @id @default(uuid())
-  email      String    @unique
-  pwdHash    String
-  role       Role
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  disabledAt DateTime?
+  id               String    @id @default(uuid())
+  email            String    @unique
+  pwdHash          String
+  role             Role
+  currentSessionId String?   // 현재 활성화된 고유 세션 식별자 (동시접속 차단용)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  disabledAt       DateTime?
 
   requestedExceptionRequests PolicyExceptionRequest[] @relation("PolicyExceptionRequestRequester")
   approvedExceptionRequests  PolicyExceptionRequest[] @relation("PolicyExceptionRequestApprover")

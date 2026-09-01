@@ -13,6 +13,11 @@ export const AUTH_ERROR = {
     code: "AUTHENTICATION_REQUIRED",
     message: "Unauthorized",
   },
+  SESSION_EXPIRED: {
+    code: "AUTH_SESSION_EXPIRED",
+    message:
+      "다른 환경에서 로그인되어 세션이 만료되었습니다. 다시 로그인해 주세요.",
+  },
   INSUFFICIENT_PERMISSIONS: {
     code: "AUTH_INSUFFICIENT_PERMISSIONS",
     message: "Insufficient permissions.",

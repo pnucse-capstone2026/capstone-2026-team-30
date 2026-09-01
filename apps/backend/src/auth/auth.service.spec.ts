@@ -28,6 +28,7 @@ function createService() {
     runSerializableTransaction: jest.fn(),
     user: {
       findUnique: jest.fn(),
+      update: jest.fn().mockResolvedValue({}),
     },
     refreshToken: {
       create: jest.fn().mockResolvedValue({ id: "refresh-token-2" }),
@@ -70,15 +71,22 @@ function createService() {
     }),
   };
 
+  const sessionEventsService = {
+    emitForceLogout: jest.fn(),
+    subscribe: jest.fn(),
+  };
+
   return {
     service: new AuthService(
       prisma as never,
       jwtService as unknown as JwtService,
       configService as unknown as ConfigService,
+      sessionEventsService as never,
     ),
     prisma,
     jwtService,
     configService,
+    sessionEventsService,
   };
 }
 
@@ -124,8 +132,14 @@ describe("AuthService", () => {
     expect(result).toEqual({
       accessToken: "access-token",
       refreshToken: "refresh-token",
-      user: publicUser,
+      user: expect.objectContaining({
+        id: publicUser.id,
+        email: publicUser.email,
+        role: publicUser.role,
+        clusterIds: publicUser.clusterIds,
+      }),
     });
+    expect(result.user.sessionId).toBeDefined();
     expect(result.user).not.toHaveProperty("pwdHash");
   });
 

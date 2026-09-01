@@ -37,23 +37,39 @@ export class RefreshTokenCookieService {
     }
   }
 
-  set(response: Response, refreshToken: string) {
+  set(response: Response, refreshToken: string, request?: Request) {
+    const isSecure = this.isSecureConnection(request);
     response.cookie(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
       httpOnly: true,
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      secure: isSecure,
       path: "/api/auth",
       maxAge: this.getMaxAgeMs(),
     });
   }
 
-  clear(response: Response) {
+  clear(response: Response, request?: Request) {
+    const isSecure = this.isSecureConnection(request);
     response.clearCookie(REFRESH_TOKEN_COOKIE_NAME, {
       httpOnly: true,
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      secure: isSecure,
       path: "/api/auth",
     });
+  }
+
+  private isSecureConnection(request?: Request): boolean {
+    const configSecure = this.configService.get<string>("COOKIE_SECURE");
+    if (configSecure === "true") return true;
+    if (configSecure === "false") return false;
+
+    // HTTP ALB/프록시 환경에서 비암호화 쿠키 유실 방지
+    if (request) {
+      const proto = request.headers["x-forwarded-proto"];
+      return proto === "https" || request.secure === true;
+    }
+
+    return false;
   }
 
   private getMaxAgeMs(): number {

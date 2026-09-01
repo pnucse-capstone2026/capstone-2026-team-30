@@ -40,6 +40,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, "jwt") {
         id: true,
         email: true,
         role: true,
+        currentSessionId: true,
         disabledAt: true,
         userClusters: { select: { clusterId: true } },
       },
@@ -49,10 +50,20 @@ export class JwtStrategy extends PassportStrategy(Strategy, "jwt") {
       throw new BusinessException(AUTH_ERROR.AUTHENTICATION_REQUIRED);
     }
 
+    // 동시접속 차단(방안 A): 발급된 세션 ID와 DB의 최신 세션 ID가 불일치하면 세션 만료 에러
+    if (
+      payload.sessionId &&
+      user.currentSessionId &&
+      user.currentSessionId !== payload.sessionId
+    ) {
+      throw new BusinessException(AUTH_ERROR.SESSION_EXPIRED);
+    }
+
     return {
       id: user.id,
       email: user.email,
       role: user.role,
+      sessionId: user.currentSessionId ?? undefined,
       clusterIds: user.userClusters.map((assignment) => assignment.clusterId),
     };
   }

@@ -84,7 +84,6 @@ describe("seedRbacPermissions", () => {
       "exception_requests.cancel",
       "notifications.read",
       "mlops.notebooks",
-      "mlops.governance",
       "mlops.pipelines",
       "mlops.serving",
     ]);
@@ -93,7 +92,6 @@ describe("seedRbacPermissions", () => {
       "violations.read",
       "exception_requests.read",
       "notifications.read",
-      "mlops.governance",
       "mlops.pipelines",
       "mlops.serving",
     ]);

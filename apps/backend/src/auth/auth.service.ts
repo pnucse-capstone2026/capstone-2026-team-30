@@ -18,6 +18,8 @@ import {
   getExpiresAt,
 } from "./token-expiration";
 
+import { SessionEventsService } from "./session-events.service";
+
 type LoginResult = {
   accessToken: string;
   refreshToken: string;
@@ -47,6 +49,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly sessionEventsService: SessionEventsService,
   ) {}
 
   me(user: AuthenticatedUser): AuthenticatedUser {
@@ -70,10 +73,17 @@ export class AuthService {
       throw new BusinessException(AUTH_ERROR.INVALID_CREDENTIALS);
     }
 
+    // 신규 고유 세션 ID 생성 (후입 우선 원칙에 따라 기존 세션 무효화용)
+    const newSessionId = randomUUID();
+
+    // 기존 연결된 브라우저/클라이언트에 실시간 강제 로그아웃 SSE 이벤트 전송 (방안 C)
+    this.sessionEventsService.emitForceLogout(user.id);
+
     const authenticatedUser: AuthenticatedUser = {
       id: user.id,
       email: user.email,
       role: user.role,
+      sessionId: newSessionId,
       clusterIds: user.userClusters.map((assignment) => assignment.clusterId),
     };
     const preparedTokens = await this.prepareTokenPair(authenticatedUser);
@@ -92,6 +102,16 @@ export class AuthService {
         throw new BusinessException(AUTH_ERROR.INVALID_CREDENTIALS);
       }
 
+      // 1. 기존 모든 RefreshToken 즉시 폐기
+      await revokeAllRefreshTokensForUser(transaction, user.id);
+
+      // 2. User 테이블의 currentSessionId를 새 세션 ID로 갱신 (방안 A)
+      await transaction.user.update({
+        where: { id: user.id },
+        data: { currentSessionId: newSessionId },
+      });
+
+      // 3. 신규 세션의 RefreshToken 등록
       await transaction.refreshToken.create({
         data: {
           ...preparedTokens.refreshTokenData,
@@ -176,6 +196,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role,
+      sessionId: user.sessionId,
       jti: randomUUID(),
     };
 
@@ -227,6 +248,7 @@ export class AuthService {
         id: true,
         email: true,
         role: true,
+        currentSessionId: true,
         disabledAt: true,
         userClusters: { select: { clusterId: true } },
       },
@@ -240,6 +262,7 @@ export class AuthService {
       id: user.id,
       email: user.email,
       role: user.role,
+      sessionId: user.currentSessionId ?? undefined,
       clusterIds: user.userClusters.map((assignment) => assignment.clusterId),
     };
   }

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryProvider } from "@/components/providers/query-provider";
+import { SessionWatcher } from "@/components/auth/session-watcher";
 
 import "./globals.css";
 
@@ -22,6 +23,7 @@ export default function RootLayout({
         <QueryProvider>
           <TooltipProvider>
             {children}
+            <SessionWatcher />
             <Toaster />
           </TooltipProvider>
         </QueryProvider>

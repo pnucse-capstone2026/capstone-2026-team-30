@@ -31,6 +31,7 @@ function createRefreshTokenCookieService(overrides = {}) {
 
 describe("AuthController", () => {
   it("delegates login requests and stores refresh tokens in a cookie", async () => {
+    const request = createRequest();
     const response = createResponse();
     const serviceResponse = {
       accessToken: "access-token",
@@ -41,13 +42,18 @@ describe("AuthController", () => {
       login: jest.fn().mockResolvedValue(serviceResponse),
     });
     const refreshTokenCookieService = createRefreshTokenCookieService();
+    const sessionEventsService = {
+      emitForceLogout: jest.fn(),
+      subscribe: jest.fn(),
+    };
     const controller = new AuthController(
       authService as never,
+      sessionEventsService as never,
       refreshTokenCookieService as never,
     );
     const dto = { email: "admin@example.com", password: "password" };
 
-    await expect(controller.login(dto, response)).resolves.toEqual({
+    await expect(controller.login(dto, request, response)).resolves.toEqual({
       accessToken: "access-token",
       user: serviceResponse.user,
     });
@@ -55,6 +61,7 @@ describe("AuthController", () => {
     expect(refreshTokenCookieService.set).toHaveBeenCalledWith(
       response,
       "refresh-token",
+      request,
     );
   });
 
@@ -72,8 +79,13 @@ describe("AuthController", () => {
     const refreshTokenCookieService = createRefreshTokenCookieService({
       get: jest.fn().mockReturnValue("old-refresh-token"),
     });
+    const sessionEventsService = {
+      emitForceLogout: jest.fn(),
+      subscribe: jest.fn(),
+    };
     const controller = new AuthController(
       authService as never,
+      sessionEventsService as never,
       refreshTokenCookieService as never,
     );
 
@@ -86,6 +98,7 @@ describe("AuthController", () => {
     expect(refreshTokenCookieService.set).toHaveBeenCalledWith(
       response,
       "new-refresh-token",
+      request,
     );
   });
 
@@ -94,8 +107,13 @@ describe("AuthController", () => {
     const refreshTokenCookieService = createRefreshTokenCookieService({
       get: jest.fn().mockReturnValue(undefined),
     });
+    const sessionEventsService = {
+      emitForceLogout: jest.fn(),
+      subscribe: jest.fn(),
+    };
     const controller = new AuthController(
       authService as never,
+      sessionEventsService as never,
       refreshTokenCookieService as never,
     );
 
@@ -117,8 +135,13 @@ describe("AuthController", () => {
     const refreshTokenCookieService = createRefreshTokenCookieService({
       get: jest.fn().mockReturnValue("old-refresh-token"),
     });
+    const sessionEventsService = {
+      emitForceLogout: jest.fn(),
+      subscribe: jest.fn(),
+    };
     const controller = new AuthController(
       authService as never,
+      sessionEventsService as never,
       refreshTokenCookieService as never,
     );
 
@@ -126,7 +149,10 @@ describe("AuthController", () => {
       serviceResponse,
     );
     expect(authService.logout).toHaveBeenCalledWith("old-refresh-token");
-    expect(refreshTokenCookieService.clear).toHaveBeenCalledWith(response);
+    expect(refreshTokenCookieService.clear).toHaveBeenCalledWith(
+      response,
+      request,
+    );
   });
 
   it("delegates me requests to AuthService", () => {
@@ -134,8 +160,13 @@ describe("AuthController", () => {
     const authService = createAuthService({
       me: jest.fn().mockReturnValue(user),
     });
+    const sessionEventsService = {
+      emitForceLogout: jest.fn(),
+      subscribe: jest.fn(),
+    };
     const controller = new AuthController(
       authService as never,
+      sessionEventsService as never,
       createRefreshTokenCookieService() as never,
     );
 

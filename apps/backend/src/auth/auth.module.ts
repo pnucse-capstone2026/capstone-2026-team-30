@@ -7,6 +7,7 @@ import { AuthService } from "./auth.service";
 import { RefreshTokenCookieService } from "./refresh-token-cookie.service";
 import { PermissionsGuard } from "./guards/permissions.guard";
 import { JwtStrategy } from "./strategies/jwt.strategy";
+import { SessionEventsService } from "./session-events.service";
 
 @Module({
   imports: [JwtModule.register({}), PassportModule, PrismaModule],
@@ -16,6 +17,8 @@ import { JwtStrategy } from "./strategies/jwt.strategy";
     JwtStrategy,
     RefreshTokenCookieService,
     PermissionsGuard,
+    SessionEventsService,
   ],
+  exports: [AuthService, SessionEventsService],
 })
 export class AuthModule {}

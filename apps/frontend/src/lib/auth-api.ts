@@ -33,12 +33,20 @@ export class ApiError extends Error {
   }
 }
 
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ??
-  process.env.NEXT_PUBLIC_API_URL ??
-  (typeof window !== "undefined"
-    ? `${window.location.origin}/api`
-    : "http://localhost:3001");
+function getApiBaseUrl(): string {
+  const envUrl =
+    process.env.NEXT_PUBLIC_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_URL;
+  if (envUrl) {
+    const trimmed = envUrl.replace(/\/+$/, "");
+    return trimmed.endsWith("/api") ? trimmed : `${trimmed}/api`;
+  }
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/api`;
+  }
+  return "http://localhost:4000/api";
+}
+
+export const API_BASE_URL = getApiBaseUrl();
 
 export async function parseResponse<T>(response: Response): Promise<T> {
   if (response.ok) {
