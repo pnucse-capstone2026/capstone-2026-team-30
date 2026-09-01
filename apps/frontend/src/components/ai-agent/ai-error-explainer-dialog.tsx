@@ -124,10 +124,10 @@ export function AiErrorExplainerDialog({
                 ) : (
                   <Badge
                     variant="secondary"
-                    className="gap-1 text-xs font-normal"
+                    className="gap-1 text-xs font-normal bg-indigo-50 text-indigo-700 border border-indigo-200"
                   >
                     <Sparkles className="h-3 w-3 text-indigo-500" />
-                    Claude 3.5 Sonnet{" "}
+                    Bedrock AI{" "}
                     {result?.latencyMs ? `(${result.latencyMs}ms)` : ""}
                   </Badge>
                 )}

@@ -1,12 +1,12 @@
 import {
   BedrockRuntimeClient,
-  InvokeModelCommand,
+  ConverseCommand,
 } from "@aws-sdk/client-bedrock-runtime";
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
 /**
- * AWS Bedrock Runtime과 연동하여 LLM 모델 호출을 처리하는 서비스
+ * AWS Bedrock Runtime Converse API와 연동하여 범용 LLM 모델(Amazon Nova, Claude 등) 호출을 처리하는 서비스
  */
 @Injectable()
 export class BedrockService {
@@ -22,9 +22,10 @@ export class BedrockService {
       "AWS_SECRET_ACCESS_KEY",
     );
 
+    // 즉시 사용 가능한 AWS Bedrock 최신 LLM 모델 기본 지정
     this.modelId = this.configService.get<string>(
       "BEDROCK_MODEL_ID",
-      "anthropic.claude-3-5-sonnet-20240620-v1:0",
+      "amazon.nova-lite-v1:0",
     );
 
     const clientConfig: Record<string, unknown> = { region };
@@ -39,7 +40,7 @@ export class BedrockService {
   }
 
   /**
-   * Anthropic Claude Messages API 규격으로 Bedrock 모델을 호출합니다.
+   * AWS Bedrock Converse API 규격으로 파운데이션 모델을 호출합니다.
    *
    * @param systemPrompt 에이전트 페르소나 및 응답 지침
    * @param userPrompt 오류 메시지, 정책, 매니페스트 또는 MLOps 질의 프롬프트
@@ -51,41 +52,35 @@ export class BedrockService {
     userPrompt: string,
     options?: { maxTokens?: number; temperature?: number },
   ): Promise<string> {
-    const payload = {
-      anthropic_version: "bedrock-2023-05-31",
-      max_tokens: options?.maxTokens ?? 2048,
-      temperature: options?.temperature ?? 0.2,
-      system: systemPrompt,
-      messages: [
-        {
-          role: "user",
-          content: userPrompt,
-        },
-      ],
-    };
-
     try {
-      const command = new InvokeModelCommand({
+      const command = new ConverseCommand({
         modelId: this.modelId,
-        contentType: "application/json",
-        accept: "application/json",
-        body: JSON.stringify(payload),
+        system: [{ text: systemPrompt }],
+        messages: [
+          {
+            role: "user",
+            content: [{ text: userPrompt }],
+          },
+        ],
+        inferenceConfig: {
+          maxTokens: options?.maxTokens ?? 2048,
+          temperature: options?.temperature ?? 0.2,
+        },
       });
 
       const response = await this.client.send(command);
-      const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+      const responseText = response.output?.message?.content?.[0]?.text;
 
-      if (responseBody.content && responseBody.content.length > 0) {
-        return responseBody.content[0].text;
+      if (responseText) {
+        return responseText;
       }
 
       throw new Error(
-        "Bedrock response body does not contain valid text content",
+        "Bedrock Converse response does not contain valid text content",
       );
     } catch (error) {
-      // 로컬 개발 및 테스트 시 AWS 자격증명이 연결되어 있지 않거나 타임아웃 발생 시 로깅 처리
       this.logger.warn(
-        `AWS Bedrock invocation failed: ${(error as Error).message}`,
+        `AWS Bedrock Converse API invocation failed: ${(error as Error).message}`,
       );
       throw error;
     }

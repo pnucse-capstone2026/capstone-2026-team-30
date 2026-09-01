@@ -22,14 +22,14 @@ export class AiAgentService {
     private readonly workloadEvaluator: WorkloadEvaluatorService,
     config: ConfigService,
   ) {
-    // Bedrock API 응답 대기 상한 타임아웃 (기본값: 3500ms)
+    // Bedrock API 응답 대기 상한 타임아웃 (기본값: 15000ms)
     const configuredTimeout = Number(
-      config.get<string>("AI_ANALYSIS_TIMEOUT_MS", "3500"),
+      config.get<string>("AI_ANALYSIS_TIMEOUT_MS", "15000"),
     );
     this.timeoutMs =
       Number.isFinite(configuredTimeout) && configuredTimeout > 0
         ? configuredTimeout
-        : 3500;
+        : 15000;
   }
 
   /**
