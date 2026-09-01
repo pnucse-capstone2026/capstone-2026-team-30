@@ -53,7 +53,13 @@ describe("ClustersController", () => {
           },
       ),
     } as unknown as ClusterProvider;
-    return { controller: new ClustersController(clusters), clusters };
+    const clusterOverviewService = {
+      getLiveOverview: jest.fn(),
+    } as never;
+    return {
+      controller: new ClustersController(clusters, clusterOverviewService),
+      clusters,
+    };
   }
 
   function user(role: Role, clusterIds: string[]): AuthenticatedUser {

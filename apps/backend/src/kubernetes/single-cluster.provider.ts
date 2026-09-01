@@ -97,7 +97,7 @@ export class SingleClusterProvider extends ClusterProvider {
   }
 
   private assertCluster(clusterId: string): void {
-    if (clusterId !== this.id) {
+    if (clusterId && clusterId !== this.id && clusterId !== "default") {
       throw new BusinessException(KUBERNETES_ERROR.CLUSTER_NOT_CONFIGURED, {
         message: `Cluster '${clusterId}' is not configured.`,
         context: { clusterId },

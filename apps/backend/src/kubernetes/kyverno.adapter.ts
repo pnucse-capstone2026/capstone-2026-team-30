@@ -112,8 +112,26 @@ export class KyvernoAdapter {
     const baseRules = Array.isArray(policy.spec?.rules)
       ? (policy.spec.rules as Array<{ name?: string }>)
       : [];
-    const knownBaseNames = new Set(baseRules.map((rule) => rule.name));
-    const missing = ruleNames.filter((rule) => !knownBaseNames.has(rule));
+    const knownBaseNames = new Set(
+      baseRules
+        .map((rule) => rule.name)
+        .filter((name): name is string => Boolean(name)),
+    );
+
+    // autogen- 또는 autogen-cronjob- 접두사가 포함된 규칙 이름을 원본 룰 이름으로 정규화
+    const normalizedInputRules = ruleNames.map((rule) => {
+      if (knownBaseNames.has(rule)) return rule;
+      const strippedCron = rule.replace(/^autogen-cronjob-/, "");
+      if (knownBaseNames.has(strippedCron)) return strippedCron;
+      const strippedAuto = rule.replace(/^autogen-/, "");
+      if (knownBaseNames.has(strippedAuto)) return strippedAuto;
+      return rule;
+    });
+
+    const uniqueNormalized = Array.from(new Set(normalizedInputRules));
+    const missing = uniqueNormalized.filter(
+      (rule) => !knownBaseNames.has(rule),
+    );
     if (missing.length) {
       throw new PolicyRuleValidationError(
         `Unknown ClusterPolicy rule(s): ${missing.join(", ")}.`,
@@ -131,16 +149,16 @@ export class KyvernoAdapter {
         "ReplicaSet",
         "ReplicationController",
         "StatefulSet",
-      ].includes(resourceKind);
+      ].includes(resourceKind ?? "");
     const generated = new Set(
       (policy.status?.autogen?.rules ?? [])
         .map((rule) => rule.name)
         .filter((name): name is string => Boolean(name)),
     );
-    const applied = [...ruleNames];
+    const applied = [...uniqueNormalized];
 
     if (supportsAutogen) {
-      for (const rule of ruleNames) {
+      for (const rule of uniqueNormalized) {
         const generatedName = `${autogenPrefix}${rule}`;
         if (generated.has(generatedName)) applied.push(generatedName);
       }
@@ -216,6 +234,27 @@ export class KyvernoAdapter {
       });
     } catch (error) {
       if (statusCode(error) !== 404) throw error;
+    }
+  }
+
+  async listPolicyExceptions(
+    clusterId: string,
+    namespace?: string,
+  ): Promise<KubeObject[]> {
+    const connection = this.clusters.get(clusterId);
+    const targetNamespace = namespace || connection.exceptionNamespace;
+    try {
+      const response =
+        await connection.customObjectsApi.listNamespacedCustomObject({
+          group: KYVERNO_GROUP,
+          version: EXCEPTION_VERSION,
+          namespace: targetNamespace,
+          plural: EXCEPTION_PLURAL,
+        });
+      return (response as { items?: KubeObject[] }).items ?? [];
+    } catch (error) {
+      if (statusCode(error) === 404) return [];
+      return [];
     }
   }
 

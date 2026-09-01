@@ -173,6 +173,20 @@ export default function UserDashboardPage() {
             </div>
           </section>
 
+          {!isLoading && clustersList.length === 0 && (
+            <section className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-amber-900">
+              <Server className="size-5 shrink-0 text-amber-600" />
+              <div className="text-sm">
+                <span className="font-semibold">
+                  클러스터 연결 상태 확인 필요:
+                </span>{" "}
+                계정에 할당된 클러스터가 없거나 상태를 스캔하는 중입니다.
+                관리자에게 클러스터 접근 권한을 요청하거나 Kubernetes 연결을
+                점검하세요.
+              </div>
+            </section>
+          )}
+
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {summaryCards.map(
               ({ label, value, detail, icon: Icon, tone, trend }) => (

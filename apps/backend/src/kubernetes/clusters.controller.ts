@@ -12,6 +12,10 @@ import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { PermissionsGuard } from "../auth/guards/permissions.guard";
 import { BusinessException } from "../common/errors/business.exception";
 import { ClusterMetadata, ClusterProvider } from "./cluster-provider";
+import {
+  ClusterOverviewService,
+  LiveClusterOverview,
+} from "./cluster-overview.service";
 import { KUBERNETES_ERROR } from "./kubernetes.errors";
 
 /**
@@ -22,7 +26,10 @@ import { KUBERNETES_ERROR } from "./kubernetes.errors";
 @Controller("clusters")
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class ClustersController {
-  constructor(private readonly clusters: ClusterProvider) {}
+  constructor(
+    private readonly clusters: ClusterProvider,
+    private readonly clusterOverviewService: ClusterOverviewService,
+  ) {}
 
   /**
    * 사용자가 접근 가능한 배정 클러스터 목록을 조회합니다.
@@ -41,6 +48,17 @@ export class ClustersController {
   }
 
   /**
+   * 기본 클러스터의 실시간 노드/파드/정책/위반 상태를 조회합니다.
+   */
+  @Get("live-overview")
+  @RequirePermissions("exception_requests.read")
+  @ApiOperation({ summary: "기본 클러스터 실시간 상세 관제 데이터 조회" })
+  @ApiResponse({ status: 200, description: "클러스터 실시간 현황 반환" })
+  async getLiveOverviewDefault(): Promise<LiveClusterOverview> {
+    return this.clusterOverviewService.getLiveOverview();
+  }
+
+  /**
    * 시스템에 등록된 전체 클러스터 카탈로그를 조회합니다. (어드민/권한 보유자 전용)
    *
    * @returns 전체 클러스터 메타데이터 목록
@@ -51,6 +69,30 @@ export class ClustersController {
   @ApiResponse({ status: 200, description: "전체 클러스터 목록 반환" })
   catalog(): ClusterMetadata[] {
     return this.clusters.list();
+  }
+
+  /**
+   * 특정 클러스터의 실시간 노드/파드/정책/위반 상태를 조회합니다.
+   */
+  @Get(":id/live-overview")
+  @RequirePermissions("exception_requests.read")
+  @ApiOperation({ summary: "특정 클러스터 실시간 상세 관제 데이터 조회" })
+  @ApiResponse({ status: 200, description: "클러스터 실시간 현황 반환" })
+  async getLiveOverview(
+    @Param("id") id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<LiveClusterOverview> {
+    const isAssigned = user.clusterIds.includes(id);
+    const isAdmin = user.role === "ADMIN";
+
+    if (!isAssigned && !isAdmin) {
+      throw new BusinessException(KUBERNETES_ERROR.CLUSTER_NOT_CONFIGURED, {
+        message: `Cluster '${id}' is not accessible or not configured.`,
+        context: { clusterId: id },
+      });
+    }
+
+    return this.clusterOverviewService.getLiveOverview(id);
   }
 
   /**
