@@ -289,7 +289,15 @@ export class ExceptionRequestsService {
   }
 
   private normalizeRequestedRules(ruleNames: string[]): string[] {
-    const normalized = [...new Set(ruleNames.map((rule) => rule.trim()))];
+    const normalized = [
+      ...new Set(
+        ruleNames
+          .map((rule) => rule.trim())
+          .map((rule) =>
+            rule.replace(/^autogen-cronjob-/, "").replace(/^autogen-/, ""),
+          ),
+      ),
+    ];
     if (normalized.some((rule) => !rule || rule === "*")) {
       throw new BusinessException(EXCEPTION_REQUEST_ERROR.RULE_NAMES_REQUIRED);
     }

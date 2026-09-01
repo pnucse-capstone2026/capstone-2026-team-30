@@ -51,6 +51,7 @@ export class ExceptionRequestsController {
   }
 
   @Patch(":id/approve")
+  @Post(":id/approve")
   @RequirePermissions("exception_requests.approve")
   approve(
     @Param("id") id: string,
@@ -61,6 +62,7 @@ export class ExceptionRequestsController {
   }
 
   @Patch(":id/reject")
+  @Post(":id/reject")
   @RequirePermissions("exception_requests.reject")
   reject(
     @Param("id") id: string,

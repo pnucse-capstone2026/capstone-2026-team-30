@@ -42,6 +42,19 @@ type PolicyReportRaw = {
     creationTimestamp?: string;
     annotations?: Record<string, string>;
     labels?: Record<string, string>;
+    ownerReferences?: Array<{
+      apiVersion?: string;
+      kind?: string;
+      name?: string;
+      uid?: string;
+    }>;
+  };
+  scope?: {
+    apiVersion?: string;
+    kind?: string;
+    name?: string;
+    namespace?: string;
+    uid?: string;
   };
   summary?: {
     pass?: number;
@@ -655,7 +668,7 @@ export class ViolationsService {
         );
         const ns = rec.namespace || "cluster-wide";
 
-        // 1. 리소스명이 유효한 경우 복합 키 매핑을 등록하여 인덱스/접두사 변동 시에도 상태 보존
+        // 리소스명이 유효한 경우에만 리소스 단위 복합 키 매핑을 등록하여 타 리소스 상태 오염 방지
         if (rec.resourceName && rec.resourceName !== "Unknown") {
           for (const r of ruleVariants) {
             map.set(
@@ -669,22 +682,6 @@ export class ViolationsService {
                 validStatus,
               );
             }
-          }
-        } else {
-          // 2. 리소스명이 Unknown인 경우 정책/룰/네임스페이스 단위의 2차 Fallback 키 등록
-          for (const r of ruleVariants) {
-            map.set(
-              `${rec.targetClusterId}:${rec.policyName}:${r}:${ns}`,
-              validStatus,
-            );
-            map.set(
-              `${rec.targetClusterId}:${rec.policyName}:${r}:cluster-wide`,
-              validStatus,
-            );
-            map.set(
-              `${rec.targetClusterId}:${rec.policyName}:${r}`,
-              validStatus,
-            );
           }
         }
       }
@@ -790,15 +787,21 @@ export class ViolationsService {
     const policyName = result.policy ?? "unknown-policy";
     const ruleName = result.rule ?? "unknown-rule";
 
+    const scopeResource = report.scope;
+    const ownerRef = report.metadata?.ownerReferences?.[0];
     const targetResource = result.resources?.[0];
     const properties = (result.properties as Record<string, string>) ?? {};
 
     let resourceKind =
+      scopeResource?.kind ||
+      ownerRef?.kind ||
       targetResource?.kind ||
       properties["resource.kind"] ||
       properties["kind"] ||
       "";
     let resourceName =
+      scopeResource?.name ||
+      ownerRef?.name ||
       targetResource?.name ||
       properties["resource.name"] ||
       properties["name"] ||
@@ -818,6 +821,7 @@ export class ViolationsService {
     if (!resourceName) resourceName = "Unknown";
 
     const namespace =
+      scopeResource?.namespace ??
       targetResource?.namespace ??
       properties["resource.namespace"] ??
       report.metadata?.namespace ??
@@ -840,15 +844,14 @@ export class ViolationsService {
       result.message ??
       `Policy '${policyName}' violation detected on ${resourceKind}/${resourceName}.`;
 
-    const excKey = `${cluster.id}:${policyName}:${resourceName}:${namespace}`;
-    const exc = exceptionsMap?.get(excKey);
-
     const isNamedResource = resourceName && resourceName !== "Unknown";
     const normalizedRule = this.normalizeRuleName(ruleName);
 
+    // 1. 해당 위반 고유 ID 매핑 우선 확인
     let savedStatus: ("open" | "inReview" | "resolved") | undefined =
       savedStatusesMap?.get(id);
 
+    // 2. 인덱스 변동 대응을 위해 리소스명이 유효한 경우에만 정확한 복합 키로 매핑
     if (!savedStatus && isNamedResource) {
       savedStatus =
         savedStatusesMap?.get(
@@ -865,23 +868,32 @@ export class ViolationsService {
         );
     }
 
-    // 2차 Fallback: 리소스명 미일치 또는 Unknown인 경우 규칙/정책 단위 상태 조회
-    if (!savedStatus) {
-      savedStatus =
-        savedStatusesMap?.get(
-          `${cluster.id}:${policyName}:${ruleName}:${namespace}`,
+    // 3. 예외 신청(Exception) 매핑도 해당 특정 리소스에만 엄격하게 매칭
+    let exc = isNamedResource
+      ? (exceptionsMap?.get(
+          `${cluster.id}:${policyName}:${resourceName}:${namespace}`,
         ) ??
-        savedStatusesMap?.get(
-          `${cluster.id}:${policyName}:${normalizedRule}:${namespace}`,
-        ) ??
-        savedStatusesMap?.get(
-          `${cluster.id}:${policyName}:${ruleName}:cluster-wide`,
-        ) ??
-        savedStatusesMap?.get(
-          `${cluster.id}:${policyName}:${normalizedRule}:cluster-wide`,
-        ) ??
-        savedStatusesMap?.get(`${cluster.id}:${policyName}:${ruleName}`) ??
-        savedStatusesMap?.get(`${cluster.id}:${policyName}:${normalizedRule}`);
+        exceptionsMap?.get(
+          `${cluster.id}:${policyName}:${resourceName}:cluster-wide`,
+        ))
+      : undefined;
+
+    // 상위 Controller로 신청된 예외가 하위 Pod에 매칭되는 경우만 안전하게 연결 (예: Deployment unapproved-redis ➡️ Pod unapproved-redis-5d846bd946-flxzj)
+    if (!exc && isNamedResource && exceptionsMap) {
+      for (const [key, value] of exceptionsMap.entries()) {
+        const [eCluster, ePolicy, eResName, eNs] = key.split(":");
+        if (
+          eCluster === cluster.id &&
+          ePolicy === policyName &&
+          (eNs === namespace ||
+            eNs === "cluster-wide" ||
+            namespace === "cluster-wide") &&
+          resourceName.startsWith(`${eResName}-`)
+        ) {
+          exc = value;
+          break;
+        }
+      }
     }
 
     let status: "open" | "inReview" | "resolved" = savedStatus ?? "open";

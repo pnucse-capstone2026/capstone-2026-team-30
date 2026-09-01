@@ -534,7 +534,7 @@ describe("ViolationsService", () => {
       expect(result[0].status).toBe("resolved");
     });
 
-    it("DB의 resourceName이 Unknown인 경우에도 정책/규칙 Fallback을 통해 처리 상태를 매핑한다", async () => {
+    it("동일 정책 아래에서도 리소스 단위로 격리되어 타 리소스의 처리 상태가 전파되지 않는다", async () => {
       mockKyvernoAdapter.listNamespacedPolicyReports = jest
         .fn()
         .mockResolvedValueOnce([
@@ -567,14 +567,14 @@ describe("ViolationsService", () => {
         .fn()
         .mockResolvedValueOnce([]);
 
-      // DB 레코드에 알림 등을 통해 resourceName이 Unknown으로 저장된 경우
+      // DB 레코드에 다른 리소스(order-processor-deploy)의 상태만 저장된 경우
       mockPrismaService.violationHistory.findMany.mockResolvedValueOnce([
         {
-          id: "db-uuid-unknown",
+          id: "db-uuid-order-processor",
           targetClusterId: "cluster-1",
           policyName: "disallow-latest-tag",
           ruleName: "require-image-tag",
-          resourceName: "Unknown",
+          resourceName: "order-processor-deploy",
           namespace: "payments",
           status: "inReview",
         },
@@ -583,7 +583,8 @@ describe("ViolationsService", () => {
       const result = await service.list(mockUser, { clusterId: "cluster-1" });
 
       expect(result).toHaveLength(1);
-      expect(result[0].status).toBe("inReview");
+      // payment-api-pod는 타 리소스(order-processor-deploy)의 inReview 상태에 오염되지 않고 open 상태 유지
+      expect(result[0].status).toBe("open");
     });
   });
 });

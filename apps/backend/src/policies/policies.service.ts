@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import * as yaml from "js-yaml";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { BusinessException } from "../common/errors/business.exception";
 import {
@@ -198,70 +199,100 @@ export class PoliciesService {
   ): Promise<PolicyDetailDto> {
     const cluster = this.validateClusterAccess(user, dto.clusterId);
 
-    if (dto.scope === "Policy" && !dto.namespace?.trim()) {
-      throw new BusinessException(POLICY_ERROR.INVALID_SPEC, {
-        context: { reason: "Namespace is required for namespaced Policy." },
-      });
-    }
+    let manifest: Record<string, unknown>;
+    let targetScope: "ClusterPolicy" | "Policy" = dto.scope;
+    let targetNamespace = dto.namespace?.trim();
 
-    const kinds = dto.matchKinds
-      .split(",")
-      .map((kind) => kind.trim())
-      .filter(Boolean);
+    if (dto.rawYaml?.trim()) {
+      try {
+        const parsed = yaml.load(dto.rawYaml.trim()) as Record<string, unknown>;
+        if (!parsed || typeof parsed !== "object") {
+          throw new Error("YAML content is not a valid object");
+        }
+        manifest = parsed;
+        if (parsed.kind === "Policy" || parsed.kind === "ClusterPolicy") {
+          targetScope = parsed.kind as "ClusterPolicy" | "Policy";
+        }
+        const meta = parsed.metadata as Record<string, unknown> | undefined;
+        if (meta?.namespace && typeof meta.namespace === "string") {
+          targetNamespace = meta.namespace.trim();
+        }
+      } catch (err) {
+        throw new BusinessException(POLICY_ERROR.INVALID_SPEC, {
+          context: { reason: `Invalid YAML format: ${(err as Error).message}` },
+        });
+      }
+    } else {
+      if (dto.scope === "Policy" && !dto.namespace?.trim()) {
+        throw new BusinessException(POLICY_ERROR.INVALID_SPEC, {
+          context: { reason: "Namespace is required for namespaced Policy." },
+        });
+      }
 
-    const manifest: Record<string, unknown> = {
-      apiVersion: "kyverno.io/v1",
-      kind: dto.scope,
-      metadata: {
-        name: dto.name.trim(),
-        ...(dto.scope === "Policy" && dto.namespace
-          ? { namespace: dto.namespace.trim() }
-          : {}),
-        annotations: {
-          ...(dto.description?.trim()
-            ? { "policies.kyverno.io/description": dto.description.trim() }
+      const kinds = dto.matchKinds
+        .split(",")
+        .map((kind) => kind.trim())
+        .filter(Boolean);
+
+      manifest = {
+        apiVersion: "kyverno.io/v1",
+        kind: dto.scope,
+        metadata: {
+          name: dto.name.trim(),
+          ...(dto.scope === "Policy" && dto.namespace
+            ? { namespace: dto.namespace.trim() }
             : {}),
+          annotations: {
+            ...(dto.description?.trim()
+              ? { "policies.kyverno.io/description": dto.description.trim() }
+              : {}),
+          },
         },
-      },
-      spec: {
-        validationFailureAction: dto.mode === "enforce" ? "Enforce" : "Audit",
-        background: true,
-        rules: [
-          {
-            name: dto.ruleName.trim(),
-            match: {
-              any: [
-                {
-                  resources: {
-                    kinds: kinds.length > 0 ? kinds : ["Pod"],
+        spec: {
+          validationFailureAction: dto.mode === "enforce" ? "Enforce" : "Audit",
+          background: true,
+          rules: [
+            {
+              name: dto.ruleName.trim(),
+              match: {
+                any: [
+                  {
+                    resources: {
+                      kinds: kinds.length > 0 ? kinds : ["Pod"],
+                    },
                   },
-                },
-              ],
-            },
-            [dto.type]: {
-              message:
-                dto.message?.trim() ||
-                dto.description?.trim() ||
-                "Policy rule condition not satisfied",
-              pattern: {
-                metadata: {
-                  labels: {
-                    app: "?*",
+                ],
+              },
+              [dto.type]: {
+                message:
+                  dto.message?.trim() ||
+                  dto.description?.trim() ||
+                  "Policy rule condition not satisfied",
+                pattern: {
+                  metadata: {
+                    labels: {
+                      app: "?*",
+                    },
                   },
                 },
               },
             },
-          },
-        ],
-      },
-    };
+          ],
+        },
+      };
+    }
 
     let rawPolicy: KubePolicyRaw;
     try {
-      if (dto.scope === "Policy") {
+      if (targetScope === "Policy") {
+        if (!targetNamespace) {
+          throw new BusinessException(POLICY_ERROR.INVALID_SPEC, {
+            context: { reason: "Namespace is required for namespaced Policy." },
+          });
+        }
         rawPolicy = (await this.kyvernoAdapter.createNamespacedPolicy(
           dto.clusterId,
-          dto.namespace!.trim(),
+          targetNamespace,
           manifest,
         )) as KubePolicyRaw;
       } else {
