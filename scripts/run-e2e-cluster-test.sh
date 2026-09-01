@@ -23,6 +23,7 @@ KUBECTL_VERSION="v1.29.2"
 HELM_VERSION="v3.14.0"
 
 SKIP_BUILD=false
+SKIP_FRONTEND=false
 CLEANUP=false
 DELETE_CLUSTER=false
 
@@ -92,6 +93,20 @@ cleanup_test_resources() {
   log_info "Cleanup completed."
 }
 
+# 예기치 못한 스크립트 중단(Ctrl+C, 에러 등) 시 자동 진단 덤프 및 리소스 정리 수행
+cleanup_on_exit() {
+  local exit_code=$?
+  if [ ${exit_code} -ne 0 ] && [ "${TEST_FINISHED:-false}" != "true" ]; then
+    log_warn "Test execution aborted or failed with exit code ${exit_code}."
+    dump_diagnostics
+  fi
+  if [ "${CLEANUP}" = true ]; then
+    cleanup_test_resources
+  fi
+  exit ${exit_code}
+}
+trap cleanup_on_exit EXIT ERR SIGINT SIGTERM
+
 # ==============================================================================
 # 2. CLI 인자 파싱
 # ==============================================================================
@@ -100,8 +115,10 @@ print_usage() {
   echo ""
   echo "Options:"
   echo "  --skip-build       Skip Docker image building and loading (uses existing in-cluster images)"
+  echo "  --skip-frontend    Skip building and deploying Next.js frontend (accelerates E2E backend tests)"
   echo "  --cleanup          Clean up test namespace and test policies after test execution"
   echo "  --delete-cluster   Delete the entire Kind cluster after test execution"
+  echo "  --cleanup-cluster  Alias for --delete-cluster (cleans test resources & deletes cluster)"
   echo "  --cluster-name <n> Specify custom Kind cluster name (default: k8s-lab)"
   echo "  -h, --help         Show this help message"
   echo ""
@@ -113,11 +130,15 @@ while [[ $# -gt 0 ]]; do
       SKIP_BUILD=true
       shift
       ;;
+    --skip-frontend)
+      SKIP_FRONTEND=true
+      shift
+      ;;
     --cleanup)
       CLEANUP=true
       shift
       ;;
-    --delete-cluster)
+    --delete-cluster|--cleanup-cluster)
       CLEANUP=true
       DELETE_CLUSTER=true
       shift
@@ -199,7 +220,7 @@ kubectl cluster-info
 log_pass "Kind cluster '${CLUSTER_NAME}' is up and responsive."
 
 # ==============================================================================
-# 5. Kyverno v1.12 (PolicyExceptions 활성화) 릴리즈 배포
+# 5. Kyverno v1.12 (PolicyExceptions 활성화 및 I/O 최적화) 릴리즈 배포
 # ==============================================================================
 log_step "Step 3: Deploying Kyverno v1.12 with PolicyExceptions Enabled"
 
@@ -207,7 +228,7 @@ log_info "Updating Kyverno Helm repository..."
 helm repo add kyverno https://kyverno.github.io/kyverno/ --force-update > /dev/null 2>&1 || true
 helm repo update kyverno > /dev/null 2>&1
 
-# 로컬 자원 최적화 및 PolicyException CRD 활성화 주입
+# 로컬 자원 최적화 및 PolicyException CRD 활성화 주입 (admissionReports 비활성화로 etcd I/O 스래싱 차단)
 log_info "Installing / Upgrading Kyverno chart in namespace 'kyverno'..."
 helm upgrade --install kyverno kyverno/kyverno \
   --namespace kyverno \
@@ -216,10 +237,17 @@ helm upgrade --install kyverno kyverno/kyverno \
   --set backgroundController.replicas=1 \
   --set cleanupController.replicas=1 \
   --set reportsController.replicas=1 \
+  --set "reportsController.backgroundScan=true" \
+  --set "reportsController.backgroundScanInterval=1h" \
+  --set "backgroundController.backgroundScanInterval=1h" \
+  --set admissionController.resources.requests.cpu=50m \
+  --set admissionController.resources.requests.memory=64Mi \
+  --set admissionController.resources.limits.cpu=200m \
+  --set admissionController.resources.limits.memory=256Mi \
   --set features.policyExceptions.enabled=true \
   --set "features.policyExceptions.namespace=*" \
   --set features.validatingAdmissionPolicyReports.enabled=false \
-  --set features.admissionReports.enabled=true \
+  --set features.admissionReports.enabled=false \
   --set features.aggregateReports.enabled=true \
   --set features.policyReports.enabled=true \
   --wait --timeout=180s
@@ -236,13 +264,17 @@ log_step "Step 4: Building and Loading Local Container Images"
 if [ "${SKIP_BUILD}" = false ]; then
   log_info "Building local Docker image: kyverno-backend:latest..."
   docker build -t kyverno-backend:latest -f "${ROOT_DIR}/apps/backend/Dockerfile" "${ROOT_DIR}"
-
-  log_info "Building local Docker image: kyverno-frontend:latest..."
-  docker build -t kyverno-frontend:latest -f "${ROOT_DIR}/apps/frontend/Dockerfile" "${ROOT_DIR}"
-
-  log_info "Loading container images into Kind cluster '${CLUSTER_NAME}' nodes..."
+  log_info "Loading backend image into Kind cluster '${CLUSTER_NAME}'..."
   kind load docker-image kyverno-backend:latest --name "${CLUSTER_NAME}"
-  kind load docker-image kyverno-frontend:latest --name "${CLUSTER_NAME}"
+
+  if [ "${SKIP_FRONTEND}" = false ]; then
+    log_info "Building local Docker image: kyverno-frontend:latest..."
+    docker build -t kyverno-frontend:latest -f "${ROOT_DIR}/apps/frontend/Dockerfile" "${ROOT_DIR}"
+    log_info "Loading frontend image into Kind cluster '${CLUSTER_NAME}'..."
+    kind load docker-image kyverno-frontend:latest --name "${CLUSTER_NAME}"
+  else
+    log_info "Skipping frontend image build & load as requested (--skip-frontend)."
+  fi
   log_pass "Images built and loaded into Kind nodes."
 else
   log_info "Skipping Docker image build & load as requested (--skip-build)."
@@ -255,20 +287,10 @@ log_step "Step 5: Deploying In-Cluster Platform Workloads (k8s-manifests/system)
 
 SYSTEM_MANIFEST_DIR="${ROOT_DIR}/k8s-manifests/system"
 
-log_info "1/5 Applying namespace.yaml..."
+log_info "1/4 Applying namespace.yaml, postgres.yaml, and rbac.yaml..."
 kubectl apply -f "${SYSTEM_MANIFEST_DIR}/namespace.yaml"
-
-log_info "2/5 Applying postgres.yaml..."
 kubectl apply -f "${SYSTEM_MANIFEST_DIR}/postgres.yaml"
-
-log_info "3/5 Applying rbac.yaml..."
 kubectl apply -f "${SYSTEM_MANIFEST_DIR}/rbac.yaml"
-
-log_info "4/5 Applying backend.yaml..."
-kubectl apply -f "${SYSTEM_MANIFEST_DIR}/backend.yaml"
-
-log_info "5/5 Applying frontend.yaml..."
-kubectl apply -f "${SYSTEM_MANIFEST_DIR}/frontend.yaml"
 
 log_info "Waiting for PostgreSQL to be Ready (1/1 Running)..."
 if ! kubectl -n "${PLATFORM_NAMESPACE}" rollout status deployment/postgres --timeout=120s; then
@@ -277,6 +299,24 @@ if ! kubectl -n "${PLATFORM_NAMESPACE}" rollout status deployment/postgres --tim
   exit 1
 fi
 
+# PostgreSQL 데이터베이스 스키마 및 시드 데이터 자동 동기화 (Prisma)
+log_info "Synchronizing PostgreSQL schema & seeding initial platform accounts..."
+kubectl port-forward svc/postgres 5432:5432 -n "${PLATFORM_NAMESPACE}" > /dev/null 2>&1 &
+PF_PG_PID=$!
+sleep 3
+DATABASE_URL="postgresql://devuser:devpassword@localhost:5432/kyverno_dashboard?schema=public" \
+  pnpm --filter @kyverno-platform/backend exec prisma db push --accept-data-loss > /dev/null 2>&1 || true
+DATABASE_URL="postgresql://devuser:devpassword@localhost:5432/kyverno_dashboard?schema=public" \
+  SEED_ADMIN_EMAIL="admin@test.com" \
+  SEED_ADMIN_PASSWORD="test1234!" \
+  SEED_USER_EMAIL="user@test.com" \
+  SEED_USER_PASSWORD="test1234!" \
+  pnpm --filter @kyverno-platform/backend exec prisma db seed > /dev/null 2>&1 || true
+kill "${PF_PG_PID}" 2>/dev/null || true
+
+log_info "2/4 Applying backend.yaml..."
+kubectl apply -f "${SYSTEM_MANIFEST_DIR}/backend.yaml"
+
 log_info "Waiting for Kyverno Backend to be Ready (1/1 Running)..."
 if ! kubectl -n "${PLATFORM_NAMESPACE}" rollout status deployment/kyverno-backend --timeout=180s; then
   log_fail "Kyverno Backend failed to roll out."
@@ -284,14 +324,21 @@ if ! kubectl -n "${PLATFORM_NAMESPACE}" rollout status deployment/kyverno-backen
   exit 1
 fi
 
-log_info "Waiting for Kyverno Frontend to be Ready (1/1 Running)..."
-if ! kubectl -n "${PLATFORM_NAMESPACE}" rollout status deployment/kyverno-frontend --timeout=180s; then
-  log_fail "Kyverno Frontend failed to roll out."
-  dump_diagnostics
-  exit 1
+if [ "${SKIP_FRONTEND}" = false ]; then
+  log_info "3/4 Applying frontend.yaml..."
+  kubectl apply -f "${SYSTEM_MANIFEST_DIR}/frontend.yaml"
+
+  log_info "Waiting for Kyverno Frontend to be Ready (1/1 Running)..."
+  if ! kubectl -n "${PLATFORM_NAMESPACE}" rollout status deployment/kyverno-frontend --timeout=180s; then
+    log_fail "Kyverno Frontend failed to roll out."
+    dump_diagnostics
+    exit 1
+  fi
+else
+  log_info "Skipping frontend deployment as requested (--skip-frontend)."
 fi
 
-log_pass "All platform system pods (PostgreSQL, Backend, Frontend, RBAC) are Running & Ready!"
+log_pass "All platform system pods (PostgreSQL, Backend, RBAC) are Running & Ready!"
 
 # ==============================================================================
 # 8. 거버넌스 전주기 E2E 테스트 시나리오 실행
@@ -515,13 +562,23 @@ AI_RESPONSE=$(kubectl exec -n "${PLATFORM_NAMESPACE}" "${BACKEND_POD}" -- node -
     let data = "";
     res.on("data", (chunk) => data += chunk);
     res.on("end", () => {
-      console.log(data);
-      process.exit(res.statusCode === 200 ? 0 : 1);
+      try {
+        const parsed = JSON.parse(data);
+        const valid = parsed &&
+          typeof parsed.summary === "string" && parsed.summary.length > 0 &&
+          Array.isArray(parsed.resolutionSteps) && parsed.resolutionSteps.length > 0 &&
+          typeof parsed.governanceRationale === "string" && parsed.governanceRationale.length > 0;
+        console.log(data);
+        process.exit(valid ? 0 : 1);
+      } catch (e) {
+        console.error("JSON parsing error:", e.message);
+        process.exit(1);
+      }
     });
   });
 
   req.on("error", (err) => {
-    console.error(err);
+    console.error("HTTP request error:", err.message);
     process.exit(1);
   });
 
@@ -531,11 +588,11 @@ AI_RESPONSE=$(kubectl exec -n "${PLATFORM_NAMESPACE}" "${BACKEND_POD}" -- node -
 
 log_info "AI Explainer API Response: ${AI_RESPONSE}"
 
-if [[ "${AI_RESPONSE}" == *"\"summary\""* ]] && [[ "${AI_RESPONSE}" == *"\"resolutionSteps\""* ]] && [[ "${AI_RESPONSE}" == *"\"governanceRationale\""* ]]; then
-  log_pass "Scenario 6 PASSED: AI Explainer API returned structured remediation report (summary, resolutionSteps, governanceRationale)."
+if [[ "${AI_RESPONSE}" != "FAILED" ]] && [[ "${AI_RESPONSE}" == *"\"summary\""* ]] && [[ "${AI_RESPONSE}" == *"\"resolutionSteps\""* ]] && [[ "${AI_RESPONSE}" == *"\"governanceRationale\""* ]]; then
+  log_pass "Scenario 6 PASSED: AI Explainer API returned valid, structured remediation report (summary, resolutionSteps, governanceRationale)."
   S6_PASS=true
 else
-  log_fail "Scenario 6 FAILED: AI Explainer API response missing required schema fields."
+  log_fail "Scenario 6 FAILED: AI Explainer API response missing required schema fields or invalid JSON."
   S6_PASS=false
   TEST_FAILED=$((TEST_FAILED + 1))
 fi
@@ -545,6 +602,7 @@ fi
 # ==============================================================================
 END_TIME=$(date +%s)
 DURATION=$((END_TIME - START_TIME))
+TEST_FINISHED=true
 
 log_step "E2E Governance Platform Integration Test Summary"
 

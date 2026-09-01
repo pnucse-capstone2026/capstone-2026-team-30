@@ -81,15 +81,17 @@ POLICY_DOCUMENT=$(cat <<EOF
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "BedrockClaudeSonnetInvocation",
+      "Sid": "BedrockUniversalInvocation",
       "Effect": "Allow",
       "Action": [
         "bedrock:InvokeModel",
         "bedrock:InvokeModelWithResponseStream"
       ],
       "Resource": [
-        "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0",
-        "arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0"
+        "arn:aws:bedrock:us-east-1::foundation-model/*",
+        "arn:aws:bedrock:us-east-2::foundation-model/*",
+        "arn:aws:bedrock:us-east-1:*:inference-profile/*",
+        "arn:aws:bedrock:us-east-2:*:inference-profile/*"
       ]
     }
   ]

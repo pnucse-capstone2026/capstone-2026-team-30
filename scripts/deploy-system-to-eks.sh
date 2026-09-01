@@ -23,6 +23,16 @@ echo ">>> 1. Creating 'kyverno-platform' namespace..."
 echo ">>> 2. Applying RBAC Permissions for Backend ServiceAccount..."
 "${KUBECTL}" apply -f "${MANIFESTS_DIR}/rbac.yaml"
 
+# 호스트의 .env 환경변수를 EKS Secret으로 동기화하여 GitHub Token 및 설정 주입
+ENV_FILE="${SCRIPT_DIR}/../apps/backend/.env"
+if [ -f "${ENV_FILE}" ]; then
+  echo ">>> 2.5. Synchronizing backend environment variables to 'backend-env-secret'..."
+  "${KUBECTL}" create secret generic backend-env-secret \
+    --from-env-file="${ENV_FILE}" \
+    -n kyverno-platform \
+    --dry-run=client -o yaml | "${KUBECTL}" apply -f -
+fi
+
 echo ">>> 3. Deploying PostgreSQL Database..."
 "${KUBECTL}" apply -f "${MANIFESTS_DIR}/postgres.yaml"
 

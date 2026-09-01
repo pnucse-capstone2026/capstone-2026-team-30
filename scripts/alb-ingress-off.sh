@@ -4,6 +4,8 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOCAL_BIN_DIR="${SCRIPT_DIR}/bin"
+export PATH="${LOCAL_BIN_DIR}:${PATH}"
 INGRESS_MANIFEST="${SCRIPT_DIR}/../k8s-manifests/system/ingress.yaml"
 
 echo "=========================================================="

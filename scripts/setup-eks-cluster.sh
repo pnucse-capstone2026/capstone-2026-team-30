@@ -82,7 +82,8 @@ helm repo add kyverno https://kyverno.github.io/kyverno/
 helm repo update
 
 echo ">>> Deploying Kyverno to namespace 'kyverno' with multi-node HA configuration..."
-# 멀티노드 고가용성을 위해 레플리카 2개 배정 및 프로덕션 1시간 주기 감사 활성화
+# [도입 배경] 멀티노드 HA(Admission 2개) 유지 및 전체 네임스페이스 PolicyException CRD 자동 연동 보장
+# [기대 효과] admissionReports 비활성화 및 1시간 주기 스캔으로 EKS etcd I/O 부하를 차단하고 전역 정책 예외 우회 지원
 helm upgrade --install kyverno kyverno/kyverno \
   --namespace kyverno \
   --create-namespace \
@@ -94,7 +95,9 @@ helm upgrade --install kyverno kyverno/kyverno \
   --set "reportsController.backgroundScanInterval=1h" \
   --set "backgroundController.backgroundScanInterval=1h" \
   --set features.policyExceptions.enabled=true \
-  --set features.admissionReports.enabled=true \
+  --set "features.policyExceptions.namespace=*" \
+  --set features.validatingAdmissionPolicyReports.enabled=false \
+  --set features.admissionReports.enabled=false \
   --set features.aggregateReports.enabled=true \
   --set features.policyReports.enabled=true
 
@@ -107,6 +110,9 @@ if [ -f "${POLICIES_PATH}" ]; then
   kubectl apply -f "${POLICIES_PATH}"
   echo ">>> Baseline policies successfully applied."
 fi
+
+echo ">>> Installing MLOps Kubeflow Notebooks CRDs..."
+kubectl apply -f https://raw.githubusercontent.com/kubeflow/kubeflow/v1.8.0/components/notebook-controller/config/crd/bases/kubeflow.org_notebooks.yaml 2>/dev/null || echo "[WARNING] Kubeflow CRD installation skipped."
 
 # Hub 클러스터인 경우 AI Agent(Bedrock Claude) 연동을 위한 IRSA 자동 구성 실행
 if [ "${CLUSTER_ROLE}" = "hub" ]; then
