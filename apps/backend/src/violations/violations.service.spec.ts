@@ -199,6 +199,49 @@ describe("ViolationsService", () => {
       const result = await service.list(mockUser, { clusterId: "cluster-3" });
       expect(result).toHaveLength(0);
     });
+
+    it("동일 이름의 PolicyReport가 다른 네임스페이스에 존재해도 위반 ID가 충돌하지 않는다", async () => {
+      const makeReport = (namespace: string) => ({
+        metadata: {
+          name: "controlled-load",
+          namespace,
+          creationTimestamp: "2026-08-19T05:30:00Z",
+        },
+        results: [
+          {
+            policy: "disallow-latest-tag",
+            rule: "require-image-tag",
+            severity: "high",
+            result: "fail",
+            message: "Using the :latest tag is prohibited.",
+            resources: [
+              { apiVersion: "v1", kind: "Pod", name: "load-pod", namespace },
+            ],
+          },
+        ],
+      });
+
+      mockKyvernoAdapter.listNamespacedPolicyReports = jest
+        .fn()
+        .mockResolvedValue([
+          makeReport("pac-final-bench-0905"),
+          makeReport("pac-report-bench-0905"),
+        ]);
+      mockKyvernoAdapter.listClusterPolicyReports = jest
+        .fn()
+        .mockResolvedValue([]);
+
+      const result = await service.list(mockUser, { clusterId: "cluster-1" });
+
+      expect(result).toHaveLength(2);
+      const ids = result.map((v) => v.id);
+      // 두 위반의 ID는 네임스페이스가 포함되어 서로 달라야 한다.
+      expect(new Set(ids).size).toBe(2);
+      expect(ids).toContain("cluster-1:pac-final-bench-0905/controlled-load:0");
+      expect(ids).toContain(
+        "cluster-1:pac-report-bench-0905/controlled-load:0",
+      );
+    });
   });
 
   describe("getDetail", () => {
@@ -258,6 +301,45 @@ describe("ViolationsService", () => {
       expect(detail.id).toBe("ec90b8e7-2112-4ea0-a55b-b65100acffc5");
       expect(detail.policyName).toBe("disallow-latest-tag");
       expect(detail.reportName).toBe("db-fallback");
+    });
+
+    it("네임스페이스를 포함한 신규 ID로 정확한 네임스페이스의 보고서를 조회한다", async () => {
+      const makeReport = (namespace: string, policy: string) => ({
+        metadata: {
+          name: "controlled-load",
+          namespace,
+          creationTimestamp: "2026-08-19T05:30:00Z",
+        },
+        results: [
+          {
+            policy,
+            rule: "require-image-tag",
+            severity: "high",
+            result: "fail",
+            message: "Using the :latest tag is prohibited.",
+            resources: [
+              { apiVersion: "v1", kind: "Pod", name: "load-pod", namespace },
+            ],
+          },
+        ],
+      });
+
+      mockKyvernoAdapter.listNamespacedPolicyReports = jest
+        .fn()
+        .mockResolvedValue([
+          makeReport("pac-final-bench-0905", "policy-final"),
+          makeReport("pac-report-bench-0905", "policy-report"),
+        ]);
+
+      // 첫 번째가 아닌 두 번째(pac-report-bench-0905) 네임스페이스 보고서로 정확히 해석되어야 한다.
+      const detail = await service.getDetail(
+        "cluster-1",
+        "cluster-1:pac-report-bench-0905/controlled-load:0",
+        mockUser,
+      );
+
+      expect(detail.namespace).toBe("pac-report-bench-0905");
+      expect(detail.policyName).toBe("policy-report");
     });
 
     it("존재하지 않는 결과 인덱스 조회 시 BusinessException(NOT_FOUND)을 던진다", async () => {

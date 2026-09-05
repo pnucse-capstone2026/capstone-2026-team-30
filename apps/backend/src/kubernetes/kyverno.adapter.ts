@@ -20,6 +20,12 @@ const POLICY_REPORT_VERSION = "v1alpha2";
 const POLICY_REPORT_PLURAL = "policyreports";
 const CLUSTER_POLICY_REPORT_PLURAL = "clusterpolicyreports";
 
+/**
+ * 클러스터 범위(네임스페이스 없음) PolicyReport의 위반 ID에 사용하는 센티널.
+ * 위반 ID 포맷은 `<clusterId>:<namespace>/<reportName>:<index>` 이다.
+ */
+const CLUSTER_SCOPE_SENTINEL = "cluster";
+
 export type KubeObject = {
   metadata?: {
     name?: string;
@@ -635,7 +641,11 @@ export class KyvernoAdapter {
       // fail, warn, error 상태의 검사 결과만 정규화 DTO로 변환
       if (outcome === "fail" || outcome === "warn" || outcome === "error") {
         const reportName = (metadata.name as string) ?? "unknown-report";
-        const id = `${cluster.id}:${reportName}:${index}`;
+        // 서로 다른 네임스페이스에 동일 이름의 PolicyReport가 존재해도 ID가 충돌하지
+        // 않도록 네임스페이스를 포함한다. (클러스터 범위 보고서는 센티널로 대체)
+        const reportNamespace =
+          (metadata.namespace as string) ?? CLUSTER_SCOPE_SENTINEL;
+        const id = `${cluster.id}:${reportNamespace}/${reportName}:${index}`;
         const policyName = (result.policy as string) ?? "unknown-policy";
         const ruleName = (result.rule as string) ?? "unknown-rule";
 
