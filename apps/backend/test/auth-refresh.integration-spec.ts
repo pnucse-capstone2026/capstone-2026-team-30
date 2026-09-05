@@ -4,6 +4,7 @@ import { Prisma, Role } from "@prisma/client";
 import argon2 from "argon2";
 import { AUTH_ERROR } from "../src/auth/auth.errors";
 import { AuthService } from "../src/auth/auth.service";
+import { SessionEventsService } from "../src/auth/session-events.service";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { PRISMA_ERROR_CODE } from "../src/prisma/prisma-error";
 
@@ -50,6 +51,7 @@ describe("AuthService refresh token transactions", () => {
       prisma as never,
       new JwtService(),
       configService as unknown as ConfigService,
+      new SessionEventsService(),
     );
   });
 

@@ -1,11 +1,24 @@
 import { Logger } from "@nestjs/common";
 import { AuditActorType, ExceptionStatus, Role } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 import { isBusinessException } from "../src/common/errors/business.exception";
+import { ExceptionReconcileSettings } from "../src/exception-lifecycle/exception-reconcile.settings";
 import { EXCEPTION_LIFECYCLE_ERROR } from "../src/exception-lifecycle/exception-lifecycle.errors";
-import { ExceptionLifecycleService } from "../src/exception-lifecycle/exception-lifecycle.service";
+import {
+  ClaimedReconcileCandidate,
+  ExceptionLifecycleService,
+} from "../src/exception-lifecycle/exception-lifecycle.service";
 import { ExceptionReconcilerService } from "../src/exception-lifecycle/exception-reconciler.service";
 import { KyvernoAdapter } from "../src/kubernetes/kyverno.adapter";
 import { PrismaService } from "../src/prisma/prisma.service";
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
 
 describe("policy exception lifecycle transactions", () => {
   let prisma: PrismaService;
@@ -15,6 +28,10 @@ describe("policy exception lifecycle transactions", () => {
     ensurePolicyException: jest.fn().mockResolvedValue(undefined),
     deletePolicyException: jest.fn().mockResolvedValue(undefined),
   };
+  const settings = {
+    claimTtlSeconds: 60,
+    approvedRecheckIntervalSeconds: 300,
+  } as ExceptionReconcileSettings;
 
   beforeAll(() => {
     const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -27,8 +44,9 @@ describe("policy exception lifecycle transactions", () => {
     lifecycle = new ExceptionLifecycleService(
       prisma,
       kyverno as unknown as KyvernoAdapter,
+      settings,
     );
-    reconciler = new ExceptionReconcilerService(prisma, lifecycle);
+    reconciler = new ExceptionReconcilerService(prisma, lifecycle, settings);
   });
 
   beforeEach(async () => {
@@ -161,9 +179,7 @@ describe("policy exception lifecycle transactions", () => {
       createdAt: new Date(Date.now() - 5000),
       activatedAt: new Date(Date.now() - 2000),
     });
-    const active = await prisma.policyExceptionRequest.findUniqueOrThrow({
-      where: { id: request.id },
-    });
+    const active = await claimRequest(request.id);
 
     await Promise.all([
       lifecycle.reconcile(active),
@@ -190,9 +206,7 @@ describe("policy exception lifecycle transactions", () => {
       appliedRuleNames: ["rule"],
       activatedAt: new Date(),
     });
-    const active = await prisma.policyExceptionRequest.findUniqueOrThrow({
-      where: { id: request.id },
-    });
+    const active = await claimRequest(request.id);
 
     await lifecycle.reconcile(active);
 
@@ -218,6 +232,270 @@ describe("policy exception lifecycle transactions", () => {
     ).resolves.toMatchObject({ status: ExceptionStatus.APPROVED });
     expect(kyverno.ensurePolicyException).toHaveBeenCalledWith(
       "local",
+      expect.objectContaining({ requestId: request.id }),
+    );
+  });
+
+  it("claims a non-expired request once across concurrent reconcilers", async () => {
+    const { request } = await createPendingRequest("reconcile-claim", {
+      status: ExceptionStatus.APPLYING,
+      appliedRuleNames: ["rule"],
+    });
+    const started = deferred();
+    const release = deferred();
+    kyverno.ensurePolicyException.mockImplementationOnce(async () => {
+      started.resolve();
+      await release.promise;
+    });
+    const otherReconciler = new ExceptionReconcilerService(
+      prisma,
+      lifecycle,
+      settings,
+    );
+
+    const firstBatch = reconciler.reconcileBatch();
+    await started.promise;
+    await otherReconciler.reconcileBatch();
+
+    expect(kyverno.ensurePolicyException).toHaveBeenCalledTimes(1);
+    release.resolve();
+    await firstBatch;
+    await expect(
+      prisma.policyExceptionRequest.findUnique({ where: { id: request.id } }),
+    ).resolves.toMatchObject({ status: ExceptionStatus.APPROVED });
+  });
+
+  it("skips a queued request after another reconciler takes over its claim", async () => {
+    const staleUpdatedAt = new Date(Date.now() - 2 * 60_000);
+    const { request: first } = await createPendingRequest("queued-first", {
+      status: ExceptionStatus.APPLYING,
+      appliedRuleNames: ["rule"],
+      updatedAt: staleUpdatedAt,
+    });
+    const { request: second } = await createPendingRequest("queued-second", {
+      status: ExceptionStatus.APPLYING,
+      appliedRuleNames: ["rule"],
+      updatedAt: new Date(staleUpdatedAt.getTime() + 1_000),
+    });
+    const firstStarted = deferred();
+    const releaseFirst = deferred();
+    const secondStarted = deferred();
+    const releaseSecond = deferred();
+    kyverno.ensurePolicyException.mockImplementation(
+      async (_clusterId: string, input: { requestId: string }) => {
+        if (input.requestId === first.id) {
+          firstStarted.resolve();
+          await releaseFirst.promise;
+        }
+        if (input.requestId === second.id) {
+          secondStarted.resolve();
+          await releaseSecond.promise;
+        }
+      },
+    );
+    const otherReconciler = new ExceptionReconcilerService(
+      prisma,
+      lifecycle,
+      settings,
+    );
+
+    const firstBatch = reconciler.reconcileBatch();
+    await firstStarted.promise;
+    await prisma.policyExceptionRequest.update({
+      where: { id: second.id },
+      data: { reconcileLeaseUntil: new Date(Date.now() - 1) },
+    });
+    const secondBatch = otherReconciler.reconcileBatch();
+    await secondStarted.promise;
+
+    releaseFirst.resolve();
+    await firstBatch;
+    expect(
+      kyverno.ensurePolicyException.mock.calls.filter(
+        ([, input]) => input.requestId === second.id,
+      ),
+    ).toHaveLength(1);
+
+    releaseSecond.resolve();
+    await secondBatch;
+    await expect(
+      prisma.policyExceptionRequest.findMany({
+        where: { id: { in: [first.id, second.id] } },
+      }),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: first.id,
+          status: ExceptionStatus.APPROVED,
+        }),
+        expect.objectContaining({
+          id: second.id,
+          status: ExceptionStatus.APPROVED,
+        }),
+      ]),
+    );
+  });
+
+  it("keeps the expiration claim while Kubernetes deletion is in flight", async () => {
+    const { request } = await createPendingRequest("expiration-lease", {
+      status: ExceptionStatus.APPROVED,
+      appliedRuleNames: ["rule"],
+      expiresAt: new Date(Date.now() - 1_000),
+      createdAt: new Date(Date.now() - 5_000),
+      activatedAt: new Date(Date.now() - 2_000),
+    });
+    const deletionStarted = deferred();
+    const releaseDeletion = deferred();
+    kyverno.deletePolicyException.mockImplementationOnce(async () => {
+      deletionStarted.resolve();
+      await releaseDeletion.promise;
+    });
+    const otherReconciler = new ExceptionReconcilerService(
+      prisma,
+      lifecycle,
+      settings,
+    );
+
+    const firstBatch = reconciler.reconcileBatch();
+    await deletionStarted.promise;
+    await otherReconciler.reconcileBatch();
+
+    expect(kyverno.deletePolicyException).toHaveBeenCalledTimes(1);
+    await expect(
+      prisma.policyExceptionRequest.findUnique({ where: { id: request.id } }),
+    ).resolves.toMatchObject({
+      status: ExceptionStatus.EXPIRING,
+      reconcileClaimId: expect.any(String),
+      reconcileLeaseUntil: expect.any(Date),
+    });
+
+    releaseDeletion.resolve();
+    await firstBatch;
+    await expect(
+      prisma.policyExceptionRequest.findUnique({ where: { id: request.id } }),
+    ).resolves.toMatchObject({
+      status: ExceptionStatus.EXPIRED,
+      reconcileClaimId: null,
+      reconcileLeaseUntil: null,
+    });
+  });
+
+  it("converges to CANCELLED when cancellation races with apply", async () => {
+    const { request, approver, requester } =
+      await createPendingRequest("apply-cancel-race");
+    const applyStarted = deferred();
+    const releaseApply = deferred();
+    kyverno.ensurePolicyException.mockImplementationOnce(async () => {
+      applyStarted.resolve();
+      await releaseApply.promise;
+    });
+
+    const applying = lifecycle.approve(request.id, approver.id, ["rule"]);
+    await applyStarted.promise;
+    const cancelling = await lifecycle.cancel(request.id, requester.id);
+
+    expect(cancelling.status).toBe(ExceptionStatus.CANCELLING);
+    expect(kyverno.deletePolicyException).not.toHaveBeenCalled();
+
+    releaseApply.resolve();
+    await expect(applying).resolves.toMatchObject({
+      status: ExceptionStatus.CANCELLING,
+    });
+    await reconciler.reconcileBatch();
+
+    expect(kyverno.ensurePolicyException).toHaveBeenCalledTimes(1);
+    expect(kyverno.deletePolicyException).toHaveBeenCalledTimes(1);
+    await expect(
+      prisma.policyExceptionRequest.findUnique({ where: { id: request.id } }),
+    ).resolves.toMatchObject({
+      status: ExceptionStatus.CANCELLED,
+      reconcileClaimId: null,
+      reconcileLeaseUntil: null,
+    });
+    await expect(
+      prisma.auditLog.findMany({ where: { entityId: request.id } }),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ action: "EXCEPTION_APPROVED" }),
+        expect.objectContaining({ action: "EXCEPTION_CANCEL_REQUESTED" }),
+        expect.objectContaining({ action: "EXCEPTION_CANCELLED" }),
+      ]),
+    );
+    await expect(
+      prisma.auditLog.count({
+        where: { entityId: request.id, action: "EXCEPTION_ACTIVATED" },
+      }),
+    ).resolves.toBe(0);
+  });
+
+  it("rechecks a healthy APPROVED request every five minutes", async () => {
+    const staleUpdatedAt = new Date(Date.now() - 6 * 60_000);
+    const { request } = await createPendingRequest("approved-recheck", {
+      status: ExceptionStatus.APPROVED,
+      appliedRuleNames: ["rule"],
+      activatedAt: staleUpdatedAt,
+      updatedAt: staleUpdatedAt,
+    });
+
+    await reconciler.reconcileBatch();
+    expect(kyverno.ensurePolicyException).toHaveBeenCalledTimes(1);
+    const reconciled = await prisma.policyExceptionRequest.findUniqueOrThrow({
+      where: { id: request.id },
+    });
+    expect(reconciled.nextAttemptAt).toBeNull();
+    expect(reconciled.updatedAt.getTime()).toBeGreaterThan(
+      staleUpdatedAt.getTime(),
+    );
+
+    await reconciler.reconcileBatch();
+    expect(kyverno.ensurePolicyException).toHaveBeenCalledTimes(1);
+
+    await prisma.policyExceptionRequest.update({
+      where: { id: request.id },
+      data: { updatedAt: staleUpdatedAt },
+    });
+    await reconciler.reconcileBatch();
+    expect(kyverno.ensurePolicyException).toHaveBeenCalledTimes(2);
+  });
+
+  it("prioritizes APPLYING work over a full batch of APPROVED checks", async () => {
+    const staleUpdatedAt = new Date(Date.now() - 6 * 60_000);
+    const { request, requester } = await createPendingRequest(
+      "priority-applying",
+      {
+        status: ExceptionStatus.APPLYING,
+        appliedRuleNames: ["rule"],
+      },
+    );
+    await prisma.policyExceptionRequest.createMany({
+      data: Array.from({ length: 50 }, (_, index) => ({
+        id: `integration-priority-approved-${index}`,
+        status: ExceptionStatus.APPROVED,
+        reason: "integration test",
+        policyName: "policy",
+        ruleNames: ["rule"],
+        appliedRuleNames: ["rule"],
+        resourceKind: "Deployment",
+        resourceName: `api-${index}`,
+        resourceNamespace: "default",
+        targetClusterId: "local",
+        targetClusterDisplayName: "Local",
+        k8sExceptionName: `pac-exception-priority-approved-${index}`,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        createdAt: staleUpdatedAt,
+        updatedAt: staleUpdatedAt,
+        activatedAt: staleUpdatedAt,
+        requestUserId: requester.id,
+      })),
+    });
+
+    await reconciler.reconcileBatch();
+
+    await expect(
+      prisma.policyExceptionRequest.findUnique({ where: { id: request.id } }),
+    ).resolves.toMatchObject({ status: ExceptionStatus.APPROVED });
+    expect(kyverno.ensurePolicyException).toHaveBeenCalledTimes(50);
+    expect(kyverno.ensurePolicyException.mock.calls[0][1]).toEqual(
       expect.objectContaining({ requestId: request.id }),
     );
   });
@@ -299,9 +577,7 @@ describe("policy exception lifecycle transactions", () => {
     );
 
     for (let attempt = 0; attempt < 10; attempt += 1) {
-      const current = await prisma.policyExceptionRequest.findUniqueOrThrow({
-        where: { id: request.id },
-      });
+      const current = await claimRequest(request.id);
       await lifecycle.reconcile(current);
     }
 
@@ -371,9 +647,7 @@ describe("policy exception lifecycle transactions", () => {
     kyverno.ensurePolicyException.mockRejectedValue(
       new Error("permanent Kubernetes failure"),
     );
-    const active = await prisma.policyExceptionRequest.findUniqueOrThrow({
-      where: { id: request.id },
-    });
+    const active = await claimRequest(request.id);
     const logError = jest.spyOn(Logger.prototype, "error").mockImplementation();
 
     try {
@@ -410,6 +684,7 @@ describe("policy exception lifecycle transactions", () => {
       expiresAt: Date;
       createdAt: Date;
       activatedAt: Date;
+      updatedAt: Date;
       applyAttempts: number;
       lastError: string;
       nextAttemptAt: Date;
@@ -446,6 +721,7 @@ describe("policy exception lifecycle transactions", () => {
         k8sExceptionName: `pac-exception-${suffix}`,
         expiresAt: overrides.expiresAt ?? new Date(Date.now() + 60 * 60 * 1000),
         createdAt: overrides.createdAt,
+        updatedAt: overrides.updatedAt,
         activatedAt: overrides.activatedAt,
         applyAttempts: overrides.applyAttempts,
         lastError: overrides.lastError,
@@ -454,5 +730,17 @@ describe("policy exception lifecycle transactions", () => {
       },
     });
     return { request, requester, approver };
+  }
+
+  async function claimRequest(
+    requestId: string,
+  ): Promise<ClaimedReconcileCandidate> {
+    return prisma.policyExceptionRequest.update({
+      where: { id: requestId },
+      data: {
+        reconcileClaimId: randomUUID(),
+        reconcileLeaseUntil: new Date(Date.now() + 60_000),
+      },
+    }) as Promise<ClaimedReconcileCandidate>;
   }
 });

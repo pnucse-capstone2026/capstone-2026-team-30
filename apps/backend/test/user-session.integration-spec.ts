@@ -4,6 +4,7 @@ import { Role } from "@prisma/client";
 import argon2 from "argon2";
 import { AUTH_ERROR } from "../src/auth/auth.errors";
 import { AuthService } from "../src/auth/auth.service";
+import { SessionEventsService } from "../src/auth/session-events.service";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { UsersService } from "../src/users/users.service";
 
@@ -52,6 +53,7 @@ describe("user session invalidation transactions", () => {
       prisma,
       new JwtService(),
       configService as unknown as ConfigService,
+      new SessionEventsService(),
     );
     // setClusters 를 쓰지 않는 스펙이라 ClusterProvider 는 자리만 채운다.
     usersService = new UsersService(prisma, {

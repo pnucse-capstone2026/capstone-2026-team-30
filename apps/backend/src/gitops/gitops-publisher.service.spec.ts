@@ -32,6 +32,8 @@ function createMockRequest(
     applyAttempts: 0,
     lastError: null,
     nextAttemptAt: null,
+    reconcileClaimId: null,
+    reconcileLeaseUntil: null,
     createdAt: now,
     updatedAt: now,
     requestUserId: "user-1",
@@ -253,6 +255,7 @@ describe("GitOpsPublisherService", () => {
         GITOPS_GITHUB_TOKEN: "ghp_mocktoken123",
         GITOPS_GITHUB_REPO: "test-owner/test-repo",
         GITOPS_GITHUB_BASE_BRANCH: "main",
+        GITOPS_AUTO_MERGE: "false",
       });
       const prService = new GitOpsPublisherService(prConfig);
       const request = createMockRequest({ id: "req-pr-test" });
@@ -354,6 +357,7 @@ describe("GitOpsPublisherService", () => {
         GITOPS_STRATEGY: "GITHUB_PR",
         GITOPS_GITHUB_TOKEN: "ghp_mocktoken123",
         GITOPS_GITHUB_REPO: "global-owner/global-repo",
+        GITOPS_AUTO_MERGE: "false",
       });
       const clusterProviderMock = {
         getMetadata: jest.fn().mockReturnValue({

@@ -1,9 +1,11 @@
 import { ConfigService } from "@nestjs/config";
 import { ExceptionStatus, Role } from "@prisma/client";
 import { AuthenticatedUser } from "../src/auth/auth.types";
+import { ExceptionReconcileSettings } from "../src/exception-lifecycle/exception-reconcile.settings";
 import { ExceptionLifecycleService } from "../src/exception-lifecycle/exception-lifecycle.service";
 import { EXCEPTION_REQUEST_ERROR } from "../src/exception-requests/exception-request.errors";
 import { ExceptionRequestsService } from "../src/exception-requests/exception-requests.service";
+import { GitOpsPublisherService } from "../src/gitops/gitops-publisher.service";
 import { KyvernoAdapter } from "../src/kubernetes/kyverno.adapter";
 import { PrismaService } from "../src/prisma/prisma.service";
 import {
@@ -48,15 +50,26 @@ describe("policy exception request flow (real adapter, fake cluster)", () => {
       },
     ]);
     const kyverno = new KyvernoAdapter(clusters);
-    const lifecycle = new ExceptionLifecycleService(prisma, kyverno);
+    const settings = {
+      claimTtlSeconds: 60,
+      approvedRecheckIntervalSeconds: 300,
+    } as ExceptionReconcileSettings;
+    const lifecycle = new ExceptionLifecycleService(prisma, kyverno, settings);
     const config = {
       get: () => undefined,
     } as unknown as ConfigService;
+    const gitOpsPublisher = {
+      publishManifest: jest.fn().mockResolvedValue({
+        publishedToGitOps: false,
+        appliedDirectly: true,
+      }),
+    } as unknown as GitOpsPublisherService;
     service = new ExceptionRequestsService(
       prisma,
       lifecycle,
       clusters,
       kyverno,
+      gitOpsPublisher,
       config,
     );
 
