@@ -50,6 +50,13 @@ const ML_POLICY_NAMES = [
 ];
 
 /**
+ * 클러스터 범위(네임스페이스 없음) PolicyReport의 위반 ID에 사용하는 센티널.
+ * 위반 ID 포맷은 `<clusterId>:<namespace>/<reportName>:<index>` 이며,
+ * 서로 다른 네임스페이스의 동일 이름 보고서 간 ID 충돌을 방지한다.
+ */
+const CLUSTER_SCOPE_SENTINEL = "cluster";
+
+/**
  * MLOps 리소스 거버넌스, FinOps 클라우드 비용 절감액 계산 및 Kyverno ML 정책 준수 현황을 통합 관리하는 서비스입니다.
  */
 @Injectable()
@@ -231,8 +238,14 @@ export class MlGovernanceService {
                 severity = "medium";
               else if (res.severity?.toLowerCase() === "low") severity = "low";
 
+              const reportName = raw.metadata?.name ?? "report";
+              // 서로 다른 네임스페이스에 동일 이름의 PolicyReport가 존재해도 ID가
+              // 충돌하지 않도록 보고서 네임스페이스를 포함한다. (없으면 센티널)
+              const reportNamespace =
+                raw.metadata?.namespace ?? CLUSTER_SCOPE_SENTINEL;
+
               violations.push({
-                id: `${cluster.id}:${raw.metadata?.name ?? "report"}:${index}`,
+                id: `${cluster.id}:${reportNamespace}/${reportName}:${index}`,
                 clusterId: cluster.id,
                 namespace: targetNs,
                 policyName,
