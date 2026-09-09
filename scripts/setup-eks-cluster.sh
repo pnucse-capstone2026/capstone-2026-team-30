@@ -66,7 +66,7 @@ else
     eksctl create cluster \
       --name "${CLUSTER_NAME}" \
       --region "${REGION}" \
-      --version "1.35" \
+      --version "1.32" \
       --with-oidc \
       --nodegroup-name "nodes" \
       --instance-types "m7i-flex.large,c7i-flex.large,t3.medium" \

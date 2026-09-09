@@ -1,0 +1,46 @@
+# ==============================================================================
+# AWS EKS Tier 2 거버넌스 벤치마크용 eksctl 구성 파일 (AWS Free Tier 준수)
+# ==============================================================================
+# [AWS 최신 프리티어 및 비용 최적화 지침 준수]
+# 1. 컴퓨팅 (EC2 Free Tier):
+#    - us-east-1 리전의 최신 프리티어 지원 인스턴스 (m7i-flex.large, c7i-flex.large, t3.small) 적용
+#    - 노드 수: 2대 (월 750시간 무료 한도 내 운영 가능)
+# 2. 스토리지 (EBS Free Tier):
+#    - 노드당 15GB x 2대 = 총 30GB (AWS 프리티어 30GB gp3 한도 100% 준수)
+# 3. 고밀도 파드 패킹 (VPC CNI Prefix Delegation):
+#    - maxPodsPerNode: 110 설정 및 Nitro 인스턴스 접두사 위임으로 소형 노드에서도 대량 파드 수용
+# ==============================================================================
+
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: kyverno-eks-tier2
+  region: us-east-1
+  version: "1.32"
+
+iam:
+  withOIDC: true
+
+managedNodeGroups:
+  - name: freetier-benchmark-nodes
+    # 최신 AWS Free Tier 대상 인스턴스 규격 풀 적용 (us-east-1)
+    instanceTypes:
+      - "m7i-flex.large"
+      - "c7i-flex.large"
+      - "t3.small"
+    spot: false
+    desiredCapacity: 2
+    minSize: 1
+    maxSize: 2
+    # EKS AMI 기본 스냅샷 최소 요구치 (20GB gp3)
+    volumeSize: 20
+    volumeType: gp3
+    maxPodsPerNode: 110
+    labels:
+      role: "benchmark"
+      environment: "freetier-benchmark"
+      pac-kyverno.io/role: "benchmark"
+    tags:
+      Environment: "FreeTier-Tier2"
+      ManagedBy: "KyvernoPlatform"

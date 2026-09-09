@@ -1,0 +1,61 @@
+graph TB
+    subgraph Clients["1. 인바운드 트래픽 & 사용자"]
+        Users["👤 사용자 / 관리자 브라우저"]
+        ALB["⚖️ AWS ALB (Target-Type: IP)"]
+        Users -->|HTTP 80/443| ALB
+    end
+
+    subgraph PlatformHub["2. 관리 플랫폼 (kyverno-eks-hub / AWS us-east-1)"]
+        FE["🌐 Next.js 15 Standalone (Port 3000)"]
+        BE["⚙️ NestJS 11 Core API (Port 3001, IRSA)"]
+        DB[("🗄️ PostgreSQL 16 (Port 5432 / gp3 EBS)")]
+        Reconciler["🔄 상태 조정 & TTL Sweeper"]
+
+        ALB -->|Path: /*| FE
+        ALB -->|Path: /api/* (REST/SSE)| BE
+        FE -->|내부 API| BE
+        BE -->|Prisma SQL| DB
+        BE -->|스케줄 관리| Reconciler
+    end
+
+    subgraph ExternalServices["3. 외부 클라우드 & AI & GitOps"]
+        Bedrock["🤖 Amazon Bedrock (Claude 3.5 / Nova Lite)"]
+        GitHub["🐙 GitHub GitOps (PolicyException PR)"]
+        ECR["📦 Amazon ECR (프라이빗 레지스트리)"]
+    end
+
+    subgraph ClusterFleet["4. 관리 대상 클러스터 함대 (K8s & Kyverno)"]
+        K8sAPI["☸️ Kubernetes API Server (TLS 6443)"]
+        Kyverno["🛡️ Kyverno v1.12.0 Admission HA (2 Pods)"]
+        
+        subgraph CRDLayer["K8s CRD 계층"]
+            RepCRD["📄 PolicyReport (wgpolicyk8s.k8s.io)"]
+            ExcCRD["🛡️ PolicyException (kyverno.io)"]
+            MLCRD["🧪 Kubeflow Notebooks (5GB PVC)"]
+        end
+
+        subgraph WorkloadNS["격리 워크로드 네임스페이스"]
+            NS_Kyv["ns/kyverno"]
+            NS_Test["ns/governance-testbed (User Pods)"]
+            NS_ML["ns/mlops-workspace (Jupyter Hub)"]
+        end
+
+        K8sAPI <-->|Admission Webhook| Kyverno
+        Kyverno -->|정책 검증| WorkloadNS
+        Kyverno -->|리포트 생성| RepCRD
+    end
+
+    subgraph CICD["5. 이미지 빌드 & 배포 파이프라인"]
+        GHA["🐙 GitHub Actions CI/CD (Build Offloading)"]
+        Deploy["🚀 운영자 배포 / Helm / RollingUpdate"]
+        GHA -->|이미지 Push| ECR
+        ECR -.->|이미지 Pull| PlatformHub
+        Deploy -.->|배포 설정 적용| PlatformHub
+        Deploy -.->|배포 설정 적용| ClusterFleet
+    end
+
+    BE <-->|AI 분석 요청 · 응답 (IRSA)| Bedrock
+    BE -->|예외 YAML PR 자동 생성| GitHub
+    BE -->|정책/리소스 조회 & PolicyReport 수집| K8sAPI
+    BE -->|승인 예외 CRD 배포/회수| K8sAPI
+    Reconciler -->|만료 예외 자동 삭제| K8sAPI

@@ -1,0 +1,22 @@
+apiVersion: kyverno.io/v2
+kind: PolicyException
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: pac-kyverno-dashboard
+    pac.kyverno.io/request-id: 2a77c5e9-8c64-4c73-b91f-d18cc67792a3
+  name: pac-exception-2a77c5e9-8c64-4c73-b91f-d18cc67792a3
+  namespace: governance-testbed
+spec:
+  exceptions:
+    - policyName: disallow-privileged-containers
+      ruleNames:
+        - disallow-privileged-containers
+  match:
+    any:
+      - resources:
+          kinds:
+            - Pod
+          names:
+            - user-network-debugger
+          namespaces:
+            - governance-testbed

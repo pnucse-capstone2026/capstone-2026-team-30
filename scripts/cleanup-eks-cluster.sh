@@ -20,8 +20,15 @@ echo "=========================================================="
 
 if eksctl get cluster --name "${CLUSTER_NAME}" --region "${REGION}" 2>/dev/null | grep -q "${CLUSTER_NAME}"; then
   echo ">>> Deleting EKS cluster '${CLUSTER_NAME}' in ${REGION} and all associated AWS resources..."
-  if [ "${CLUSTER_NAME}" = "kyverno-eks-lab" ] && [ "${REGION}" = "us-east-1" ] && [ -f "${CONFIG_PATH}" ]; then
-    eksctl delete cluster -f "${CONFIG_PATH}" --wait
+  TIER2_CONFIG="${SCRIPT_DIR}/eksctl-tier2-config.yaml"
+  LAB_CONFIG="${SCRIPT_DIR}/eksctl-config.yaml"
+  
+  if [ "${CLUSTER_NAME}" = "kyverno-eks-tier2" ] && [ -f "${TIER2_CONFIG}" ]; then
+    echo ">>> Using tier2 cluster config: ${TIER2_CONFIG}"
+    eksctl delete cluster -f "${TIER2_CONFIG}" --wait
+  elif [ "${CLUSTER_NAME}" = "kyverno-eks-lab" ] && [ -f "${LAB_CONFIG}" ]; then
+    echo ">>> Using lab cluster config: ${LAB_CONFIG}"
+    eksctl delete cluster -f "${LAB_CONFIG}" --wait
   else
     eksctl delete cluster --name "${CLUSTER_NAME}" --region "${REGION}" --wait
   fi

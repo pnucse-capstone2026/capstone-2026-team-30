@@ -8,7 +8,13 @@
     "lint": "pnpm --parallel -r lint",
     "format": "pnpm --parallel -r format",
     "test": "pnpm --parallel -r --if-present test",
-    "prepare": "husky"
+    "test:log": "bash scripts/run-tests-with-log.sh backend",
+    "test:integration:log": "bash scripts/run-tests-with-log.sh integration",
+    "test:all:log": "bash scripts/run-tests-with-log.sh all",
+    "prepare": "husky",
+    "user:setup": "bash scripts/setup-user-environment.sh",
+    "user:shell": "bash scripts/user-shell.sh",
+    "user:docker": "bash scripts/user-docker-sandbox.sh"
   },
   "devDependencies": {
     "husky": "^9.0.11",

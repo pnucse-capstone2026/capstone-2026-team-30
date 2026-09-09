@@ -1,0 +1,261 @@
+<svg width="2400" height="1400" viewBox="0 0 2400 1400" xmlns="http://www.w3.org/2000/svg" style="background:#0b0f19; font-family:'Noto Sans CJK KR', 'Ubuntu', 'DejaVu Sans', sans-serif;">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b0f19"/>
+      <stop offset="100%" stop-color="#070a10"/>
+    </linearGradient>
+
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000000" flood-opacity="0.5"/>
+    </filter>
+
+    <marker id="arrBlue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrGreen" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#4ade80"/>
+    </marker>
+    <marker id="arrPurple" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#c084fc"/>
+    </marker>
+    <marker id="arrAmber" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fbbf24"/>
+    </marker>
+  </defs>
+
+  <rect width="2400" height="1400" fill="url(#bg)"/>
+
+  <!-- HEADER -->
+  <g transform="translate(80, 50)">
+    <rect x="0" y="0" width="2240" height="90" rx="14" fill="#131c2e" stroke="#1e293b" stroke-width="1.5" filter="url(#shadow)"/>
+    <rect x="25" y="24" width="130" height="42" rx="8" fill="#3b82f6"/>
+    <text x="90" y="51" text-anchor="middle" fill="#ffffff" font-size="16" font-weight="800">TOPOLOGY</text>
+    <text x="180" y="45" fill="#f8fafc" font-size="26" font-weight="800">Kyverno Governance Platform - Cluster Topology Overview</text>
+    <text x="180" y="70" fill="#94a3b8" font-size="14">전체 멀티 클러스터 토폴로지 구성 : Primary Hub, Remote Spoke, DR 고가용성, Tier2 벤치마크 및 로컬 Kind</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- TOP ROW: CLIENTS & EXTERNAL ENGINES (y: 170)                              -->
+  <!-- ========================================================================= -->
+  <g transform="translate(80, 170)">
+    <!-- Users -->
+    <g transform="translate(0, 0)" filter="url(#shadow)">
+      <rect x="0" y="0" width="680" height="130" rx="12" fill="#1e293b" stroke="#3b82f6" stroke-width="2"/>
+      <rect x="20" y="20" width="80" height="28" rx="6" fill="#2563eb"/>
+      <text x="60" y="39" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="700">USERS</text>
+      <text x="115" y="40" fill="#f8fafc" font-size="18" font-weight="700">Platform Users &amp; Administrators</text>
+      <text x="20" y="80" fill="#cbd5e1" font-size="14">개발자(user@test.com) &amp; 플랫폼 관리자(admin@test.com)</text>
+      <text x="20" y="105" fill="#94a3b8" font-size="13">웹 대시보드(3000), 실시간 토폴로지 관제실, 정책 예외 결재, MLOps 허브</text>
+    </g>
+
+    <!-- Bedrock AI -->
+    <g transform="translate(780, 0)" filter="url(#shadow)">
+      <rect x="0" y="0" width="680" height="130" rx="12" fill="#1e293b" stroke="#a855f7" stroke-width="2"/>
+      <rect x="20" y="20" width="100" height="28" rx="6" fill="#7c3aed"/>
+      <text x="70" y="39" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="700">BEDROCK AI</text>
+      <text x="135" y="40" fill="#f8fafc" font-size="18" font-weight="700">Amazon Bedrock AI Engine</text>
+      <text x="20" y="80" fill="#cbd5e1" font-size="14">Claude 3.5 Sonnet / Amazon Nova Lite (IRSA 최소권한 연동)</text>
+      <text x="20" y="105" fill="#94a3b8" font-size="13">실시간 정책 위반 진단, 자동 수정(Remediation) YAML 생성, 3.5s 서킷브레이커</text>
+    </g>
+
+    <!-- GitHub GitOps -->
+    <g transform="translate(1560, 0)" filter="url(#shadow)">
+      <rect x="0" y="0" width="680" height="130" rx="12" fill="#1e293b" stroke="#10b981" stroke-width="2"/>
+      <rect x="20" y="20" width="90" height="28" rx="6" fill="#059669"/>
+      <text x="65" y="39" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="700">GITOPS</text>
+      <text x="125" y="40" fill="#f8fafc" font-size="18" font-weight="700">GitHub Declarative GitOps Repo</text>
+      <text x="20" y="80" fill="#cbd5e1" font-size="14">YeongrimGo/PaC-KyvernoDashboard (Dual-Path 자동 PR 발행)</text>
+      <text x="20" y="105" fill="#94a3b8" font-size="13">PolicyException 승인 시 k8s-manifests 자동 커밋 및 감사 이력 추적</text>
+    </g>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- MIDDLE MAIN: PRIMARY HUB CLUSTER (y: 350, height: 420)                     -->
+  <!-- ========================================================================= -->
+  <g transform="translate(80, 350)" filter="url(#shadow)">
+    <!-- Container Box -->
+    <rect x="0" y="0" width="2240" height="430" rx="16" fill="#111827" stroke="#3b82f6" stroke-width="2.5"/>
+
+    <!-- Hub Header -->
+    <rect x="25" y="20" width="110" height="34" rx="6" fill="#2563eb"/>
+    <text x="80" y="43" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="800">PRIMARY HUB</text>
+    <text x="150" y="44" fill="#f8fafc" font-size="22" font-weight="800">Hub Cluster: kyverno-eks-hub (AWS us-east-1)</text>
+    <text x="750" y="44" fill="#38bdf8" font-size="15" font-weight="600">EKS v1.32 | 2-3 Worker Nodes (m7i-flex.large) | AWS ALB (Target-Type: IP)</text>
+
+    <!-- Hub Inner 4 Component Cards -->
+    <g transform="translate(25, 75)">
+      <!-- Card 1: Frontend -->
+      <g transform="translate(0, 0)">
+        <rect x="0" y="0" width="525" height="320" rx="12" fill="#1e293b" stroke="#0284c7" stroke-width="1.5"/>
+        <rect x="20" y="20" width="100" height="26" rx="4" fill="#0284c7"/>
+        <text x="70" y="38" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="700">FRONTEND</text>
+        <text x="135" y="39" fill="#f8fafc" font-size="17" font-weight="700">Next.js 15 Standalone</text>
+        <text x="20" y="80" fill="#38bdf8" font-size="14" font-weight="700">Port 3000 (In-Cluster Service)</text>
+        <text x="20" y="115" fill="#cbd5e1" font-size="13">• React 19 + Tailwind CSS + shadcn/ui</text>
+        <text x="20" y="145" fill="#cbd5e1" font-size="13">• TanStack React Query v5 &amp; Zustand Store</text>
+        <text x="20" y="175" fill="#cbd5e1" font-size="13">• 실시간 관제실 토폴로지 Canvas (/demo)</text>
+        <text x="20" y="205" fill="#cbd5e1" font-size="13">• SSE 기반 실시간 알림 &amp; 세션 관리</text>
+        <text x="20" y="275" fill="#94a3b8" font-size="12">node:22-slim 기반 80% 이미지 최적화</text>
+      </g>
+
+      <!-- Card 2: Backend -->
+      <g transform="translate(555, 0)">
+        <rect x="0" y="0" width="525" height="320" rx="12" fill="#1e293b" stroke="#10b981" stroke-width="1.5"/>
+        <rect x="20" y="20" width="90" height="26" rx="4" fill="#059669"/>
+        <text x="65" y="38" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="700">BACKEND</text>
+        <text x="125" y="39" fill="#f8fafc" font-size="17" font-weight="700">NestJS 11 Core API</text>
+        <text x="20" y="80" fill="#4ade80" font-size="14" font-weight="700">Port 3001 (IRSA Role Enabled)</text>
+        <text x="20" y="115" fill="#cbd5e1" font-size="13">• MultiClusterProvider (원격 클러스터 연동)</text>
+        <text x="20" y="145" fill="#cbd5e1" font-size="13">• Dual-Path GitOps Service (Runtime + PR)</text>
+        <text x="20" y="175" fill="#cbd5e1" font-size="13">• Bedrock AI Adapter (3.5s Circuit Breaker)</text>
+        <text x="20" y="205" fill="#cbd5e1" font-size="13">• @kubernetes/client-node CRD 핸들러</text>
+        <text x="20" y="275" fill="#94a3b8" font-size="12">Prisma ORM 6 &amp; JWT/Argon2 RBAC</text>
+      </g>
+
+      <!-- Card 3: Database -->
+      <g transform="translate(1110, 0)">
+        <rect x="0" y="0" width="525" height="320" rx="12" fill="#1e293b" stroke="#6366f1" stroke-width="1.5"/>
+        <rect x="20" y="20" width="110" height="26" rx="4" fill="#4f46e5"/>
+        <text x="75" y="38" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="700">DATABASE</text>
+        <text x="145" y="39" fill="#f8fafc" font-size="17" font-weight="700">PostgreSQL 16 StatefulSet</text>
+        <text x="20" y="80" fill="#818cf8" font-size="14" font-weight="700">Port 5432 (EBS gp3 20GB Volume)</text>
+        <text x="20" y="115" fill="#cbd5e1" font-size="13">• Users, Roles, UserCluster 접근 권한</text>
+        <text x="20" y="145" fill="#cbd5e1" font-size="13">• ExceptionRequest (PENDING/APPROVED)</text>
+        <text x="20" y="175" fill="#cbd5e1" font-size="13">• AuditLogs (관리자 승인 및 보안 이력)</text>
+        <text x="20" y="205" fill="#cbd5e1" font-size="13">• ManagedViolationStatus (위반 추적)</text>
+        <text x="20" y="275" fill="#94a3b8" font-size="12">Prisma Automated Migrations &amp; Seed</text>
+      </g>
+
+      <!-- Card 4: Kyverno -->
+      <g transform="translate(1665, 0)">
+        <rect x="0" y="0" width="525" height="320" rx="12" fill="#1e293b" stroke="#ec4899" stroke-width="1.5"/>
+        <rect x="20" y="20" width="90" height="26" rx="4" fill="#db2777"/>
+        <text x="65" y="38" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="700">KYVERNO</text>
+        <text x="125" y="39" fill="#f8fafc" font-size="17" font-weight="700">Admission Controller HA</text>
+        <text x="20" y="80" fill="#f472b6" font-size="14" font-weight="700">2 Replicas HA (Namespace: kyverno)</text>
+        <text x="20" y="115" fill="#cbd5e1" font-size="13">• Validating / Mutating Webhook (Enforce)</text>
+        <text x="20" y="145" fill="#cbd5e1" font-size="13">• PolicyException CRD 런타임 면제 집행</text>
+        <text x="20" y="175" fill="#cbd5e1" font-size="13">• PolicyReport 백그라운드 스캔 (1h)</text>
+        <text x="20" y="205" fill="#cbd5e1" font-size="13">• Kubeflow MLOps Notebook CRD 검증</text>
+        <text x="20" y="275" fill="#94a3b8" font-size="12">7종 거버넌스 및 AI/MLOps 보안 정책</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- BOTTOM ROW: SUB-CLUSTERS & LOCAL DEV (y: 830, height: 500)                 -->
+  <!-- ========================================================================= -->
+  <g transform="translate(80, 830)">
+    <!-- Spoke 1 -->
+    <g transform="translate(0, 0)" filter="url(#shadow)">
+      <rect x="0" y="0" width="535" height="490" rx="14" fill="#111827" stroke="#06b6d4" stroke-width="2"/>
+      <rect x="20" y="20" width="90" height="28" rx="6" fill="#0891b2"/>
+      <text x="65" y="39" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="700">SPOKE 01</text>
+      <text x="125" y="40" fill="#f8fafc" font-size="18" font-weight="700">Remote Spoke Cluster</text>
+      <text x="20" y="75" fill="#22d3ee" font-size="13" font-weight="600">kyverno-eks-spoke-01 (us-east-1)</text>
+
+      <rect x="20" y="95" width="495" height="110" rx="8" fill="#1e293b" stroke="#334155"/>
+      <text x="35" y="125" fill="#38bdf8" font-size="14" font-weight="700">Hub-Spoke 원격 보안 브릿지</text>
+      <text x="35" y="150" fill="#cbd5e1" font-size="13">• ServiceAccount 토큰 기반 K8s API 원격 인증</text>
+      <text x="35" y="175" fill="#cbd5e1" font-size="13">• Hub MultiClusterProvider와 실시간 동기화</text>
+
+      <rect x="20" y="220" width="495" height="150" rx="8" fill="#1e293b" stroke="#334155"/>
+      <text x="35" y="250" fill="#38bdf8" font-size="14" font-weight="700">자율 거버넌스 &amp; 워크로드</text>
+      <text x="35" y="275" fill="#cbd5e1" font-size="13">• 독자적 Kyverno Webhook 정책 집행</text>
+      <text x="35" y="300" fill="#cbd5e1" font-size="13">• Local PolicyReport 수집 및 Hub 전달</text>
+      <text x="35" y="325" fill="#cbd5e1" font-size="13">• Multi-Tenant 워크로드 네임스페이스</text>
+
+      <text x="20" y="420" fill="#94a3b8" font-size="13">Status: Active Connected | TLS 6443 Endpoint</text>
+    </g>
+
+    <!-- Spoke 2: DR -->
+    <g transform="translate(565, 0)" filter="url(#shadow)">
+      <rect x="0" y="0" width="535" height="490" rx="14" fill="#111827" stroke="#8b5cf6" stroke-width="2"/>
+      <rect x="20" y="20" width="90" height="28" rx="6" fill="#7c3aed"/>
+      <text x="65" y="39" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="700">DR SPOKE</text>
+      <text x="125" y="40" fill="#f8fafc" font-size="18" font-weight="700">Disaster Recovery Cluster</text>
+      <text x="20" y="75" fill="#c084fc" font-size="13" font-weight="600">kyverno-eks-spoke-dr (us-east-2)</text>
+
+      <rect x="20" y="95" width="495" height="110" rx="8" fill="#1e293b" stroke="#334155"/>
+      <text x="35" y="125" fill="#c084fc" font-size="14" font-weight="700">Multi-Region HA &amp; 장애 복구</text>
+      <text x="35" y="150" fill="#cbd5e1" font-size="13">• 오하이오(us-east-2) 보조 리전 상시 대기</text>
+      <text x="35" y="175" fill="#cbd5e1" font-size="13">• Active-Standby Failover 파이프라인</text>
+
+      <rect x="20" y="220" width="495" height="150" rx="8" fill="#1e293b" stroke="#334155"/>
+      <text x="35" y="250" fill="#c084fc" font-size="14" font-weight="700">동기화 및 AI Fallback</text>
+      <text x="35" y="275" fill="#cbd5e1" font-size="13">• Multi-Region 정책 동기화 &amp; 감사 로그</text>
+      <text x="35" y="300" fill="#cbd5e1" font-size="13">• Bedrock us-east-2 엔드포인트 Fallback</text>
+      <text x="35" y="325" fill="#cbd5e1" font-size="13">• Zero-Downtime 거버넌스 보장</text>
+
+      <text x="20" y="420" fill="#94a3b8" font-size="13">Status: Standby Hot Replica | Multi-Region HA</text>
+    </g>
+
+    <!-- Tier 2 Benchmark -->
+    <g transform="translate(1130, 0)" filter="url(#shadow)">
+      <rect x="0" y="0" width="535" height="490" rx="14" fill="#111827" stroke="#f59e0b" stroke-width="2"/>
+      <rect x="20" y="20" width="110" height="28" rx="6" fill="#d97706"/>
+      <text x="75" y="39" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="700">TIER 2</text>
+      <text x="145" y="40" fill="#f8fafc" font-size="18" font-weight="700">Benchmark Cluster</text>
+      <text x="20" y="75" fill="#fbbf24" font-size="13" font-weight="600">kyverno-eks-tier2 (AWS Free-Tier)</text>
+
+      <rect x="20" y="95" width="495" height="110" rx="8" fill="#1e293b" stroke="#334155"/>
+      <text x="35" y="125" fill="#fbbf24" font-size="14" font-weight="700">고밀도 파드 벤치마크</text>
+      <text x="35" y="150" fill="#cbd5e1" font-size="13">• VPC CNI Prefix Delegation (110 pods/node)</text>
+      <text x="35" y="175" fill="#cbd5e1" font-size="13">• 50+ Multi-Pod 대량 주입 &amp; 레이턴시 검증</text>
+
+      <rect x="20" y="220" width="495" height="150" rx="8" fill="#1e293b" stroke="#334155"/>
+      <text x="35" y="250" fill="#fbbf24" font-size="14" font-weight="700">FinOps 비용 최적화 ($0)</text>
+      <text x="35" y="275" fill="#cbd5e1" font-size="13">• 750시간 EC2 무료 한도 100% 준수</text>
+      <text x="35" y="300" fill="#cbd5e1" font-size="13">• EBS 30GB 스토리지 상한 통제</text>
+      <text x="35" y="325" fill="#cbd5e1" font-size="13">• 자동 클린업 스크립트 연동 (Zero-Leak)</text>
+
+      <text x="20" y="420" fill="#94a3b8" font-size="13">Status: High-Density Testing | Cost: $0 Free Tier</text>
+    </g>
+
+    <!-- Local Kind Lab -->
+    <g transform="translate(1695, 0)" filter="url(#shadow)">
+      <rect x="0" y="0" width="545" height="490" rx="14" fill="#111827" stroke="#10b981" stroke-width="2"/>
+      <rect x="20" y="20" width="90" height="28" rx="6" fill="#059669"/>
+      <text x="65" y="39" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="700">KIND LAB</text>
+      <text x="125" y="40" fill="#f8fafc" font-size="18" font-weight="700">Local Dev Cluster</text>
+      <text x="20" y="75" fill="#34d399" font-size="13" font-weight="600">k8s-lab (Docker in Docker)</text>
+
+      <rect x="20" y="95" width="505" height="110" rx="8" fill="#1e293b" stroke="#334155"/>
+      <text x="35" y="125" fill="#34d399" font-size="14" font-weight="700">초경량 로컬 개발 환경</text>
+      <text x="35" y="150" fill="#cbd5e1" font-size="13">• Single Control-Plane Node (RAM &lt; 1.5GB)</text>
+      <text x="35" y="175" fill="#cbd5e1" font-size="13">• DevContainer &amp; Docker Bridge 통신</text>
+
+      <rect x="20" y="220" width="505" height="150" rx="8" fill="#1e293b" stroke="#334155"/>
+      <text x="35" y="250" fill="#34d399" font-size="14" font-weight="700">6단계 E2E 검증 테스트베드</text>
+      <text x="35" y="275" fill="#cbd5e1" font-size="13">• 위반 감지 -&gt; 예외 신청 -&gt; 관리자 승인</text>
+      <text x="35" y="300" fill="#cbd5e1" font-size="13">• 런타임 CRD 배포 + GitOps PR 자동 발행</text>
+      <text x="35" y="325" fill="#cbd5e1" font-size="13">• MLOps Jupyter Notebook 셀프서비스</text>
+
+      <text x="20" y="420" fill="#94a3b8" font-size="13">Status: Local Standalone | RAM &lt; 1.5GB</text>
+    </g>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- CONNECTIVE FLOW ARROWS & BADGES                                            -->
+  <!-- ========================================================================= -->
+  <!-- User -> Frontend -->
+  <path d="M 420,300 L 420,350" stroke="#38bdf8" stroke-width="3" marker-end="url(#arrBlue)"/>
+  <rect x="360" y="310" width="120" height="22" rx="4" fill="#0f172a" stroke="#38bdf8"/>
+  <text x="420" y="325" text-anchor="middle" fill="#38bdf8" font-size="11" font-weight="700">1. 웹 대시보드</text>
+
+  <!-- Backend -> Bedrock -->
+  <path d="M 900,350 L 900,300" stroke="#c084fc" stroke-width="3" marker-end="url(#arrPurple)"/>
+  <rect x="830" y="310" width="140" height="22" rx="4" fill="#0f172a" stroke="#c084fc"/>
+  <text x="900" y="325" text-anchor="middle" fill="#c084fc" font-size="11" font-weight="700">2. AI 진단 &amp; 수정 (IRSA)</text>
+
+  <!-- Backend -> GitHub -->
+  <path d="M 1700,350 L 1700,300" stroke="#4ade80" stroke-width="3" marker-end="url(#arrGreen)"/>
+  <rect x="1620" y="310" width="160" height="22" rx="4" fill="#0f172a" stroke="#4ade80"/>
+  <text x="1700" y="325" text-anchor="middle" fill="#4ade80" font-size="11" font-weight="700">3. GitOps PR 자동 발행</text>
+
+  <!-- Hub -> Sub-Clusters -->
+  <path d="M 347,780 L 347,830" stroke="#38bdf8" stroke-width="3" marker-end="url(#arrBlue)"/>
+  <path d="M 912,780 L 912,830" stroke="#8b5cf6" stroke-width="3" marker-end="url(#arrPurple)"/>
+  <path d="M 1477,780 L 1477,830" stroke="#fbbf24" stroke-width="3" marker-end="url(#arrAmber)"/>
+  <path d="M 2042,780 L 2042,830" stroke="#4ade80" stroke-width="3" marker-end="url(#arrGreen)"/>
+</svg>

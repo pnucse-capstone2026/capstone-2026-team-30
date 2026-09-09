@@ -82,6 +82,7 @@ export class GitOpsPublisherService {
   private readonly githubToken?: string;
   private readonly githubRepo?: string;
   private readonly githubBaseBranch: string;
+  private readonly autoMerge: boolean;
 
   constructor(
     config: ConfigService,
@@ -108,6 +109,9 @@ export class GitOpsPublisherService {
       "GITOPS_GITHUB_BASE_BRANCH",
       "main",
     );
+    this.autoMerge =
+      config.get<string>("GITOPS_AUTO_MERGE", "false").toLowerCase() ===
+        "true" || config.get<string>("GITOPS_AUTO_MERGE", "false") === "1";
 
     const configuredHours = Number(
       config.get<string>("GITOPS_MIN_DURATION_HOURS", "24"),
@@ -299,6 +303,18 @@ export class GitOpsPublisherService {
         `[GitOps PR Created] Pull Request successfully opened: ${prData.html_url}`,
       );
 
+      // GITOPS_AUTO_MERGE가 활성화되어 있는 경우 GitHub REST API를 통해 즉시 PR 자동 머지 실행
+      if (this.autoMerge && prData.number) {
+        await this.autoMergePullRequest(
+          owner,
+          repo,
+          prData.number,
+          request.id,
+          targetBaseBranch,
+          headers,
+        );
+      }
+
       return {
         prUrl: prData.html_url,
         prNumber: prData.number,
@@ -310,6 +326,65 @@ export class GitOpsPublisherService {
         }`,
       );
       return {};
+    }
+  }
+
+  /**
+   * 개설된 GitHub PR에 대해 GitHub REST API를 호출하여 base 브랜치로 자동 머지(Auto-Merge)를 수행합니다.
+   * GitHub의 mergeable 상태 계산 딜레이에 대응하여 최대 3회 재시도(Backoff)를 수행합니다.
+   */
+  private async autoMergePullRequest(
+    owner: string,
+    repo: string,
+    prNumber: number,
+    requestId: string,
+    targetBaseBranch: string,
+    headers: Record<string, string>,
+  ): Promise<void> {
+    this.logger.log(
+      `[GitOps Auto-Merge] Initiating auto-merge for PR #${prNumber}...`,
+    );
+
+    const maxRetries = 3;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // GitHub 백엔드의 머지 가능 상태 계산을 위해 첫 시도 및 재시도 전 약간의 딜레이
+        await new Promise((resolve) => setTimeout(resolve, attempt * 1200));
+
+        const mergeRes = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}/merge`,
+          {
+            method: "PUT",
+            headers,
+            body: JSON.stringify({
+              commit_title: `feat(gitops): auto-merge PolicyException for request ${requestId} (#${prNumber})`,
+              commit_message: `Automatically merged by Kyverno Governance Platform GitOps Publisher Service.`,
+              merge_method: "squash",
+            }),
+          },
+        );
+
+        if (mergeRes.ok) {
+          const mergeData = (await mergeRes.json()) as { merged?: boolean };
+          if (mergeData.merged) {
+            this.logger.log(
+              `[GitOps Auto-Merged] Pull Request #${prNumber} successfully merged into '${targetBaseBranch}'! 🟣`,
+            );
+            return;
+          }
+        }
+
+        const errText = await mergeRes.text();
+        this.logger.warn(
+          `[GitOps Auto-Merge Attempt ${attempt}/${maxRetries}] HTTP ${mergeRes.status}: ${errText}`,
+        );
+      } catch (err) {
+        this.logger.warn(
+          `[GitOps Auto-Merge Attempt ${attempt}/${maxRetries}] Network error: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
     }
   }
 

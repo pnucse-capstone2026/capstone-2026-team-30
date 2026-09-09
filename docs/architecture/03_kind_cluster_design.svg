@@ -1,0 +1,245 @@
+<svg width="2400" height="1400" viewBox="0 0 2400 1400" xmlns="http://www.w3.org/2000/svg" style="background:#0b0f19; font-family:'Noto Sans CJK KR', 'Ubuntu', 'DejaVu Sans', sans-serif;">
+  <defs>
+    <linearGradient id="bg3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b0f19"/>
+      <stop offset="100%" stop-color="#070a10"/>
+    </linearGradient>
+
+    <filter id="shadow3" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000000" flood-opacity="0.5"/>
+    </filter>
+
+    <marker id="arrGreen3" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#4ade80"/>
+    </marker>
+    <marker id="arrBlue3" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+  </defs>
+
+  <rect width="2400" height="1400" fill="url(#bg3)"/>
+
+  <!-- HEADER -->
+  <g transform="translate(80, 50)">
+    <rect x="0" y="0" width="2240" height="90" rx="14" fill="#131c2e" stroke="#1e293b" stroke-width="1.5" filter="url(#shadow3)"/>
+    <rect x="25" y="24" width="100" height="42" rx="8" fill="#059669"/>
+    <text x="75" y="51" text-anchor="middle" fill="#ffffff" font-size="16" font-weight="800">KIND LAB</text>
+    <text x="145" y="45" fill="#f8fafc" font-size="26" font-weight="800">Local Kind Cluster Design &amp; 6-Stage E2E Governance Workflow</text>
+    <text x="145" y="70" fill="#94a3b8" font-size="14">VSCode DevContainer 환경, Docker 네트워크 브릿지, 단일 노드 Kind 클러스터 및 엔드투엔드 거버넌스 라이프사이클</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- LEFT COLUMN: LOCAL DEV & KIND CLUSTER (x: 80, y: 170, width: 1100)        -->
+  <!-- ========================================================================= -->
+  <g transform="translate(80, 170)" filter="url(#shadow3)">
+    <rect x="0" y="0" width="1100" height="1160" rx="16" fill="#111827" stroke="#3b82f6" stroke-width="2.5"/>
+
+    <!-- Section Header -->
+    <rect x="25" y="20" width="130" height="34" rx="6" fill="#2563eb"/>
+    <text x="90" y="43" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="800">DEV &amp; KIND</text>
+    <text x="170" y="44" fill="#f8fafc" font-size="20" font-weight="800">Local Runtime &amp; Kind Cluster (k8s-lab)</text>
+    <text x="650" y="44" fill="#38bdf8" font-size="14">Docker Bridge | Single-Node (RAM &lt; 1.5GB)</text>
+
+    <!-- Card 1: Host & DevContainer -->
+    <g transform="translate(25, 75)">
+      <rect x="0" y="0" width="1050" height="210" rx="10" fill="#1e293b" stroke="#334155"/>
+      <rect x="15" y="12" width="120" height="24" rx="4" fill="#3b82f6"/>
+      <text x="75" y="29" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="700">DEVCONTAINER</text>
+      <text x="145" y="30" fill="#f8fafc" font-size="16" font-weight="700">Host OS &amp; VSCode DevContainer Runtime</text>
+
+      <g transform="translate(15, 50)">
+        <g transform="translate(0, 0)">
+          <rect x="0" y="0" width="330" height="140" rx="6" fill="#0f172a" stroke="#334155"/>
+          <text x="15" y="24" fill="#93c5fd" font-size="13" font-weight="700">Host Environment</text>
+          <text x="15" y="50" fill="#cbd5e1" font-size="12">• Linux / macOS / WSL2</text>
+          <text x="15" y="75" fill="#cbd5e1" font-size="12">• Docker Desktop / Engine</text>
+          <text x="15" y="100" fill="#cbd5e1" font-size="12">• /var/run/docker.sock 마운트</text>
+          <text x="15" y="125" fill="#cbd5e1" font-size="12">• ~/.kube/config 연동</text>
+        </g>
+
+        <g transform="translate(345, 0)">
+          <rect x="0" y="0" width="330" height="140" rx="6" fill="#0f172a" stroke="#334155"/>
+          <text x="15" y="24" fill="#93c5fd" font-size="13" font-weight="700">Local Toolchain</text>
+          <text x="15" y="50" fill="#cbd5e1" font-size="12">• Node.js 22 LTS &amp; pnpm 9</text>
+          <text x="15" y="75" fill="#cbd5e1" font-size="12">• kubectl, helm, gh CLI</text>
+          <text x="15" y="100" fill="#cbd5e1" font-size="12">• Kyverno CLI v1.12.0</text>
+          <text x="15" y="125" fill="#cbd5e1" font-size="12">• Husky &amp; lint-staged Hook</text>
+        </g>
+
+        <g transform="translate(690, 0)">
+          <rect x="0" y="0" width="330" height="140" rx="6" fill="#0f172a" stroke="#334155"/>
+          <text x="15" y="24" fill="#93c5fd" font-size="13" font-weight="700">Port Mapping Matrix</text>
+          <text x="15" y="50" fill="#cbd5e1" font-size="12">• <tspan fill="#38bdf8">3000</tspan>: Next.js 15 UI</text>
+          <text x="15" y="75" fill="#cbd5e1" font-size="12">• <tspan fill="#38bdf8">4000</tspan>: NestJS 11 Backend</text>
+          <text x="15" y="100" fill="#cbd5e1" font-size="12">• <tspan fill="#38bdf8">5432</tspan>: PostgreSQL 16</text>
+          <text x="15" y="125" fill="#cbd5e1" font-size="12">• <tspan fill="#38bdf8">6443</tspan>: Kind API Server</text>
+        </g>
+      </g>
+    </g>
+
+    <!-- Card 2: Kind Cluster Architecture -->
+    <g transform="translate(25, 305)">
+      <rect x="0" y="0" width="1050" height="825" rx="10" fill="#1e293b" stroke="#059669"/>
+      <rect x="15" y="12" width="110" height="24" rx="4" fill="#059669"/>
+      <text x="70" y="29" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="700">K8S-LAB</text>
+      <text x="135" y="30" fill="#f8fafc" font-size="16" font-weight="700">Kind Cluster (Single Control-Plane Node - RAM &lt; 1.5GB)</text>
+
+      <!-- Sub 1: Control Plane Core -->
+      <g transform="translate(15, 50)">
+        <rect x="0" y="0" width="1020" height="95" rx="8" fill="#0f172a" stroke="#334155"/>
+        <text x="15" y="25" fill="#34d399" font-size="14" font-weight="700">Kubernetes v1.36.1 Control-Plane Core</text>
+        <text x="15" y="50" fill="#cbd5e1" font-size="12">• API Server (https://k8s-lab-control-plane:6443) | Etcd v3 Datastore | Controller Manager | Scheduler</text>
+        <text x="15" y="75" fill="#cbd5e1" font-size="12">• Ingress-Ready Port Mappings: Host 80/443 TCP 포워딩 지원 | containerd v1.7+ 런타임</text>
+      </g>
+
+      <!-- Sub 2: Kyverno Engine -->
+      <g transform="translate(15, 160)">
+        <rect x="0" y="0" width="1020" height="120" rx="8" fill="#0f172a" stroke="#334155"/>
+        <text x="15" y="25" fill="#34d399" font-size="14" font-weight="700">Kyverno v1.12.0 Admission &amp; Reporting Engine</text>
+        <text x="15" y="52" fill="#cbd5e1" font-size="12">• Validating / Mutating Webhook (CREATE / UPDATE 가로채기 및 거버넌스 집행)</text>
+        <text x="15" y="77" fill="#cbd5e1" font-size="12">• Background Scan: 주기적 스캔 후 <tspan fill="#38bdf8">PolicyReport (wgpolicyk8s.k8s.io/v1alpha2)</tspan> 생성 (3~5s)</text>
+        <text x="15" y="102" fill="#cbd5e1" font-size="12">• PolicyException v2beta1 CRD 기반 동적 런타임 면제 바이패스</text>
+      </g>
+
+      <!-- Sub 3: 3 Namespaces Layout -->
+      <g transform="translate(15, 295)">
+        <rect x="0" y="0" width="1020" height="370" rx="8" fill="#0f172a" stroke="#334155"/>
+        <text x="15" y="25" fill="#34d399" font-size="14" font-weight="700">3 Isolated Namespaces &amp; Workloads</text>
+
+        <!-- NS 1: kyverno -->
+        <g transform="translate(15, 40)">
+          <rect x="0" y="0" width="990" height="90" rx="6" fill="#1e293b" stroke="#7c3aed"/>
+          <rect x="12" y="10" width="70" height="20" rx="4" fill="#7c3aed"/>
+          <text x="47" y="24" text-anchor="middle" fill="#ffffff" font-size="10" font-weight="700">SYSTEM</text>
+          <text x="90" y="25" fill="#f8fafc" font-size="13" font-weight="700">Namespace: kyverno</text>
+          <text x="12" y="52" fill="#cbd5e1" font-size="12">• Pods: kyverno-admission-controller, kyverno-background-controller</text>
+          <text x="12" y="75" fill="#cbd5e1" font-size="12">• CRDs: <tspan fill="#c084fc" font-weight="700">pac-exception-&lt;UUID&gt;</tspan> (PolicyException 런타임 면제 객체 배포)</text>
+        </g>
+
+        <!-- NS 2: testbed -->
+        <g transform="translate(15, 145)">
+          <rect x="0" y="0" width="990" height="100" rx="6" fill="#1e293b" stroke="#0284c7"/>
+          <rect x="12" y="10" width="70" height="20" rx="4" fill="#0284c7"/>
+          <text x="47" y="24" text-anchor="middle" fill="#ffffff" font-size="10" font-weight="700">TESTBED</text>
+          <text x="90" y="25" fill="#f8fafc" font-size="13" font-weight="700">Namespace: governance-testbed</text>
+          <text x="12" y="52" fill="#cbd5e1" font-size="12">• 클린 베이스라인: 01-clean-baseline (정상 파드 x3)</text>
+          <text x="12" y="75" fill="#cbd5e1" font-size="12">• 타깃 위반 파드: <tspan fill="#f87171" font-weight="700">user-payment-batch-worker</tspan> (user@test.com 소유)</text>
+          <text x="12" y="95" fill="#a78bfa" font-size="11">승인 시 [Shield] 정책 예외 승인됨 뱃지 부착 및 정상 구동</text>
+        </g>
+
+        <!-- NS 3: mlops -->
+        <g transform="translate(15, 260)">
+          <rect x="0" y="0" width="990" height="95" rx="6" fill="#1e293b" stroke="#d97706"/>
+          <rect x="12" y="10" width="70" height="20" rx="4" fill="#d97706"/>
+          <text x="47" y="24" text-anchor="middle" fill="#ffffff" font-size="10" font-weight="700">MLOPS</text>
+          <text x="90" y="25" fill="#f8fafc" font-size="13" font-weight="700">Namespace: mlops-workspace</text>
+          <text x="12" y="52" fill="#cbd5e1" font-size="12">• <tspan fill="#fbbf24" font-weight="700">my-pytorch-lab</tspan> (kubeflow.org/v1 Notebook CRD - PyTorch 2.1 + CUDA 12.1)</text>
+          <text x="12" y="75" fill="#cbd5e1" font-size="12">• <tspan fill="#38bdf8">my-pytorch-lab-pvc</tspan> (5GB Persistent Home Volume 마운트)</text>
+        </g>
+      </g>
+
+      <!-- 7 Governance Policies -->
+      <g transform="translate(15, 680)">
+        <rect x="0" y="0" width="1020" height="125" rx="8" fill="#0f172a" stroke="#334155"/>
+        <text x="15" y="24" fill="#34d399" font-size="13" font-weight="700">7 Active Governance &amp; MLOps Policies</text>
+        <text x="15" y="48" fill="#cbd5e1" font-size="12">1. disallow-latest-tag (태그 고정)</text>
+        <text x="360" y="48" fill="#cbd5e1" font-size="12">2. disallow-privileged (보안 권한 제한)</text>
+        <text x="700" y="48" fill="#cbd5e1" font-size="12">3. require-resource-limits (자원 한도)</text>
+        <text x="15" y="72" fill="#cbd5e1" font-size="12">4. restrict-image-registries (승인 레지스트리)</text>
+        <text x="360" y="72" fill="#cbd5e1" font-size="12">5. mlops-require-gpu-toleration (GPU)</text>
+        <text x="700" y="72" fill="#cbd5e1" font-size="12">6. mlops-disallow-root-user (Non-Root)</text>
+        <text x="15" y="96" fill="#cbd5e1" font-size="12">7. mlops-shm-size-limit (PyTorch 공유메모리 한도 64GB 통제)</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- RIGHT COLUMN: 6-STAGE E2E VERIFICATION PIPELINE (x: 1220, y: 170, w: 1100)-->
+  <!-- ========================================================================= -->
+  <g transform="translate(1220, 170)" filter="url(#shadow3)">
+    <rect x="0" y="0" width="1100" height="1160" rx="16" fill="#111827" stroke="#10b981" stroke-width="2.5"/>
+
+    <!-- Section Header -->
+    <rect x="25" y="20" width="140" height="34" rx="6" fill="#059669"/>
+    <text x="95" y="43" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="800">E2E PIPELINE</text>
+    <text x="180" y="44" fill="#f8fafc" font-size="20" font-weight="800">6-Stage End-to-End Governance Verification</text>
+
+    <!-- Stage 1 -->
+    <g transform="translate(25, 75)">
+      <rect x="0" y="0" width="1050" height="160" rx="10" fill="#1e293b" stroke="#ef4444" stroke-width="1.5"/>
+      <rect x="15" y="15" width="80" height="26" rx="4" fill="#ef4444"/>
+      <text x="55" y="33" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="800">STEP 1</text>
+      <text x="110" y="34" fill="#f8fafc" font-size="16" font-weight="700">사용자 워크로드 배포 및 실시간 위반 감지 (Audit Mode)</text>
+      <text x="15" y="65" fill="#cbd5e1" font-size="13">• 개발자(user@test.com)가 리소스 제한이 누락된 <tspan fill="#f87171" font-weight="700">user-payment-batch-worker</tspan> 파드 배포</text>
+      <text x="15" y="90" fill="#cbd5e1" font-size="13">• Kyverno Audit 모드가 위반 사항 감지 후 <tspan fill="#f87171" font-weight="700">PolicyReport</tspan> 생성 (3~5초 소요)</text>
+      <text x="15" y="115" fill="#cbd5e1" font-size="13">• 웹 UI <tspan fill="#38bdf8">/violations</tspan> 화면에 본인 소유의 빨간색 위반 카드로 실시간 표출</text>
+      <text x="15" y="140" fill="#94a3b8" font-size="12">Rule: validate-resource-requests-limits | Status: VIOLATION</text>
+    </g>
+
+    <!-- Stage 2 -->
+    <g transform="translate(25, 255)">
+      <rect x="0" y="0" width="1050" height="160" rx="10" fill="#1e293b" stroke="#f59e0b" stroke-width="1.5"/>
+      <rect x="15" y="15" width="80" height="26" rx="4" fill="#f59e0b"/>
+      <text x="55" y="33" text-anchor="middle" fill="#0f172a" font-size="12" font-weight="800">STEP 2</text>
+      <text x="110" y="34" fill="#f8fafc" font-size="16" font-weight="700">사용자 정책 예외 (PolicyException) 신청</text>
+      <text x="15" y="65" fill="#cbd5e1" font-size="13">• 사용자가 위반 카드에서 [예외 요청] 클릭 또는 <tspan fill="#38bdf8">/exceptions/new</tspan> 서식 접속</text>
+      <text x="15" y="90" fill="#cbd5e1" font-size="13">• 대상 클러스터(k8s-lab), 정책명, 리소스명, 사유("결제 배치 튜닝"), 만료일 입력 후 제출</text>
+      <text x="15" y="115" fill="#cbd5e1" font-size="13">• PostgreSQL 데이터베이스에 신청 내역이 <tspan fill="#fbbf24" font-weight="700">'PENDING' (검토 대기)</tspan> 상태로 안전하게 등록</text>
+      <text x="15" y="140" fill="#94a3b8" font-size="12">State: PENDING | CreatedBy: user@test.com</text>
+    </g>
+
+    <!-- Stage 3 -->
+    <g transform="translate(25, 435)">
+      <rect x="0" y="0" width="1050" height="175" rx="10" fill="#1e293b" stroke="#8b5cf6" stroke-width="2"/>
+      <rect x="15" y="15" width="80" height="26" rx="4" fill="#8b5cf6"/>
+      <text x="55" y="33" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="800">STEP 3</text>
+      <text x="110" y="34" fill="#f8fafc" font-size="16" font-weight="700">관리자 승인 &amp; Dual-Path GitOps 자동 발행</text>
+      <text x="15" y="65" fill="#cbd5e1" font-size="13">• 보안 관리자(admin@test.com)가 <tspan fill="#38bdf8">/admin/exceptions</tspan> 에서 사유 검토 후 [승인] 클릭</text>
+      <text x="15" y="90" fill="#cbd5e1" font-size="13">• <tspan fill="#c084fc" font-weight="700">경로 A (Runtime)</tspan>: Kubernetes에 <tspan fill="#c084fc">pac-exception-&lt;UUID&gt;</tspan> PolicyException CRD 즉시 배포</text>
+      <text x="15" y="115" fill="#cbd5e1" font-size="13">• <tspan fill="#4ade80" font-weight="700">경로 B (GitOps)</tspan>: GitHub 저장소(YeongrimGo/PaC-KyvernoDashboard)에 PR 자동 개설</text>
+      <text x="15" y="140" fill="#cbd5e1" font-size="13">• DB 상태 <tspan fill="#4ade80" font-weight="700">'APPROVED'</tspan> 전환 및 엔터프라이즈 감사 로그 기록</text>
+      <text x="15" y="160" fill="#94a3b8" font-size="12">PR URL: https://github.com/YeongrimGo/PaC-KyvernoDashboard/pull/...</text>
+    </g>
+
+    <!-- Stage 4 -->
+    <g transform="translate(25, 630)">
+      <rect x="0" y="0" width="1050" height="155" rx="10" fill="#1e293b" stroke="#3b82f6" stroke-width="1.5"/>
+      <rect x="15" y="15" width="80" height="26" rx="4" fill="#3b82f6"/>
+      <text x="55" y="33" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="800">STEP 4</text>
+      <text x="110" y="34" fill="#f8fafc" font-size="16" font-weight="700">실시간 관제실(/demo/cluster-live) 토폴로지 면제 확인</text>
+      <text x="15" y="65" fill="#cbd5e1" font-size="13">• 대시보드 실시간 관제실 화면에서 대상 파드에 보라색 방패 아이콘 부착</text>
+      <text x="15" y="90" fill="#cbd5e1" font-size="13">• <tspan fill="#c084fc" font-weight="700">[Shield] 정책 예외 승인됨</tspan> 뱃지가 실시간 인터랙티브 토폴로지에 표출</text>
+      <text x="15" y="115" fill="#cbd5e1" font-size="13">• 파드 클릭 시 승인된 PolicyException CRD 명칭과 만료 일시 상세 확인</text>
+      <text x="15" y="140" fill="#94a3b8" font-size="12">Exemption TTL &amp; Audit Trail Panel displayed seamlessly</text>
+    </g>
+
+    <!-- Stage 5 -->
+    <g transform="translate(25, 805)">
+      <rect x="0" y="0" width="1050" height="160" rx="10" fill="#1e293b" stroke="#10b981" stroke-width="1.5"/>
+      <rect x="15" y="15" width="80" height="26" rx="4" fill="#10b981"/>
+      <text x="55" y="33" text-anchor="middle" fill="#0f172a" font-size="12" font-weight="800">STEP 5</text>
+      <text x="110" y="34" fill="#f8fafc" font-size="16" font-weight="700">Enforce 강제 차단 &amp; 예외 워크로드 허용 검증</text>
+      <text x="15" y="65" fill="#cbd5e1" font-size="13">• 전체 정책을 <tspan fill="#fbbf24" font-weight="700">Enforce (강제 차단)</tspan> 모드로 일괄 전환 적용</text>
+      <text x="15" y="90" fill="#cbd5e1" font-size="13">• 예외 없는 신규 위반 파드 배포 시: Kyverno Webhook에 의해 <tspan fill="#f87171" font-weight="700">즉각 차단(Denied)</tspan></text>
+      <text x="15" y="115" fill="#cbd5e1" font-size="13">• 이미 예외를 승인받은 <tspan fill="#4ade80" font-weight="700">user-payment-batch-worker</tspan>는 정상 Running 유지</text>
+      <text x="15" y="140" fill="#94a3b8" font-size="12">Zero-Trust Admission Rule 집행 성공 검증</text>
+    </g>
+
+    <!-- Stage 6 -->
+    <g transform="translate(25, 985)">
+      <rect x="0" y="0" width="1050" height="155" rx="10" fill="#1e293b" stroke="#ec4899" stroke-width="1.5"/>
+      <rect x="15" y="15" width="80" height="26" rx="4" fill="#ec4899"/>
+      <text x="55" y="33" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="800">STEP 6</text>
+      <text x="110" y="34" fill="#f8fafc" font-size="16" font-weight="700">MLOps Jupyter Notebook Hub 셀프서비스 검증</text>
+      <text x="15" y="65" fill="#cbd5e1" font-size="13">• 데이터 사이언티스트가 <tspan fill="#38bdf8">/mlops/notebooks</tspan> 에서 PyTorch 노트북 원클릭 생성</text>
+      <text x="15" y="90" fill="#cbd5e1" font-size="13">• <tspan fill="#f472b6" font-weight="700">kubeflow.org/v1 Notebook CRD</tspan> 및 5GB 영구 홈 디렉토리 PVC 자동 프로비저닝</text>
+      <text x="15" y="115" fill="#cbd5e1" font-size="13">• 대시보드 UI에서 [중지(Stop)] / [시작(Start)] / [삭제(Delete)] 생명주기 완벽 제어</text>
+      <text x="15" y="140" fill="#94a3b8" font-size="12">Automated Mount: /home/jovyan (5GB Persistent Home)</text>
+    </g>
+  </g>
+
+  <!-- Connective Arrow -->
+  <path d="M 1180,750 L 1220,750" stroke="#4ade80" stroke-width="4" marker-end="url(#arrGreen3)"/>
+  <rect x="1155" y="725" width="90" height="24" rx="4" fill="#0f172a" stroke="#4ade80"/>
+  <text x="1200" y="742" text-anchor="middle" fill="#4ade80" font-size="11" font-weight="800">E2E Flow</text>
+</svg>

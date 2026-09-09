@@ -1,3 +1,5 @@
+import * as http from "node:http";
+import * as https from "node:https";
 import {
   CustomObjectsApi,
   KubeConfig,
@@ -17,6 +19,26 @@ import { Observable, of } from "rxjs";
  */
 export const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 
+/**
+ * EKS Control Plane 통신 시 TLS 핸드셰이크 오버헤드와 CoreDNS 쿼리 부하를 줄이기 위한
+ * 전역 HTTP/HTTPS Keep-Alive 커넥션 풀 에이전트
+ */
+export const sharedHttpsAgent = new https.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 30_000,
+  maxSockets: 64,
+  maxFreeSockets: 16,
+  timeout: 60_000,
+});
+
+export const sharedHttpAgent = new http.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 30_000,
+  maxSockets: 64,
+  maxFreeSockets: 16,
+  timeout: 60_000,
+});
+
 export function createCustomObjectsApi(
   kubeConfig: KubeConfig,
   timeoutMs: number = DEFAULT_REQUEST_TIMEOUT_MS,
@@ -30,6 +52,12 @@ export function createCustomObjectsApi(
       {
         pre: (context: RequestContext): Observable<RequestContext> => {
           context.setSignal(AbortSignal.timeout(timeoutMs));
+          const url = context.getUrl();
+          if (url.startsWith("https:")) {
+            context.setAgent(sharedHttpsAgent);
+          } else if (url.startsWith("http:")) {
+            context.setAgent(sharedHttpAgent);
+          }
           return of(context);
         },
         post: (context: ResponseContext): Observable<ResponseContext> =>

@@ -1,0 +1,39 @@
+graph TB
+    subgraph UserLayer["사용자 계층"]
+        Users["👥 개발자 · 관리자"]
+    end
+
+    subgraph PresentationLayer["프론트엔드 계층"]
+        Dashboard["🌐 웹 대시보드 (Next.js 15 App Router)"]
+    end
+
+    subgraph BackendLayer["백엔드 코어 계층"]
+        API["⚙️ 업무 API 엔진 (NestJS 11)<br/>인증 · 정책 · 위반 · 예외 · 감사 · MLOps · MultiClusterProvider"]
+        DB[("🗄️ PostgreSQL 16 (Prisma ORM 6)")]
+        Reconciler["🔄 상태 조정 서비스<br/>(만료 Sweeper · 서킷브레이커 Fallback · 유휴 FinOps)"]
+    end
+
+    subgraph K8sFleet["Kubernetes Cluster Fleet"]
+        K8sAPI["☸️ Kubernetes API Server"]
+        Kyverno["🛡️ Kyverno v1.12.0<br/>(Admission Webhook + Background Scan)"]
+        CRD["📄 CRD 리소스<br/>(PolicyReport · PolicyException · Kubeflow Notebook)"]
+        Workloads["📦 워크로드 파드<br/>(user-payment-batch-worker / Clean Baseline)"]
+    end
+
+    subgraph External["외부 연동 (선택 및 클라우드)"]
+        Bedrock["🤖 Amazon Bedrock (Claude 3.5 Sonnet)"]
+        GitHub["🐙 GitHub GitOps (PolicyException PR)"]
+        MLOps["🧪 Kubeflow MLOps (KFP · 5GB PVC)"]
+        ECR["📦 Amazon ECR & GitHub Actions"]
+    end
+
+    Users --> Dashboard
+    Dashboard --> API
+    API <--> DB
+    API --> Reconciler
+    API -->|정책 조회 · 예외 배포 · 리포트 수집| K8sAPI
+    K8sAPI <--> Kyverno
+    Kyverno --> CRD
+    Kyverno --> Workloads
+    API --> External
+    Reconciler --> External

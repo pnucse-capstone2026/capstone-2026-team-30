@@ -1,0 +1,462 @@
+<svg width="2600" height="1520" viewBox="0 0 2600 1520" xmlns="http://www.w3.org/2000/svg" style="background:#090d16; font-family:'Noto Sans CJK KR', 'Ubuntu', 'DejaVu Sans', sans-serif;">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#090d16"/>
+      <stop offset="50%" stop-color="#0e1424"/>
+      <stop offset="100%" stop-color="#060910"/>
+    </linearGradient>
+
+    <filter id="boxShadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000000" flood-opacity="0.6"/>
+    </filter>
+
+    <!-- Marker Arrowheads -->
+    <marker id="arrBlue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrGreen" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#4ade80"/>
+    </marker>
+    <marker id="arrPurple" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#c084fc"/>
+    </marker>
+    <marker id="arrAmber" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fbbf24"/>
+    </marker>
+    <marker id="arrPink" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#ec4899"/>
+    </marker>
+  </defs>
+
+  <rect width="2600" height="1520" fill="url(#bgGrad)"/>
+
+  <!-- ========================================================================= -->
+  <!-- HEADER                                                                    -->
+  <!-- ========================================================================= -->
+  <g transform="translate(60, 30)">
+    <rect x="0" y="0" width="2480" height="85" rx="14" fill="#111827" stroke="#1e293b" stroke-width="1.5" filter="url(#boxShadow)"/>
+    <rect x="25" y="22" width="160" height="38" rx="8" fill="#2563eb"/>
+    <text x="105" y="47" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="800">ARCHITECTURE</text>
+    <text x="210" y="42" fill="#f8fafc" font-size="24" font-weight="800">PaC Kyverno Governance Platform - 전체 시스템 아키텍처 및 런타임 데이터 흐름도</text>
+    <text x="210" y="66" fill="#94a3b8" font-size="14">웹 UI, 백엔드 API, AWS EKS/Kind 멀티 클러스터 함대, AI Bedrock Copilot, Dual-Path GitOps &amp; CI/CD 파이프라인</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- TOP ROW: EXTERNAL CLOUD SERVICES                                          -->
+  <!-- ========================================================================= -->
+  <!-- Amazon Bedrock -->
+  <g transform="translate(900, 135)" filter="url(#boxShadow)">
+    <rect x="0" y="0" width="370" height="105" rx="12" fill="#1e293b" stroke="#a855f7" stroke-width="2"/>
+    <rect x="20" y="16" width="110" height="26" rx="6" fill="#7c3aed"/>
+    <text x="75" y="34" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="700">BEDROCK AI</text>
+    <text x="140" y="35" fill="#f8fafc" font-size="16" font-weight="700">Amazon Bedrock</text>
+    <text x="20" y="66" fill="#cbd5e1" font-size="13">Claude 3.5 Sonnet / Amazon Nova Lite</text>
+    <text x="20" y="88" fill="#94a3b8" font-size="12">AI 정책 위반 진단 &amp; 수정 YAML 제안 (3.5s 서킷브레이커)</text>
+  </g>
+
+  <!-- GitHub Repository -->
+  <g transform="translate(1330, 135)" filter="url(#boxShadow)">
+    <rect x="0" y="0" width="380" height="105" rx="12" fill="#1e293b" stroke="#10b981" stroke-width="2"/>
+    <rect x="20" y="16" width="90" height="26" rx="6" fill="#059669"/>
+    <text x="65" y="34" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="700">GITOPS</text>
+    <text x="120" y="35" fill="#f8fafc" font-size="16" font-weight="700">GitHub (GitOps Repo)</text>
+    <text x="20" y="66" fill="#cbd5e1" font-size="13">YeongrimGo/PaC-KyvernoDashboard</text>
+    <text x="20" y="88" fill="#94a3b8" font-size="12">PolicyException 승인 시 자동 PR 발행 및 선언적 버전 관리</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- LEFT COLUMN: INBOUND TRAFFIC & INGRESS                                    -->
+  <!-- ========================================================================= -->
+  <!-- User Browser -->
+  <g transform="translate(60, 360)" filter="url(#boxShadow)">
+    <rect x="0" y="0" width="200" height="150" rx="12" fill="#1e293b" stroke="#3b82f6" stroke-width="2"/>
+    <rect x="15" y="15" width="80" height="24" rx="4" fill="#2563eb"/>
+    <text x="55" y="32" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="700">CLIENT</text>
+    <text x="15" y="65" fill="#f8fafc" font-size="16" font-weight="700">사용자 브라우저</text>
+    <text x="15" y="90" fill="#cbd5e1" font-size="12">• 개발자 / 요청자</text>
+    <text x="15" y="110" fill="#cbd5e1" font-size="12">• 플랫폼 관리자</text>
+    <text x="15" y="132" fill="#94a3b8" font-size="11">대시보드 UI &amp; REST 호출</text>
+  </g>
+
+  <!-- AWS ALB -->
+  <g transform="translate(300, 360)" filter="url(#boxShadow)">
+    <rect x="0" y="0" width="200" height="150" rx="12" fill="#1e293b" stroke="#0284c7" stroke-width="2"/>
+    <rect x="15" y="15" width="75" height="24" rx="4" fill="#0284c7"/>
+    <text x="52" y="32" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="700">INGRESS</text>
+    <text x="15" y="65" fill="#f8fafc" font-size="16" font-weight="700">AWS ALB</text>
+    <text x="15" y="90" fill="#38bdf8" font-size="12" font-weight="700">Target-Type: IP</text>
+    <text x="15" y="110" fill="#cbd5e1" font-size="11">• Path /* -&gt; UI (3000)</text>
+    <text x="15" y="130" fill="#cbd5e1" font-size="11">• Path /api/* -&gt; API</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- CENTER BOX: PLATFORM HUB (y: 290)                                         -->
+  <!-- ========================================================================= -->
+  <g transform="translate(540, 290)" filter="url(#boxShadow)">
+    <!-- Hub Boundary -->
+    <rect x="0" y="0" width="1010" height="765" rx="16" fill="#111827" stroke="#3b82f6" stroke-width="2.5"/>
+    <rect x="25" y="18" width="150" height="30" rx="6" fill="#2563eb"/>
+    <text x="100" y="38" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="800">PLATFORM HUB</text>
+    <text x="190" y="40" fill="#f8fafc" font-size="19" font-weight="800">관리 플랫폼 (Primary Hub Cluster - AWS us-east-1)</text>
+
+    <!-- 1. Next.js Frontend Box -->
+    <g transform="translate(25, 65)">
+      <rect x="0" y="0" width="440" height="250" rx="10" fill="#1e293b" stroke="#0284c7" stroke-width="1.5"/>
+      <rect x="15" y="15" width="100" height="24" rx="4" fill="#0284c7"/>
+      <text x="65" y="32" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="700">FRONTEND</text>
+      <text x="125" y="33" fill="#f8fafc" font-size="16" font-weight="700">Next.js 15 Standalone UI</text>
+      <text x="15" y="65" fill="#38bdf8" font-size="13" font-weight="700">Port 3000 (node:22-slim / React 19)</text>
+
+      <text x="15" y="93" fill="#cbd5e1" font-size="13">• App Router 대시보드 및 역할별 뷰 분리</text>
+      <text x="15" y="120" fill="#cbd5e1" font-size="13">• <tspan fill="#38bdf8" font-weight="700">실시간 관제실 (/demo/cluster-live)</tspan>: Canvas 토폴로지</text>
+      <text x="15" y="147" fill="#cbd5e1" font-size="13">• <tspan fill="#38bdf8" font-weight="700">TanStack React Query v5 &amp; Zustand</tspan> 캐시</text>
+      <text x="15" y="174" fill="#cbd5e1" font-size="13">• SSE 기반 실시간 상태 변경 이벤트 수신</text>
+      <text x="15" y="201" fill="#cbd5e1" font-size="13">• MLOps 셀프서비스 노트북 생성 대화창</text>
+      <text x="15" y="228" fill="#94a3b8" font-size="11">HttpOnly / Secure Cookie JWT 세션 관리</text>
+    </g>
+
+    <!-- 2. NestJS Backend Box -->
+    <g transform="translate(490, 65)">
+      <rect x="0" y="0" width="495" height="425" rx="10" fill="#1e293b" stroke="#10b981" stroke-width="2"/>
+      <rect x="15" y="15" width="90" height="24" rx="4" fill="#059669"/>
+      <text x="60" y="32" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="700">BACKEND</text>
+      <text x="115" y="33" fill="#f8fafc" font-size="16" font-weight="700">NestJS 11 Core API 엔진</text>
+      <text x="15" y="65" fill="#4ade80" font-size="13" font-weight="700">Port 3001 (IRSA Role Enabled)</text>
+
+      <text x="15" y="95" fill="#cbd5e1" font-size="13">• <tspan fill="#4ade80" font-weight="700">Auth &amp; RBAC</tspan>: JwtAuthGuard / PermissionsGuard</text>
+      <text x="15" y="125" fill="#cbd5e1" font-size="13">• <tspan fill="#4ade80" font-weight="700">정책 &amp; 예외 관리</tspan>: ExceptionRequestsService (CRUD)</text>
+      <text x="15" y="155" fill="#cbd5e1" font-size="13">• <tspan fill="#38bdf8" font-weight="700">Dual-Path GitOps Engine</tspan>: K8s 배포 + GitHub PR 발행</text>
+      <text x="15" y="185" fill="#cbd5e1" font-size="13">• <tspan fill="#c084fc" font-weight="700">Bedrock AI Copilot</tspan>: 3.5s Circuit Breaker + Remediation</text>
+      <text x="15" y="215" fill="#cbd5e1" font-size="13">• <tspan fill="#fbbf24" font-weight="700">MultiClusterProvider</tspan>: 다중 클러스터 K8s API 라우팅</text>
+      <text x="15" y="245" fill="#cbd5e1" font-size="13">• <tspan fill="#f472b6" font-weight="700">MLOps Kubeflow Adapter</tspan>: Notebooks &amp; 5GB PVC 제어</text>
+      <text x="15" y="275" fill="#cbd5e1" font-size="13">• <tspan fill="#4ade80" font-weight="700">Violations &amp; PolicyReport</tspan>: CRD 파싱 및 상태 관리</text>
+      
+      <rect x="15" y="300" width="465" height="110" rx="6" fill="#0f172a" stroke="#334155"/>
+      <text x="25" y="325" fill="#4ade80" font-size="12" font-weight="700">Security &amp; Performance Standards</text>
+      <text x="25" y="350" fill="#cbd5e1" font-size="12">• 하드코딩 Secret Key 100% 배제 (AWS IRSA)</text>
+      <text x="25" y="373" fill="#cbd5e1" font-size="12">• 비즈니스 에러 카탈로그 &amp; Zod/DTO 유효성 검증</text>
+      <text x="25" y="395" fill="#94a3b8" font-size="11">Fast Response &amp; Resilient Connection Pooling</text>
+    </g>
+
+    <!-- 3. PostgreSQL Database Box -->
+    <g transform="translate(25, 335)">
+      <rect x="0" y="0" width="440" height="240" rx="10" fill="#1e293b" stroke="#6366f1" stroke-width="1.5"/>
+      <rect x="15" y="15" width="110" height="24" rx="4" fill="#4f46e5"/>
+      <text x="70" y="32" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="700">DATABASE</text>
+      <text x="135" y="33" fill="#f8fafc" font-size="16" font-weight="700">PostgreSQL 16 StatefulSet</text>
+      <text x="15" y="65" fill="#818cf8" font-size="13" font-weight="700">Port 5432 (Prisma ORM 6 / EBS gp3 20GB)</text>
+
+      <text x="15" y="95" fill="#cbd5e1" font-size="13">• User, Role, UserCluster 접근 권한 매핑</text>
+      <text x="15" y="125" fill="#cbd5e1" font-size="13">• ExceptionRequest (PENDING, APPROVED, REJECTED)</text>
+      <text x="15" y="155" fill="#cbd5e1" font-size="13">• AuditLogs (관리자 승인/반려 감사 추적)</text>
+      <text x="15" y="185" fill="#cbd5e1" font-size="13">• ManagedViolationStatus (위반 추적 상태)</text>
+      <text x="15" y="215" fill="#94a3b8" font-size="11">Prisma automated schema migrations &amp; seed data</text>
+    </g>
+
+    <!-- 4. Reconciliation Service Box -->
+    <g transform="translate(25, 595)">
+      <rect x="0" y="0" width="960" height="150" rx="10" fill="#1e293b" stroke="#a855f7" stroke-width="1.5"/>
+      <rect x="15" y="12" width="130" height="24" rx="4" fill="#7c3aed"/>
+      <text x="80" y="29" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="700">RECONCILER</text>
+      <text x="155" y="30" fill="#f8fafc" font-size="15" font-weight="700">상태 조정 &amp; 백그라운드 스케줄러 (NestJS Cron &amp; Sweeper)</text>
+
+      <g transform="translate(15, 45)">
+        <!-- Card 1: TTL Sweeper -->
+        <g transform="translate(0, 0)">
+          <rect x="0" y="0" width="300" height="90" rx="6" fill="#0f172a" stroke="#334155"/>
+          <text x="15" y="25" fill="#c084fc" font-size="12" font-weight="700">만료 예외 자동 회수 (TTL Sweeper)</text>
+          <text x="15" y="48" fill="#cbd5e1" font-size="11">• 만료 일시 경과 시 PolicyException</text>
+          <text x="15" y="68" fill="#cbd5e1" font-size="11">  K8s CRD 자동 삭제 &amp; DB 상태 동기화</text>
+        </g>
+
+        <!-- Card 2: AI Circuit Breaker -->
+        <g transform="translate(315, 0)">
+          <rect x="0" y="0" width="300" height="90" rx="6" fill="#0f172a" stroke="#334155"/>
+          <text x="15" y="25" fill="#c084fc" font-size="12" font-weight="700">AI 서킷브레이커 Fallback</text>
+          <text x="15" y="48" fill="#cbd5e1" font-size="11">• 3.5s 타임아웃 발생 시</text>
+          <text x="15" y="68" fill="#cbd5e1" font-size="11">  로컬 룰 템플릿 엔진 자동 전환</text>
+        </g>
+
+        <!-- Card 3: FinOps Monitor -->
+        <g transform="translate(630, 0)">
+          <rect x="0" y="0" width="300" height="90" rx="6" fill="#0f172a" stroke="#334155"/>
+          <text x="15" y="25" fill="#c084fc" font-size="12" font-weight="700">FinOps 유휴 자원 모니터</text>
+          <text x="15" y="48" fill="#cbd5e1" font-size="11">• 장시간 미사용 MLOps 노트북</text>
+          <text x="15" y="68" fill="#cbd5e1" font-size="11">  자동 Shutdown으로 클라우드 비용 $0</text>
+        </g>
+      </g>
+    </g>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- RIGHT BOX: TARGET K8S CLUSTER FLEET (y: 290)                              -->
+  <!-- ========================================================================= -->
+  <g transform="translate(1580, 290)" filter="url(#boxShadow)">
+    <!-- Fleet Boundary -->
+    <rect x="0" y="0" width="960" height="765" rx="16" fill="#111827" stroke="#4f46e5" stroke-width="2.5"/>
+    <rect x="25" y="18" width="160" height="30" rx="6" fill="#4338ca"/>
+    <text x="105" y="38" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="800">CLUSTER FLEET</text>
+    <text x="195" y="40" fill="#f8fafc" font-size="19" font-weight="800">관리 대상 클러스터 함대 (Target Kubernetes Fleet)</text>
+
+    <!-- 1. Kubernetes API Server -->
+    <g transform="translate(25, 65)">
+      <rect x="0" y="0" width="440" height="230" rx="10" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
+      <rect x="15" y="15" width="80" height="24" rx="4" fill="#0284c7"/>
+      <text x="55" y="32" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="700">K8S API</text>
+      <text x="105" y="33" fill="#f8fafc" font-size="16" font-weight="700">Kubernetes API Server</text>
+      <text x="15" y="65" fill="#38bdf8" font-size="13" font-weight="700">EKS v1.32 / Kind v1.36 (TLS 6443)</text>
+
+      <text x="15" y="95" fill="#cbd5e1" font-size="13">• ServiceAccount 토큰 기반 K8s API 보안 인증</text>
+      <text x="15" y="125" fill="#cbd5e1" font-size="13">• CustomObjectsApi: Kyverno CRD 실시간 제어</text>
+      <text x="15" y="155" fill="#cbd5e1" font-size="13">• CoreV1Api: Pods, Nodes, Namespaces 상태 조회</text>
+      <text x="15" y="185" fill="#cbd5e1" font-size="13">• Admission Webhook 가로채기(Intercept) 디스패치</text>
+      <text x="15" y="212" fill="#94a3b8" font-size="11">클러스터 리소스의 단일 진실 공급원(SSOT)</text>
+    </g>
+
+    <!-- 2. Kyverno Governance Engine -->
+    <g transform="translate(490, 65)">
+      <rect x="0" y="0" width="445" height="230" rx="10" fill="#1e293b" stroke="#ec4899" stroke-width="1.5"/>
+      <rect x="15" y="15" width="90" height="24" rx="4" fill="#db2777"/>
+      <text x="60" y="32" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="700">KYVERNO</text>
+      <text x="115" y="33" fill="#f8fafc" font-size="16" font-weight="700">Kyverno v1.12.0 Engine</text>
+      <text x="15" y="65" fill="#f472b6" font-size="13" font-weight="700">Admission Controller HA (2 Replicas)</text>
+
+      <text x="15" y="95" fill="#cbd5e1" font-size="13">• Validating / Mutating Webhook (Enforce 집행)</text>
+      <text x="15" y="125" fill="#cbd5e1" font-size="13">• Background Scanner (주기적 클러스터 감사)</text>
+      <text x="15" y="155" fill="#cbd5e1" font-size="13">• PolicyException CRD 기반 런타임 면제 매칭</text>
+      <text x="15" y="185" fill="#cbd5e1" font-size="13">• 7종 거버넌스 및 AI/MLOps 보안 정책 집행</text>
+      <text x="15" y="212" fill="#94a3b8" font-size="11">admissionReports: false (etcd 부하 차단)</text>
+    </g>
+
+    <!-- 3. K8s CRD Layer (Inside API Server) -->
+    <g transform="translate(25, 315)">
+      <rect x="0" y="0" width="440" height="255" rx="10" fill="#1e293b" stroke="#6366f1" stroke-width="1.5"/>
+      <rect x="15" y="15" width="110" height="24" rx="4" fill="#4f46e5"/>
+      <text x="70" y="32" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="700">CRD ENGINE</text>
+      <text x="135" y="33" fill="#f8fafc" font-size="16" font-weight="700">K8s CRD 저장 &amp; 관리 계층</text>
+
+      <rect x="15" y="55" width="410" height="55" rx="6" fill="#0f172a" stroke="#334155"/>
+      <text x="25" y="78" fill="#38bdf8" font-size="13" font-weight="700">PolicyReport &amp; ClusterPolicyReport</text>
+      <text x="25" y="98" fill="#cbd5e1" font-size="11">wgpolicyk8s.k8s.io/v1alpha2 (위반 결과 저장)</text>
+
+      <rect x="15" y="120" width="410" height="55" rx="6" fill="#0f172a" stroke="#334155"/>
+      <text x="25" y="143" fill="#c084fc" font-size="13" font-weight="700">PolicyException (pac-exception-&lt;UUID&gt;)</text>
+      <text x="25" y="163" fill="#cbd5e1" font-size="11">kyverno.io/v2beta1 (승인된 런타임 면제 객체)</text>
+
+      <rect x="15" y="185" width="410" height="55" rx="6" fill="#0f172a" stroke="#334155"/>
+      <text x="25" y="208" fill="#fbbf24" font-size="13" font-weight="700">Kubeflow Notebook &amp; Persistent PVC</text>
+      <text x="25" y="228" fill="#cbd5e1" font-size="11">kubeflow.org/v1 (5GB 사용자 홈 스토리지)</text>
+    </g>
+
+    <!-- 4. Workloads & Namespaces -->
+    <g transform="translate(490, 315)">
+      <rect x="0" y="0" width="445" height="255" rx="10" fill="#1e293b" stroke="#10b981" stroke-width="1.5"/>
+      <rect x="15" y="15" width="110" height="24" rx="4" fill="#059669"/>
+      <text x="70" y="32" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="700">WORKLOADS</text>
+      <text x="135" y="33" fill="#f8fafc" font-size="16" font-weight="700">격리 네임스페이스 &amp; 파드</text>
+
+      <rect x="15" y="55" width="415" height="55" rx="6" fill="#0f172a" stroke="#334155"/>
+      <text x="25" y="78" fill="#a78bfa" font-size="13" font-weight="700">Namespace: kyverno</text>
+      <text x="25" y="98" fill="#cbd5e1" font-size="11">Kyverno Admission &amp; Background 컨트롤러 파드</text>
+
+      <rect x="15" y="120" width="415" height="55" rx="6" fill="#0f172a" stroke="#334155"/>
+      <text x="25" y="143" fill="#38bdf8" font-size="13" font-weight="700">Namespace: governance-testbed</text>
+      <text x="25" y="163" fill="#cbd5e1" font-size="11">user-payment-batch-worker ([Shield] 예외 승인 뱃지 부착)</text>
+
+      <rect x="15" y="185" width="415" height="55" rx="6" fill="#0f172a" stroke="#334155"/>
+      <text x="25" y="208" fill="#fbbf24" font-size="13" font-weight="700">Namespace: mlops-workspace</text>
+      <text x="25" y="228" fill="#cbd5e1" font-size="11">my-pytorch-lab (Jupyter AI 워크스테이션 파드)</text>
+    </g>
+
+    <!-- 5. MultiCluster Fleet Ribbon -->
+    <g transform="translate(25, 590)">
+      <rect x="0" y="0" width="910" height="155" rx="10" fill="#0f172a" stroke="#334155"/>
+      <text x="20" y="28" fill="#818cf8" font-size="14" font-weight="700">MultiClusterProvider 원격 관리 대상 클러스터 목록</text>
+
+      <g transform="translate(20, 42)">
+        <!-- Cluster 1: Primary Hub -->
+        <g transform="translate(0, 0)">
+          <rect x="0" y="0" width="205" height="95" rx="6" fill="#1e293b" stroke="#3b82f6"/>
+          <text x="15" y="25" fill="#38bdf8" font-size="12" font-weight="700">Primary Hub (EKS)</text>
+          <text x="15" y="47" fill="#cbd5e1" font-size="11">kyverno-eks-hub</text>
+          <text x="15" y="70" fill="#94a3b8" font-size="10">AWS us-east-1 (중앙)</text>
+        </g>
+
+        <!-- Cluster 2: Remote Spoke 01 -->
+        <g transform="translate(220, 0)">
+          <rect x="0" y="0" width="205" height="95" rx="6" fill="#1e293b" stroke="#06b6d4"/>
+          <text x="15" y="25" fill="#22d3ee" font-size="12" font-weight="700">Remote Spoke 01</text>
+          <text x="15" y="47" fill="#cbd5e1" font-size="11">kyverno-eks-spoke-01</text>
+          <text x="15" y="70" fill="#94a3b8" font-size="10">us-east-1 (워크로드)</text>
+        </g>
+
+        <!-- Cluster 3: DR Spoke Cluster -->
+        <g transform="translate(440, 0)">
+          <rect x="0" y="0" width="205" height="95" rx="6" fill="#1e293b" stroke="#8b5cf6"/>
+          <text x="15" y="25" fill="#c084fc" font-size="12" font-weight="700">DR Spoke Cluster</text>
+          <text x="15" y="47" fill="#cbd5e1" font-size="11">kyverno-eks-spoke-dr</text>
+          <text x="15" y="70" fill="#94a3b8" font-size="10">us-east-2 (재해복구 HA)</text>
+        </g>
+
+        <!-- Cluster 4: Tier2 / Kind Lab -->
+        <g transform="translate(660, 0)">
+          <rect x="0" y="0" width="210" height="95" rx="6" fill="#1e293b" stroke="#10b981"/>
+          <text x="15" y="25" fill="#34d399" font-size="12" font-weight="700">Tier2 / Kind Lab</text>
+          <text x="15" y="47" fill="#cbd5e1" font-size="11">kyverno-eks-tier2 (110p)</text>
+          <text x="15" y="70" fill="#94a3b8" font-size="10">k8s-lab (Local Kind)</text>
+        </g>
+      </g>
+    </g>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- BOTTOM ROW: CI/CD BUILD & DEPLOY ECOSYSTEM (y: 1080)                      -->
+  <!-- ========================================================================= -->
+  <g transform="translate(60, 1080)" filter="url(#boxShadow)">
+    <rect x="0" y="0" width="2480" height="275" rx="16" fill="#111827" stroke="#334155" stroke-width="2"/>
+    <rect x="25" y="18" width="180" height="30" rx="6" fill="#475569"/>
+    <text x="115" y="38" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="800">CI/CD &amp; DEPLOYMENT</text>
+    <text x="220" y="40" fill="#f8fafc" font-size="19" font-weight="800">CI/CD 이미지 빌드 및 배포 파이프라인 (Build &amp; Deployment Ecosystem)</text>
+
+    <!-- 1. GitHub Actions -->
+    <g transform="translate(25, 65)">
+      <rect x="0" y="0" width="760" height="190" rx="10" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
+      <rect x="15" y="15" width="130" height="24" rx="4" fill="#0284c7"/>
+      <text x="80" y="32" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="700">GITHUB ACTIONS</text>
+      <text x="155" y="33" fill="#f8fafc" font-size="16" font-weight="700">GitHub Actions CI/CD 호스트</text>
+
+      <text x="15" y="68" fill="#cbd5e1" font-size="13">• <tspan fill="#38bdf8" font-weight="700">로컬 검증</tspan>: Husky &amp; lint-staged (ESLint, Prettier, kyverno validate)</text>
+      <text x="15" y="98" fill="#cbd5e1" font-size="13">• <tspan fill="#4ade80" font-weight="700">Build Offloading</tspan>: 호스트 OOM 방지를 위해 모든 컴파일/빌드 전담</text>
+      <text x="15" y="128" fill="#cbd5e1" font-size="13">• <tspan fill="#38bdf8" font-weight="700">Multi-Stage Build</tspan>: node:22-slim 베이스 &amp; Next.js 15 Standalone 80% 압축</text>
+      <text x="15" y="158" fill="#cbd5e1" font-size="13">• <tspan fill="#fbbf24" font-weight="700">AWS OIDC</tspan>: AssumeRole 기반 무암호화 보안 인증 및 ECR 이미지 Push</text>
+      <text x="15" y="180" fill="#94a3b8" font-size="11">Automated Workflows: .github/workflows/deploy.yml</text>
+    </g>
+
+    <!-- 2. Amazon ECR -->
+    <g transform="translate(810, 65)">
+      <rect x="0" y="0" width="760" height="190" rx="10" fill="#1e293b" stroke="#f59e0b" stroke-width="1.5"/>
+      <rect x="15" y="15" width="110" height="24" rx="4" fill="#d97706"/>
+      <text x="70" y="32" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="700">AMAZON ECR</text>
+      <text x="135" y="33" fill="#f8fafc" font-size="16" font-weight="700">Amazon Elastic Container Registry</text>
+
+      <text x="15" y="68" fill="#fbbf24" font-size="13" font-weight="700">945125812546.dkr.ecr.us-east-1.amazonaws.com</text>
+      <text x="15" y="98" fill="#cbd5e1" font-size="13">• 프론트엔드 이미지: <tspan fill="#38bdf8">kyverno-frontend:latest</tspan> (초경량 번들)</text>
+      <text x="15" y="128" fill="#cbd5e1" font-size="13">• 백엔드 API 이미지: <tspan fill="#4ade80">kyverno-backend:latest</tspan> (Node 22 glibc)</text>
+      <text x="15" y="158" fill="#cbd5e1" font-size="13">• 보안 취약점 자동 스캐닝 및 이미지 무결성 보장</text>
+      <text x="15" y="180" fill="#94a3b8" font-size="11">클러스터 Worker Node에 의해 온디맨드 Image Pull 수행</text>
+    </g>
+
+    <!-- 3. Deployment & Operator -->
+    <g transform="translate(1595, 65)">
+      <rect x="0" y="0" width="860" height="190" rx="10" fill="#1e293b" stroke="#10b981" stroke-width="1.5"/>
+      <rect x="15" y="15" width="120" height="24" rx="4" fill="#059669"/>
+      <text x="75" y="32" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="700">DEPLOYMENT</text>
+      <text x="145" y="33" fill="#f8fafc" font-size="16" font-weight="700">운영자 배포 &amp; GitOps 동기화 엔진</text>
+
+      <text x="15" y="68" fill="#cbd5e1" font-size="13">• <tspan fill="#4ade80" font-weight="700">선언적 매니페스트</tspan>: k8s-manifests/system/* (ALB Ingress, Services, StatefulSet)</text>
+      <text x="15" y="98" fill="#cbd5e1" font-size="13">• <tspan fill="#4ade80" font-weight="700">배포 파이프라인</tspan>: 무중단 롤링 업데이트 (RollingUpdate / Zero-Downtime)</text>
+      <text x="15" y="128" fill="#cbd5e1" font-size="13">• <tspan fill="#4ade80" font-weight="700">DB 자동 마이그레이션</tspan>: 배포 시 pnpm prisma migrate deploy 자동 수행</text>
+      <text x="15" y="158" fill="#cbd5e1" font-size="13">• <tspan fill="#4ade80" font-weight="700">거버넌스 정책 배포</tspan>: k8s-manifests/policies/* (7종 Kyverno 정책 일괄 동기화)</text>
+      <text x="15" y="180" fill="#94a3b8" font-size="11">GitOps &amp; kubectl 배포 자동화 지원</text>
+    </g>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- CONNECTIVE DATA FLOW ARROWS & LABELS                                      -->
+  <!-- ========================================================================= -->
+  <!-- User Browser -> AWS ALB -->
+  <path d="M 260,435 L 300,435" fill="none" stroke="#38bdf8" stroke-width="3" marker-end="url(#arrBlue)"/>
+  <rect x="262" y="415" width="36" height="18" rx="3" fill="#0f172a" stroke="#38bdf8"/>
+  <text x="280" y="428" text-anchor="middle" fill="#38bdf8" font-size="9" font-weight="700">HTTP</text>
+
+  <!-- AWS ALB -> Next.js (Path: /*) -->
+  <path d="M 500,410 L 565,410" fill="none" stroke="#38bdf8" stroke-width="3" marker-end="url(#arrBlue)"/>
+  <rect x="505" y="390" width="55" height="18" rx="3" fill="#0f172a" stroke="#38bdf8"/>
+  <text x="532" y="403" text-anchor="middle" fill="#38bdf8" font-size="9" font-weight="700">Path: /*</text>
+
+  <!-- AWS ALB -> NestJS (Path: /api/*) routed through gap between Next.js and DB -->
+  <path d="M 500,480 L 530,480 L 530,615 L 1030,615" fill="none" stroke="#38bdf8" stroke-width="2.5" marker-end="url(#arrBlue)"/>
+  <rect x="415" y="500" width="110" height="20" rx="3" fill="#0f172a" stroke="#38bdf8"/>
+  <text x="470" y="514" text-anchor="middle" fill="#38bdf8" font-size="10" font-weight="700">/api · REST / SSE</text>
+
+  <!-- Next.js -> NestJS (내부 API 호출) -->
+  <path d="M 1005,420 L 1030,420" fill="none" stroke="#4ade80" stroke-width="3" marker-end="url(#arrGreen)"/>
+  <rect x="996" y="400" width="44" height="18" rx="3" fill="#0f172a" stroke="#4ade80"/>
+  <text x="1018" y="413" text-anchor="middle" fill="#4ade80" font-size="9" font-weight="700">내부 API</text>
+
+  <!-- NestJS -> PostgreSQL -->
+  <path d="M 1030,670 L 1005,670" fill="none" stroke="#818cf8" stroke-width="3" marker-end="url(#arrPurple)"/>
+  <rect x="975" y="650" width="85" height="20" rx="3" fill="#0f172a" stroke="#818cf8"/>
+  <text x="1017" y="664" text-anchor="middle" fill="#818cf8" font-size="10" font-weight="700">Prisma · SQL</text>
+
+  <!-- NestJS -> Amazon Bedrock (AI 요청/응답) -->
+  <path d="M 1080,355 L 1080,240" fill="none" stroke="#c084fc" stroke-width="2.5" stroke-dasharray="6,4" marker-end="url(#arrPurple)"/>
+  <path d="M 1100,240 L 1100,355" fill="none" stroke="#c084fc" stroke-width="2.5" stroke-dasharray="6,4" marker-end="url(#arrPurple)"/>
+  <rect x="1015" y="250" width="150" height="22" rx="4" fill="#0f172a" stroke="#c084fc"/>
+  <text x="1090" y="265" text-anchor="middle" fill="#c084fc" font-size="10" font-weight="700">AI 분석 요청 · 응답 (IRSA)</text>
+
+  <!-- NestJS -> GitHub (GitOps PR 생성) -->
+  <path d="M 1420,355 L 1420,240" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-dasharray="6,4" marker-end="url(#arrGreen)"/>
+  <rect x="1350" y="250" width="140" height="22" rx="4" fill="#0f172a" stroke="#4ade80"/>
+  <text x="1420" y="265" text-anchor="middle" fill="#4ade80" font-size="10" font-weight="700">예외 YAML PR 자동 생성</text>
+
+  <!-- NestJS -> K8s API Server (CRD 조회 / 예외 적용) -->
+  <path d="M 1525,440 L 1605,440" fill="none" stroke="#38bdf8" stroke-width="3" marker-end="url(#arrBlue)"/>
+  <rect x="1515" y="420" width="110" height="20" rx="4" fill="#0f172a" stroke="#38bdf8"/>
+  <text x="1570" y="434" text-anchor="middle" fill="#38bdf8" font-size="10" font-weight="700">정책 · 리소스 조회</text>
+
+  <path d="M 1525,480 L 1605,480" fill="none" stroke="#c084fc" stroke-width="3" marker-end="url(#arrPurple)"/>
+  <rect x="1515" y="460" width="110" height="20" rx="4" fill="#0f172a" stroke="#c084fc"/>
+  <text x="1570" y="474" text-anchor="middle" fill="#c084fc" font-size="10" font-weight="700">승인 예외 적용 · 회수</text>
+
+  <!-- K8s API Server <-> Kyverno -->
+  <path d="M 2045,440 L 2070,440" fill="none" stroke="#ec4899" stroke-width="3" marker-end="url(#arrPink)"/>
+  <path d="M 2070,465 L 2045,465" fill="none" stroke="#ec4899" stroke-width="3" marker-end="url(#arrPink)"/>
+  <rect x="2020" y="443" width="75" height="18" rx="3" fill="#0f172a" stroke="#ec4899"/>
+  <text x="2057" y="456" text-anchor="middle" fill="#ec4899" font-size="9" font-weight="700">Webhook 통신</text>
+
+  <!-- Kyverno -> Workloads (정책 검증) -->
+  <path d="M 2290,550 L 2290,590" fill="none" stroke="#ec4899" stroke-width="3" marker-end="url(#arrPink)"/>
+  <rect x="2240" y="558" width="100" height="18" rx="3" fill="#0f172a" stroke="#ec4899"/>
+  <text x="2290" y="571" text-anchor="middle" fill="#ec4899" font-size="9" font-weight="700">Admission 정책 검증</text>
+
+  <!-- Kyverno -> CRD Layer (PolicyReport 생성) -->
+  <path d="M 2100,550 L 1950,590" fill="none" stroke="#38bdf8" stroke-width="3" marker-end="url(#arrBlue)"/>
+  <rect x="1980" y="558" width="105" height="18" rx="3" fill="#0f172a" stroke="#38bdf8"/>
+  <text x="2032" y="571" text-anchor="middle" fill="#38bdf8" font-size="9" font-weight="700">검사 리포트 생성 (CRD)</text>
+
+  <!-- CI/CD Flow: GitHub Actions -> Amazon ECR -->
+  <path d="M 785,1175 L 810,1175" fill="none" stroke="#fbbf24" stroke-width="3" marker-end="url(#arrAmber)"/>
+  <rect x="760" y="1158" width="75" height="18" rx="3" fill="#0f172a" stroke="#fbbf24"/>
+  <text x="797" y="1171" text-anchor="middle" fill="#fbbf24" font-size="9" font-weight="700">이미지 Push</text>
+
+  <!-- Amazon ECR -> Platform Hub (Image Pull) -->
+  <path d="M 1190,1145 L 1190,1055" fill="none" stroke="#fbbf24" stroke-width="2.5" stroke-dasharray="6,4" marker-end="url(#arrAmber)"/>
+  <rect x="1145" y="1090" width="90" height="20" rx="3" fill="#0f172a" stroke="#fbbf24"/>
+  <text x="1190" y="1104" text-anchor="middle" fill="#fbbf24" font-size="10" font-weight="700">이미지 Pull</text>
+
+  <!-- Deployment Operator -> Platform Hub & K8s Fleet -->
+  <path d="M 1800,1145 L 1800,1055" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-dasharray="6,4" marker-end="url(#arrGreen)"/>
+  <rect x="1745" y="1090" width="110" height="20" rx="3" fill="#0f172a" stroke="#4ade80"/>
+  <text x="1800" y="1104" text-anchor="middle" fill="#4ade80" font-size="10" font-weight="700">배포 설정 적용</text>
+
+  <!-- ========================================================================= -->
+  <!-- LEGEND                                                                    -->
+  <!-- ========================================================================= -->
+  <g transform="translate(60, 1385)">
+    <rect x="0" y="0" width="2480" height="60" rx="10" fill="#111827" stroke="#1e293b" stroke-width="1.5"/>
+    <text x="30" y="35" fill="#f8fafc" font-size="14" font-weight="800">LEGEND (흐름 범례) :</text>
+
+    <!-- Legend 1: Runtime Flow -->
+    <path d="M 220,30 L 270,30" fill="none" stroke="#38bdf8" stroke-width="3" marker-end="url(#arrBlue)"/>
+    <text x="285" y="35" fill="#cbd5e1" font-size="13">실시간 요청 / 런타임 데이터 흐름 (Runtime Flow)</text>
+
+    <!-- Legend 2: External Integration -->
+    <path d="M 680,30 L 730,30" fill="none" stroke="#c084fc" stroke-width="2.5" stroke-dasharray="6,4" marker-end="url(#arrPurple)"/>
+    <text x="745" y="35" fill="#cbd5e1" font-size="13">외부 클라우드 / AI / GitOps PR 연동 흐름 (External Integration)</text>
+
+    <!-- Legend 3: Build & Deployment -->
+    <path d="M 1250,30 L 1300,30" fill="none" stroke="#fbbf24" stroke-width="2.5" stroke-dasharray="6,4" marker-end="url(#arrAmber)"/>
+    <text x="1315" y="35" fill="#cbd5e1" font-size="13">CI/CD 컨테이너 이미지 빌드 &amp; 배포 흐름 (Build &amp; Deploy Pipeline)</text>
+  </g>
+</svg>

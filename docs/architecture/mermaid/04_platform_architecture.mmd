@@ -1,0 +1,35 @@
+graph TB
+    subgraph L1["Layer 1: 프론트엔드 (Next.js 15 App Router + React 19)"]
+        Views["👤 Developer Views / 🛡️ Admin Views"]
+        Canvas["📊 Real-Time Topology Canvas (/demo/cluster-live)"]
+        State["⚡ TanStack React Query v5 & Zustand Store"]
+    end
+
+    subgraph L2["Layer 2: 백엔드 코어 (NestJS 11 + Prisma ORM 6)"]
+        Auth["🔑 Auth & RBAC (JWT/Argon2)"]
+        Exceptions["📝 ExceptionsModule (생명주기 & TTL)"]
+        GitOps["🐙 GitOpsModule (Dual-Path Runtime + PR)"]
+        BedrockMod["🤖 AiAgentModule (Bedrock AI Copilot)"]
+        MlopsMod["🧪 MlopsModule (Kubeflow & GPU Quota)"]
+    end
+
+    subgraph L3["Layer 3: 인프라 어댑터 계층"]
+        MCP["🔀 MultiClusterProvider (동적 클러스터 라우터)"]
+        KyvAdap["🛡️ KyvernoAdapter (@kubernetes/client-node)"]
+        Prisma["🗄️ PrismaService (PostgreSQL 16 연결 풀)"]
+    end
+
+    subgraph L4["Layer 4: 외부 인프라 및 영속성 계층"]
+        DB[("PostgreSQL 16 DB")]
+        Bedrock["Amazon Bedrock (Claude 3.5 Sonnet)"]
+        GitHub["GitHub Repository"]
+        K8sFleet["Kubernetes Fleet (Hub / Spoke / Tier2 / Kind)"]
+    end
+
+    L1 -->|REST API / SSE| L2
+    L2 --> L3
+    MCP --> K8sFleet
+    KyvAdap --> K8sFleet
+    Prisma --> DB
+    BedrockMod --> Bedrock
+    GitOps --> GitHub

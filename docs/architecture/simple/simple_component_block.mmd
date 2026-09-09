@@ -1,0 +1,7 @@
+graph TB
+    User["👥 사용자 (개발자 / 관리자)"] --> UI["🌐 웹 대시보드 (Next.js 15)"]
+    UI --> API["⚙️ 업무 API 엔진 (NestJS 11)"]
+    API <--> DB[("🗄️ PostgreSQL 16 (DB)")]
+    API --> Reconciler["🔄 상태 조정 서비스 (만료 회수/AI폴백/FinOps)"]
+    API <-->|조회 · 배포 · 리포트| K8s["☸️ Kubernetes 클러스터 함대 & Kyverno"]
+    API --> Ext["☁️ 외부 연동 (Bedrock AI / GitHub GitOps / ECR / Kubeflow)"]

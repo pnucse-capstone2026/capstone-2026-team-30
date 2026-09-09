@@ -1,0 +1,42 @@
+graph LR
+    subgraph Ingress["1. 사용자 & 진입점"]
+        User["👤 사용자 브라우저"]
+        ALB["⚖️ AWS ALB (Target-Type: IP)"]
+        User -->|HTTPS 443| ALB
+    end
+
+    subgraph Hub["2. 관리 플랫폼 (AWS us-east-1)"]
+        UI["🌐 Next.js 15 UI (Port 3000)"]
+        API["⚙️ NestJS 11 Core API (Port 3001)"]
+        DB[("🗄️ PostgreSQL 16 (DB)")]
+        Reconciler["🔄 상태 조정 & TTL Sweeper"]
+
+        ALB -->|Path: /*| UI
+        ALB -->|Path: /api/*| API
+        UI -->|내부 API| API
+        API <-->|Prisma SQL| DB
+        API --> Reconciler
+    end
+
+    subgraph Fleet["3. Kubernetes 클러스터 함대 & Kyverno"]
+        K8s["☸️ K8s API Server (TLS 6443)"]
+        Kyverno["🛡️ Kyverno v1.12.0 (Admission HA)"]
+        CRD["📄 PolicyReport / PolicyException"]
+        Pods["📦 워크로드 파드 (Testbed / MLOps)"]
+
+        K8s <-->|Webhook| Kyverno
+        Kyverno --> CRD
+        Kyverno --> Pods
+    end
+
+    subgraph Ext["4. 외부 연동 생태계"]
+        Bedrock["🤖 Amazon Bedrock (AI 진단)"]
+        GitHub["🐙 GitHub GitOps (자동 PR)"]
+        ECR["📦 Amazon ECR & CI/CD"]
+        Kubeflow["🧪 Kubeflow MLOps (5GB PVC)"]
+    end
+
+    API <-->|CRD 제어 / 리포트 수집| K8s
+    API <-->|AI 진단 요청 (IRSA)| Bedrock
+    API -->|예외 PR 자동 생성| GitHub
+    ECR -.->|이미지 Pull| Fleet

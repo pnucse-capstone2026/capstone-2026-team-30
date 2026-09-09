@@ -29,9 +29,10 @@ spec:
                 - local-path-storage
                 - kube-public
                 - kube-node-lease
+                - notebook-controller-system
       validate:
         message: "승인되지 않은 외부 이미지 레지스트리입니다. 사내 AWS ECR(945125812546.dkr.ecr.us-east-1.amazonaws.com/*) 또는 검증된 ECR(public.ecr.aws/*) 이미지만 배포 가능합니다."
         pattern:
           spec:
             containers:
-              - image: "945125812546.dkr.ecr.us-east-1.amazonaws.com/* | public.ecr.aws/*"
+              - image: "945125812546.dkr.ecr.us-east-1.amazonaws.com/* | public.ecr.aws/* | docker.io/kubeflownotebookswg/* | kubeflownotebookswg/* | quay.io/kubeflow/*"

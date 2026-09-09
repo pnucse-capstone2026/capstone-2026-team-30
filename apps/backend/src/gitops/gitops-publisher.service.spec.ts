@@ -251,6 +251,7 @@ describe("GitOpsPublisherService", () => {
 
     it("creates a branch, commits manifest, and opens a Pull Request on GitHub", async () => {
       const prConfig = new ConfigService({
+        GITOPS_PUBLISHING_MODE: "DUAL_PATH",
         GITOPS_STRATEGY: "GITHUB_PR",
         GITOPS_GITHUB_TOKEN: "ghp_mocktoken123",
         GITOPS_GITHUB_REPO: "test-owner/test-repo",
@@ -319,6 +320,7 @@ describe("GitOpsPublisherService", () => {
 
     it("falls back gracefully when GitHub token or repository is missing", async () => {
       const missingConfig = new ConfigService({
+        GITOPS_PUBLISHING_MODE: "DUAL_PATH",
         GITOPS_STRATEGY: "GITHUB_PR",
       });
       const prService = new GitOpsPublisherService(missingConfig);
@@ -354,6 +356,7 @@ describe("GitOpsPublisherService", () => {
 
     it("uses per-cluster gitopsRepo configuration when ClusterProvider metadata is present", async () => {
       const prConfig = new ConfigService({
+        GITOPS_PUBLISHING_MODE: "DUAL_PATH",
         GITOPS_STRATEGY: "GITHUB_PR",
         GITOPS_GITHUB_TOKEN: "ghp_mocktoken123",
         GITOPS_GITHUB_REPO: "global-owner/global-repo",

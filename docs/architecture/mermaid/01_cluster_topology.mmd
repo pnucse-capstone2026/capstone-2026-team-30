@@ -1,0 +1,32 @@
+graph TB
+    subgraph Clients["1. 사용자 및 외부 연동 계층"]
+        Users["👥 Platform Users (개발자 / 관리자)"]
+        Bedrock["🤖 Amazon Bedrock AI (Claude 3.5 / Nova Lite)"]
+        GitHub["🐙 GitHub GitOps (YeongrimGo/PaC-KyvernoDashboard)"]
+    end
+
+    subgraph Hub["2. Primary Hub Cluster (kyverno-eks-hub / AWS us-east-1)"]
+        Frontend["🌐 Next.js 15 Standalone (Port 3000)"]
+        Backend["⚙️ NestJS 11 Core API (Port 3001, IRSA)"]
+        DB[("🗄️ PostgreSQL 16 (Port 5432 / gp3 EBS)")]
+        Kyverno["🛡️ Kyverno Admission HA (2 Pods)"]
+        
+        Frontend -->|REST API / SSE| Backend
+        Backend -->|Prisma ORM| DB
+        Backend -->|Webhook / Report| Kyverno
+    end
+
+    subgraph SubClusters["3. 원격 및 로컬 서브 클러스터 함대 (MultiClusterProvider)"]
+        Spoke1["📡 Remote Spoke 01 (us-east-1)"]
+        SpokeDR["🔄 DR Spoke Cluster (us-east-2)"]
+        Tier2["⚡ Tier 2 Benchmark (Free-Tier, 110 pods/node)"]
+        KindLab["💻 Local Kind Lab (k8s-lab / DevContainer)"]
+    end
+
+    Users -->|1. 웹 대시보드| Frontend
+    Backend -->|2. AI 진단 & 수정 (IRSA)| Bedrock
+    Backend -->|3. GitOps PR 자동 발행| GitHub
+    Backend ==>|TLS 6443 K8s API 원격 제어| Spoke1
+    Backend ==>|Active-Standby HA 동기화| SpokeDR
+    Backend ==>|고밀도 벤치마크 테스트| Tier2
+    Backend ==>|로컬 개발 환경 연동| KindLab

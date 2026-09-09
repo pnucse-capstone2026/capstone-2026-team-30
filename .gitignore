@@ -16,6 +16,7 @@ out/
 # Logs
 *.log
 pino.log
+logs/
 
 # OS
 .DS_Store

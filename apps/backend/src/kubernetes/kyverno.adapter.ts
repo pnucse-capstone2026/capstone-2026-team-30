@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
 import { ClusterMetadata, ClusterProvider } from "./cluster-provider";
 import {
   buildPolicyExceptionManifest,
@@ -8,6 +8,7 @@ import {
   REQUEST_ID_LABEL,
 } from "./policy-exception-manifest";
 import { ViolationSummaryDto } from "../violations/dto/violation-summary.dto";
+import { K8sInformerService } from "./k8s-informer.service";
 
 const KYVERNO_GROUP = "kyverno.io";
 const POLICY_VERSION = "v1";
@@ -71,7 +72,10 @@ function normalized(value: unknown): string {
 
 @Injectable()
 export class KyvernoAdapter {
-  constructor(private readonly clusters: ClusterProvider) {}
+  constructor(
+    private readonly clusters: ClusterProvider,
+    @Optional() private readonly informerService?: K8sInformerService,
+  ) {}
 
   async resolveRuleNames(
     clusterId: string,
@@ -91,16 +95,17 @@ export class KyvernoAdapter {
       );
     }
 
-    const { customObjectsApi } = this.clusters.get(clusterId);
     let policy: KubeObject;
     try {
-      policy = (await customObjectsApi.getClusterCustomObject({
-        group: KYVERNO_GROUP,
-        version: POLICY_VERSION,
-        plural: POLICY_PLURAL,
-        name: policyName,
-      })) as KubeObject;
+      const found = await this.getClusterPolicy(clusterId, policyName);
+      if (!found) {
+        throw new PolicyNotFoundError(
+          `ClusterPolicy '${policyName}' not found.`,
+        );
+      }
+      policy = found;
     } catch (error) {
+      if (error instanceof PolicyNotFoundError) throw error;
       if (statusCode(error) === 404) {
         throw new PolicyNotFoundError(
           `ClusterPolicy '${policyName}' not found.`,
@@ -207,6 +212,18 @@ export class KyvernoAdapter {
     clusterId: string,
     name: string,
   ): Promise<KubeObject | null> {
+    if (this.informerService) {
+      const connection = this.clusters.get(clusterId);
+      const cached = this.informerService.getPolicyException(
+        clusterId,
+        name,
+        connection.exceptionNamespace,
+      );
+      if (cached !== undefined) {
+        return (cached as KubeObject) ?? null;
+      }
+    }
+
     const connection = this.clusters.get(clusterId);
     try {
       return (await connection.customObjectsApi.getNamespacedCustomObject({
@@ -241,6 +258,16 @@ export class KyvernoAdapter {
     clusterId: string,
     namespace?: string,
   ): Promise<KubeObject[]> {
+    if (this.informerService) {
+      const cached = this.informerService.listPolicyExceptions(
+        clusterId,
+        namespace,
+      );
+      if (cached !== null) {
+        return cached as KubeObject[];
+      }
+    }
+
     const connection = this.clusters.get(clusterId);
     const targetNamespace = namespace || connection.exceptionNamespace;
     try {
@@ -311,6 +338,13 @@ export class KyvernoAdapter {
    * @returns ClusterPolicy K8s 리소스 객체 배열
    */
   async listClusterPolicies(clusterId: string): Promise<KubeObject[]> {
+    if (this.informerService) {
+      const cached = this.informerService.listClusterPolicies(clusterId);
+      if (cached !== null) {
+        return cached as KubeObject[];
+      }
+    }
+
     const connection = this.clusters.get(clusterId);
     try {
       const response =
@@ -375,6 +409,13 @@ export class KyvernoAdapter {
     clusterId: string,
     name: string,
   ): Promise<KubeObject | null> {
+    if (this.informerService) {
+      const cached = this.informerService.getClusterPolicy(clusterId, name);
+      if (cached !== undefined) {
+        return (cached as KubeObject) ?? null;
+      }
+    }
+
     const connection = this.clusters.get(clusterId);
     try {
       return (await connection.customObjectsApi.getClusterCustomObject({
@@ -424,6 +465,13 @@ export class KyvernoAdapter {
    * @returns ClusterPolicyReport 리소스 배열
    */
   async listClusterPolicyReports(clusterId: string): Promise<KubeObject[]> {
+    if (this.informerService) {
+      const cached = this.informerService.listClusterPolicyReports(clusterId);
+      if (cached !== null) {
+        return cached as KubeObject[];
+      }
+    }
+
     const connection = this.clusters.get(clusterId);
     try {
       const response =
@@ -451,6 +499,16 @@ export class KyvernoAdapter {
     clusterId: string,
     namespace?: string,
   ): Promise<KubeObject[]> {
+    if (this.informerService) {
+      const cached = this.informerService.listNamespacedPolicyReports(
+        clusterId,
+        namespace,
+      );
+      if (cached !== null) {
+        return cached as KubeObject[];
+      }
+    }
+
     const connection = this.clusters.get(clusterId);
     try {
       let response: { items?: KubeObject[] };

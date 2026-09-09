@@ -32,6 +32,7 @@ spec:
                 - local-path-storage
                 - kube-public
                 - kube-node-lease
+                - notebook-controller-system
       validate:
         message: "이미지 태그를 반드시 명시해야 합니다. 태그가 없는 이미지는 허용되지 않습니다."
         pattern:
@@ -58,6 +59,7 @@ spec:
                 - local-path-storage
                 - kube-public
                 - kube-node-lease
+                - notebook-controller-system
       validate:
         message: "':latest' 태그는 이미지 재현성과 안정성을 보장하지 않으므로 사용할 수 없습니다. 커밋 해시 또는 특정 버전 태그를 사용하세요."
         pattern:

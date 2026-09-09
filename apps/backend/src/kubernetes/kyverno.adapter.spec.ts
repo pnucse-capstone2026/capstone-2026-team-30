@@ -166,4 +166,93 @@ describe("KyvernoAdapter", () => {
       adapter.deletePolicyException("local", "missing"),
     ).resolves.toBeUndefined();
   });
+
+  describe("Informer Cache Integration", () => {
+    it("returns cached cluster policies and policy reports when informer is warm without calling K8s API", async () => {
+      const mockInformerService = {
+        listClusterPolicies: jest
+          .fn()
+          .mockReturnValue([{ metadata: { name: "cached-policy" } }]),
+        listClusterPolicyReports: jest
+          .fn()
+          .mockReturnValue([{ metadata: { name: "cached-cpr" } }]),
+        listNamespacedPolicyReports: jest
+          .fn()
+          .mockReturnValue([{ metadata: { name: "cached-pr" } }]),
+        listPolicyExceptions: jest
+          .fn()
+          .mockReturnValue([{ metadata: { name: "cached-polex" } }]),
+        getClusterPolicy: jest
+          .fn()
+          .mockReturnValue({ metadata: { name: "cached-policy" } }),
+        getPolicyException: jest
+          .fn()
+          .mockReturnValue({ metadata: { name: "cached-polex" } }),
+      };
+
+      const cachedAdapter = new KyvernoAdapter(
+        clusters,
+        mockInformerService as any,
+      );
+
+      const policies = await cachedAdapter.listClusterPolicies("local");
+      const cprs = await cachedAdapter.listClusterPolicyReports("local");
+      const prs = await cachedAdapter.listNamespacedPolicyReports(
+        "local",
+        "default",
+      );
+      const polexs = await cachedAdapter.listPolicyExceptions("local");
+      const singlePolicy = await cachedAdapter.getClusterPolicy(
+        "local",
+        "cached-policy",
+      );
+      const singlePolex = await cachedAdapter.getPolicyException(
+        "local",
+        "cached-polex",
+      );
+
+      expect(policies).toHaveLength(1);
+      expect(cprs).toHaveLength(1);
+      expect(prs).toHaveLength(1);
+      expect(polexs).toHaveLength(1);
+      expect(singlePolicy).toEqual({ metadata: { name: "cached-policy" } });
+      expect(singlePolex).toEqual({ metadata: { name: "cached-polex" } });
+
+      // K8s API must NOT be called since informer cache fulfilled all queries
+      expect(api.getClusterCustomObject).not.toHaveBeenCalled();
+      expect(api.getNamespacedCustomObject).not.toHaveBeenCalled();
+    });
+
+    it("falls back to K8s API when informer returns null (cold / not ready)", async () => {
+      const mockInformerService = {
+        listClusterPolicies: jest.fn().mockReturnValue(null),
+        listClusterPolicyReports: jest.fn().mockReturnValue(null),
+        listNamespacedPolicyReports: jest.fn().mockReturnValue(null),
+        listPolicyExceptions: jest.fn().mockReturnValue(null),
+        getClusterPolicy: jest.fn().mockReturnValue(undefined),
+        getPolicyException: jest.fn().mockReturnValue(undefined),
+      };
+
+      api.getClusterCustomObject.mockResolvedValueOnce({
+        metadata: { name: "live-policy" },
+      });
+      (clusters.get("local").customObjectsApi as any).listClusterCustomObject =
+        jest
+          .fn()
+          .mockResolvedValueOnce({
+            items: [{ metadata: { name: "live-policy" } }],
+          });
+
+      const fallbackAdapter = new KyvernoAdapter(
+        clusters,
+        mockInformerService as any,
+      );
+
+      const policies = await fallbackAdapter.listClusterPolicies("local");
+      expect(policies).toHaveLength(1);
+      expect(mockInformerService.listClusterPolicies).toHaveBeenCalledWith(
+        "local",
+      );
+    });
+  });
 });

@@ -31,6 +31,7 @@ spec:
                 - local-path-storage
                 - kube-public
                 - kube-node-lease
+                - notebook-controller-system
       validate:
         message: "모든 컨테이너는 CPU/Memory의 requests 및 limits 설정을 요구합니다."
         pattern:

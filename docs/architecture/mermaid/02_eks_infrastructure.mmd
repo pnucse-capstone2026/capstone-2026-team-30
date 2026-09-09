@@ -1,0 +1,43 @@
+graph TB
+    subgraph Ingress["Internet Traffic & CI/CD"]
+        Users["🌐 Users / Devs (HTTPS 80/443)"]
+        GH["🐙 GitHub Actions CD (OIDC Push)"]
+    end
+
+    subgraph VPC["AWS VPC (10.0.0.0/16, Region: us-east-1)"]
+        IGW["🌐 Internet Gateway (IGW)"]
+        ALB["⚖️ AWS Application Load Balancer (Target-Type: IP)"]
+        
+        subgraph PublicSubnets["Public Subnets (AZ-a / AZ-b)"]
+            ALB
+        end
+
+        subgraph PrivateSubnets["Private Subnets (EKS Managed NodeGroup)"]
+            subgraph Node01["Node 01: Platform Core (m7i-flex.large)"]
+                PodFE["Web Pod: Next.js 15 UI (Port 3000)"]
+                PodBE["API Pod: NestJS 11 (Port 3001, IRSA)"]
+                PodDB[("DB Pod: PostgreSQL 16 (EBS gp3 20GB)")]
+            end
+
+            subgraph Node02["Node 02: Governance & MLOps (m7i-flex.large)"]
+                KyvHA["Kyverno Admission (2 Pods HA)"]
+                KyvRep["Kyverno Reports (Background 1h)"]
+                MLOps["MLOps Kubeflow Notebooks (5GB PVC)"]
+            end
+        end
+    end
+
+    subgraph CloudServices["AWS Managed Services"]
+        Bedrock["🤖 Amazon Bedrock (Claude 3.5 Sonnet)"]
+        ECR["📦 Amazon ECR (Private Registry)"]
+        OIDC["🔑 AWS IAM OIDC (Zero-Secret IRSA)"]
+        CW["📊 CloudWatch & VPC Flow Logs"]
+    end
+
+    Users --> IGW --> ALB
+    GH -->|OIDC Role| ECR
+    ALB -->|Path: /*| PodFE
+    ALB -->|Path: /api/*| PodBE
+    PodBE -->|Prisma| PodDB
+    PodBE -->|IRSA Assumed Role| Bedrock
+    KyvHA -.->|Admission Webhook| PrivateSubnets

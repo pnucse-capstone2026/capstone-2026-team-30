@@ -1,0 +1,25 @@
+graph LR
+    subgraph LocalEnv["1. 로컬 개발 환경 (Host & Kind)"]
+        Dev["💻 VSCode DevContainer (Node 22 / CLI)"]
+        Bridge["🌉 Docker Bridge (--network=kind)"]
+        
+        subgraph KindCluster["Kind Cluster: k8s-lab (Single Node)"]
+            NS_Kyv["📁 ns/kyverno (Kyverno v1.12.0 + Exception CRD)"]
+            NS_Test["📁 ns/governance-testbed (Workload + Baseline)"]
+            NS_ML["📁 ns/mlops-workspace (Kubeflow Notebook + 5GB PVC)"]
+        end
+        Dev --> Bridge --> KindCluster
+    end
+
+    subgraph E2EPipeline["2. 6단계 거버넌스 E2E 라이프사이클"]
+        S1["1️⃣ 위반 감지<br/>(Audit 모드 / PolicyReport)"]
+        S2["2️⃣ 예외 신청<br/>(/exceptions/new / PENDING)"]
+        S3["3️⃣ 관리자 승인<br/>(Dual-Path: CRD + GitOps PR)"]
+        S4["4️⃣ 실시간 관제<br/>(/demo/cluster-live [Shield] 뱃지)"]
+        S5["5️⃣ Enforce 검증<br/>(위반 차단 vs 예외 허용)"]
+        S6["6️⃣ MLOps 셀프서비스<br/>(Jupyter Hub + PVC 제어)"]
+        
+        S1 ==> S2 ==> S3 ==> S4 ==> S5 ==> S6
+    end
+
+    KindCluster -.->|실시간 검증| E2EPipeline
