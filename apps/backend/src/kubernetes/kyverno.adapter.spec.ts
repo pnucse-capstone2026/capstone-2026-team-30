@@ -237,11 +237,9 @@ describe("KyvernoAdapter", () => {
         metadata: { name: "live-policy" },
       });
       (clusters.get("local").customObjectsApi as any).listClusterCustomObject =
-        jest
-          .fn()
-          .mockResolvedValueOnce({
-            items: [{ metadata: { name: "live-policy" } }],
-          });
+        jest.fn().mockResolvedValueOnce({
+          items: [{ metadata: { name: "live-policy" } }],
+        });
 
       const fallbackAdapter = new KyvernoAdapter(
         clusters,
@@ -254,5 +252,55 @@ describe("KyvernoAdapter", () => {
         "local",
       );
     });
+  });
+
+  it("동일 이름의 PolicyReport가 다른 네임스페이스에 있어도 고유한 위반 ID를 생성한다", async () => {
+    const makeReport = (namespace: string) => ({
+      metadata: {
+        name: "controlled-load",
+        namespace,
+        creationTimestamp: "2026-08-19T05:30:00Z",
+      },
+      results: [
+        {
+          policy: "disallow-latest-tag",
+          rule: "require-image-tag",
+          severity: "high",
+          result: "fail",
+          message: "Using the :latest tag is prohibited.",
+          resources: [{ kind: "Pod", name: "load-pod", namespace }],
+        },
+      ],
+    });
+
+    const reportApi = {
+      listClusterCustomObject: jest.fn().mockResolvedValue({
+        items: [
+          makeReport("pac-final-bench-0905"),
+          makeReport("pac-report-bench-0905"),
+        ],
+      }),
+    };
+    const reportClusters = {
+      list: jest
+        .fn()
+        .mockReturnValue([{ id: "cluster-1", displayName: "Cluster One" }]),
+      get: jest.fn(() => ({
+        id: "cluster-1",
+        displayName: "Cluster One",
+        exceptionNamespace: "kyverno",
+        customObjectsApi: reportApi as unknown as CustomObjectsApi,
+      })),
+    } as unknown as ClusterProvider;
+
+    const reportAdapter = new KyvernoAdapter(reportClusters);
+    const violations = await reportAdapter.getPolicyReports();
+
+    expect(violations).toHaveLength(2);
+    const ids = violations.map((v) => v.id);
+    // 네임스페이스가 포함되어 동일 이름 보고서 간 ID 충돌이 발생하지 않는다.
+    expect(new Set(ids).size).toBe(2);
+    expect(ids).toContain("cluster-1:pac-final-bench-0905/controlled-load:0");
+    expect(ids).toContain("cluster-1:pac-report-bench-0905/controlled-load:0");
   });
 });

@@ -14,6 +14,13 @@ import { ViolationDetailDto } from "./dto/violation-detail.dto";
 import { ViolationSummaryDto } from "./dto/violation-summary.dto";
 import { VIOLATION_ERROR } from "./violation.errors";
 
+/**
+ * 클러스터 범위(네임스페이스 없음) PolicyReport의 위반 ID에 사용하는 센티널.
+ * 위반 ID 포맷은 `<clusterId>:<namespace>/<reportName>:<index>` 이며,
+ * 네임스페이스가 없는 ClusterPolicyReport는 이 값으로 대체한다.
+ */
+const CLUSTER_SCOPE_SENTINEL = "cluster";
+
 type PolicyReportResultRaw = {
   policy?: string;
   rule?: string;
@@ -217,7 +224,7 @@ export class ViolationsService {
    * 특정 정책 위반의 상세 정보 및 Bedrock AI 분석용 메타데이터, 감사 이력을 조회합니다.
    *
    * @param clusterId 클러스터 식별자
-   * @param id 위반 고유 식별자 (<clusterId>:<reportName>:<resultIndex>)
+   * @param id 위반 고유 식별자 (<clusterId>:<namespace>/<reportName>:<resultIndex>)
    * @param user 인증된 요청자 정보
    * @returns 정책 위반 상세 DTO
    * @throws {BusinessException} 클러스터 미배정(VIOLATION_CLUSTER_ACCESS_DENIED) 또는 위반 미존재(VIOLATION_NOT_FOUND_IN_CLUSTER) 시
@@ -341,7 +348,7 @@ export class ViolationsService {
 
     const cluster = this.validateClusterAccess(user, clusterId);
 
-    // ID 포맷: clusterId:reportName:index
+    // ID 포맷: clusterId:namespace/reportName:index
     const parts = normalizedId.split(":");
     if (parts.length < 3) {
       const dbRecord = await this.prisma.violationHistory.findUnique({
@@ -392,7 +399,17 @@ export class ViolationsService {
     }
 
     const index = parseInt(parts[parts.length - 1], 10);
-    const reportName = parts.slice(1, -1).join(":");
+    const scopedReportName = parts.slice(1, -1).join(":");
+
+    // 신규 ID 포맷은 `<namespace>/<reportName>` 형태로 네임스페이스를 포함한다.
+    // 슬래시가 없는 레거시 ID(네임스페이스 미포함)는 하위 호환으로 처리한다.
+    const slashIndex = scopedReportName.indexOf("/");
+    const reportNamespace =
+      slashIndex >= 0 ? scopedReportName.slice(0, slashIndex) : undefined;
+    const reportName =
+      slashIndex >= 0
+        ? scopedReportName.slice(slashIndex + 1)
+        : scopedReportName;
 
     if (isNaN(index)) {
       throw new BusinessException(VIOLATION_ERROR.NOT_FOUND);
@@ -400,13 +417,19 @@ export class ViolationsService {
 
     let report: PolicyReportRaw | null = null;
 
-    // Namespaced PolicyReport 우선 조회
-    const namespaced =
-      await this.kyvernoAdapter.listNamespacedPolicyReports(clusterId);
-    report =
-      (namespaced.find(
-        (r) => r.metadata?.name === reportName,
-      ) as PolicyReportRaw) ?? null;
+    // Namespaced PolicyReport 우선 조회 (클러스터 범위 센티널이면 건너뜀).
+    // 동일 이름 보고서가 여러 네임스페이스에 있을 때 네임스페이스로 정확히 식별한다.
+    if (reportNamespace !== CLUSTER_SCOPE_SENTINEL) {
+      const namespaced =
+        await this.kyvernoAdapter.listNamespacedPolicyReports(clusterId);
+      report =
+        (namespaced.find(
+          (r) =>
+            r.metadata?.name === reportName &&
+            (reportNamespace === undefined ||
+              r.metadata?.namespace === reportNamespace),
+        ) as PolicyReportRaw) ?? null;
+    }
 
     // ClusterPolicyReport 조회 시도
     if (!report) {
@@ -783,7 +806,11 @@ export class ViolationsService {
     savedStatusesMap?: Map<string, "open" | "inReview" | "resolved">,
   ): ViolationSummaryDto {
     const reportName = report.metadata?.name ?? "unknown-report";
-    const id = `${cluster.id}:${reportName}:${index}`;
+    // 서로 다른 네임스페이스에 동일 이름의 PolicyReport가 존재해도 ID가 충돌하지
+    // 않도록 네임스페이스를 포함한다. (클러스터 범위 보고서는 센티널로 대체)
+    const reportNamespace =
+      report.metadata?.namespace ?? CLUSTER_SCOPE_SENTINEL;
+    const id = `${cluster.id}:${reportNamespace}/${reportName}:${index}`;
     const policyName = result.policy ?? "unknown-policy";
     const ruleName = result.rule ?? "unknown-rule";
 

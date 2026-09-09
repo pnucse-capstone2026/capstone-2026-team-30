@@ -139,6 +139,38 @@ describe("MlGovernanceService", () => {
     );
   });
 
+  it("동일 이름의 PolicyReport가 다른 네임스페이스에 존재해도 ML 위반 ID가 충돌하지 않는다", async () => {
+    // namespace 미지정 시 전체 네임스페이스의 PolicyReport가 수집되며,
+    // 동일 metadata.name을 가진 보고서가 서로 다른 네임스페이스에 존재할 수 있다.
+    const makeReport = (namespace: string) => ({
+      metadata: { name: "gpu-report", namespace },
+      results: [
+        {
+          policy: "limit-gpu-per-namespace",
+          rule: "check-gpu-limits",
+          severity: "high",
+          result: "fail",
+          message: "GPU limit exceeded",
+          resources: [{ kind: "Pod", name: "heavy-gpu-pod", namespace }],
+        },
+      ],
+    });
+
+    kyvernoAdapter.listNamespacedPolicyReports.mockResolvedValue([
+      makeReport("team-a"),
+      makeReport("team-b"),
+    ] as never);
+
+    const violations = await service.getMlPolicyViolations("default");
+
+    expect(violations).toHaveLength(2);
+    const ids = violations.map((v) => v.id);
+    // 두 위반의 ID는 네임스페이스가 포함되어 서로 달라야 한다.
+    expect(new Set(ids).size).toBe(2);
+    expect(ids).toContain("default:team-a/gpu-report:0");
+    expect(ids).toContain("default:team-b/gpu-report:0");
+  });
+
   it("should subscribe to governance events and receive watch & bus events", (done) => {
     const events: any[] = [];
     const stream = service.subscribeEvents("default", "default", mockUser);
