@@ -17,11 +17,13 @@ metadata:
     # HTTP 80 포트 수신 및 외부 인터넷 접속 허용
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
     alb.ingress.kubernetes.io/inbound-cidrs: 0.0.0.0/0
-    # 프론트엔드 및 백엔드 헬스체크 경로 지정
     alb.ingress.kubernetes.io/healthcheck-path: /api/health
     alb.ingress.kubernetes.io/healthcheck-interval-seconds: '15'
-    alb.ingress.kubernetes.io/success-codes: '200,404'
+    alb.ingress.kubernetes.io/success-codes: '200'
+    # SSE 실시간 세션 및 모니터링 스트림 유지를 위한 ALB 유휴 연결 제한시간 300초 설정
+    alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=300
 spec:
+  ingressClassName: alb
   rules:
     - http:
         paths:

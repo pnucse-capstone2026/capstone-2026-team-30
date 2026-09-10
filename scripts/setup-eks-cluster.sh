@@ -111,14 +111,42 @@ if [ -f "${POLICIES_PATH}" ]; then
   echo ">>> Baseline policies successfully applied."
 fi
 
-echo ">>> Installing MLOps Kubeflow Notebooks CRDs..."
+echo ">>> Setting gp2 as default StorageClass..."
+kubectl patch storageclass gp2 -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}' 2>/dev/null || true
+
+if ! aws eks describe-addon --cluster-name "${CLUSTER_NAME}" --addon-name aws-ebs-csi-driver --region "${REGION}" &>/dev/null; then
+  echo ">>> Installing AWS EBS CSI driver addon..."
+  eksctl create iamserviceaccount \
+    --name ebs-csi-controller-sa \
+    --namespace kube-system \
+    --cluster "${CLUSTER_NAME}" \
+    --attach-policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy \
+    --approve \
+    --region "${REGION}" 2>/dev/null || true
+
+  SA_ROLE_ARN=$(kubectl get sa ebs-csi-controller-sa -n kube-system -o jsonpath='{.metadata.annotations.eks\.amazonaws\.com/role-arn}' 2>/dev/null || true)
+  if [ -n "${SA_ROLE_ARN}" ]; then
+    eksctl create addon \
+      --name aws-ebs-csi-driver \
+      --cluster "${CLUSTER_NAME}" \
+      --service-account-role-arn "${SA_ROLE_ARN}" \
+      --force \
+      --region "${REGION}" 2>/dev/null || true
+  fi
+fi
+
+echo ">>> Installing MLOps Kubeflow Notebooks CRDs and Controller..."
 kubectl apply -f https://raw.githubusercontent.com/kubeflow/kubeflow/v1.8.0/components/notebook-controller/config/crd/bases/kubeflow.org_notebooks.yaml 2>/dev/null || echo "[WARNING] Kubeflow CRD installation skipped."
+kubectl apply -f "${SCRIPT_DIR}/../k8s-manifests/system/notebook-controller.yaml"
 
 # Hub 클러스터인 경우 AI Agent(Bedrock Claude) 연동을 위한 IRSA 자동 구성 실행
 if [ "${CLUSTER_ROLE}" = "hub" ]; then
   echo ">>> Setting up AWS Bedrock IRSA for Hub Cluster..."
   bash "${SCRIPT_DIR}/setup-bedrock-irsa.sh" "${CLUSTER_NAME}" "${REGION}" || echo "[WARNING] IRSA setup skipped or failed. Run ./scripts/setup-bedrock-irsa.sh manually if needed."
 fi
+
+echo ">>> Setting up AWS Load Balancer Controller for Ingress..."
+bash "${SCRIPT_DIR}/setup-alb-controller.sh" "${CLUSTER_NAME}" "${REGION}" || echo "[WARNING] ALB Controller setup skipped or failed. Run ./scripts/setup-alb-controller.sh manually if needed."
 
 echo "=========================================================="
 echo " EKS Setup for '${CLUSTER_NAME}' (${REGION}) Completed!"

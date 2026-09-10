@@ -76,7 +76,7 @@ echo ">>> Ensuring 'kyverno-platform' namespace exists..."
 
 # Deployment 이미지 갱신 및 Zero-Downtime RollingUpdate 배포 수행
 echo ">>> Updating deployment 'kyverno-frontend' with target image '${IMAGE_TARGET}'..."
-"${KUBECTL}" apply -f "${ROOT_DIR}/k8s-manifests/system/frontend.yaml"
+sed "s|image: .*/kyverno-frontend:.*|image: ${IMAGE_TARGET}|g" "${ROOT_DIR}/k8s-manifests/system/frontend.yaml" | "${KUBECTL}" apply -f -
 "${KUBECTL}" set image deployment/kyverno-frontend frontend="${IMAGE_TARGET}" -n kyverno-platform
 PULL_POLICY="IfNotPresent"
 if [ "${IS_EKS}" = true ]; then

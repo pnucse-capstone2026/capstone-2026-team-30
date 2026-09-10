@@ -68,11 +68,21 @@ eksctl create iamserviceaccount \
 # 6. VPC ID 확인
 VPC_ID=$(aws eks describe-cluster --name "${CLUSTER_NAME}" --region "${REGION}" --query "cluster.resourcesVpcConfig.vpcId" --output text)
 
-# 7. EKS Subnet Tagging (ALB 자동 탐지를 위한 Public Subnet 태그 부여)
-echo ">>> Public Subnet에 kubernetes.io/role/elb=1 태그 검증..."
-SUBNETS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=${VPC_ID}" --query "Subnets[*].SubnetId" --output text --region "${REGION}")
-for SUBNET in ${SUBNETS}; do
-  aws ec2 create-tags --resources "${SUBNET}" --tags Key=kubernetes.io/role/elb,Value=1 --region "${REGION}" 2>/dev/null || true
+# 7. EKS Subnet Tagging (ALB 자동 탐지를 위한 Public Subnet 전용 태그 부여)
+echo ">>> Public Subnet 식별 및 kubernetes.io/role/elb=1 태그 부여..."
+ROUTE_TABLES=$(aws ec2 describe-route-tables \
+  --filters "Name=vpc-id,Values=${VPC_ID}" "Name=route.gateway-id,Values=igw-*" \
+  --query "RouteTables[*].RouteTableId" --output text --region "${REGION}")
+
+for RT in ${ROUTE_TABLES}; do
+  PUB_SUBNETS=$(aws ec2 describe-route-tables \
+    --route-table-ids "${RT}" \
+    --query "RouteTables[0].Associations[?SubnetId!=null].SubnetId" \
+    --output text --region "${REGION}")
+  for SUBNET in ${PUB_SUBNETS}; do
+    echo "    - Public Subnet 태깅: ${SUBNET}"
+    aws ec2 create-tags --resources "${SUBNET}" --tags Key=kubernetes.io/role/elb,Value=1 --region "${REGION}" 2>/dev/null || true
+  done
 done
 
 # 8. Helm 차트 추가 및 설치

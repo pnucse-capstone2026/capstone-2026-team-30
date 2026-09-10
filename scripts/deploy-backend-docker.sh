@@ -90,7 +90,7 @@ kill $PF_PG_PID 2>/dev/null || true
 
 # Deployment 이미지 갱신 및 Zero-Downtime RollingUpdate 배포 수행
 echo ">>> Updating deployment 'kyverno-backend' with target image '${IMAGE_TARGET}'..."
-"${KUBECTL}" apply -f "${ROOT_DIR}/k8s-manifests/system/backend.yaml"
+sed "s|image: .*/kyverno-backend:.*|image: ${IMAGE_TARGET}|g" "${ROOT_DIR}/k8s-manifests/system/backend.yaml" | "${KUBECTL}" apply -f -
 "${KUBECTL}" set image deployment/kyverno-backend backend="${IMAGE_TARGET}" -n kyverno-platform
 PULL_POLICY="IfNotPresent"
 if [ "${IS_EKS}" = true ]; then

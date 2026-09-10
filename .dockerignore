@@ -12,3 +12,5 @@ dist
 **/.pnpm-store
 scripts/bin
 *.log
+.env*
+**/.env*
