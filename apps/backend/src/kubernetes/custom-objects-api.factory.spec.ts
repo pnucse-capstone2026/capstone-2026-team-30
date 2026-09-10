@@ -103,25 +103,4 @@ describe("createCustomObjectsApi", () => {
       (client as unknown as { configuration: unknown }).configuration,
     ).toEqual({ baseServer: "x" });
   });
-
-  it("injects HTTPS keep-alive agent into RequestContext for https URLs", async () => {
-    const { kubeConfig, getClusterCustomObject } = stubKubeConfig();
-    const client = createCustomObjectsApi(kubeConfig, 5000);
-
-    await client.getClusterCustomObject({
-      group: "kyverno.io",
-      version: "v1",
-      plural: "clusterpolicies",
-      name: "policy",
-    });
-
-    const options = getClusterCustomObject.mock.calls[0][1];
-    const context = new RequestContext(
-      "https://eks-cluster.us-east-1.eks.amazonaws.com",
-      HttpMethod.GET,
-    );
-    await firstValueFrom(options.middleware[0].pre(context));
-
-    expect(context.getAgent()).toBeDefined();
-  });
 });

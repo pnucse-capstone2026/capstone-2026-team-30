@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
 
@@ -55,11 +55,44 @@ function isExternalHttpUrl(url: string): boolean {
   return url.startsWith("http://") || url.startsWith("https://");
 }
 
+/**
+ * 사용자 역할 및 이전 이동 요청 URL(next)에 따른 진입 경로를 결정합니다.
+ *
+ * @param {string} role 사용자 권한 역할 (ADMIN, APPROVER, REQUESTER 등)
+ * @param {string | null} nextParam 쿼리스트링 next 파라미터
+ * @returns {string} 리다이렉트할 대상 라우트 경로
+ */
+function getRedirectPath(role: string, nextParam: string | null): string {
+  if (nextParam?.startsWith("/") && !nextParam.startsWith("//")) {
+    return nextParam;
+  }
+  if (role === "ADMIN") {
+    return "/admin/dashboard";
+  }
+  if (role === "APPROVER") {
+    return "/admin/exceptions";
+  }
+  return "/dashboard";
+}
+
 export function LoginForm() {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { error, login, clearError } = useAuthStore();
+  const { error, login, clearError, initialize, status, user } = useAuthStore();
+
+  useEffect(() => {
+    setMounted(true);
+    void initialize();
+  }, [initialize]);
+
+  useEffect(() => {
+    if (status === "authenticated" && user) {
+      const next = new URLSearchParams(window.location.search).get("next");
+      router.replace(getRedirectPath(user.role, next));
+    }
+  }, [status, user, router]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -71,31 +104,32 @@ export function LoginForm() {
     const password = String(formData.get("password") ?? "");
 
     try {
-      const user = await login(email, password);
+      const authenticatedUser = await login(email, password);
       const next = new URLSearchParams(window.location.search).get("next");
-
-      if (next?.startsWith("/") && !next.startsWith("//")) {
-        router.replace(next);
-        return;
-      }
-
-      if (user.role === "ADMIN" || user.role === "APPROVER") {
-        router.replace(
-          user.role === "ADMIN"
-            ? "/admin/dashboard"
-            : user.role === "APPROVER"
-              ? "/admin/exceptions"
-              : "/dashboard",
-        );
-        return;
-      }
-
-      router.replace("/dashboard");
+      router.replace(getRedirectPath(authenticatedUser.role, next));
     } catch {
-      // The store already exposes the login error for the form.
+      // 스토어에서 로그인 에러 상태를 관리하므로 별도 핸들링 생략
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  const hasActiveSession =
+    typeof window !== "undefined" &&
+    localStorage.getItem("kyverno_auth_active") === "1";
+
+  if (
+    mounted &&
+    (status === "authenticated" || (status === "loading" && hasActiveSession))
+  ) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-slate-500">
+        <div className="size-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+        <p className="mt-4 text-xs font-medium text-slate-600">
+          로그인 세션 확인 중...
+        </p>
+      </div>
+    );
   }
 
   return (
