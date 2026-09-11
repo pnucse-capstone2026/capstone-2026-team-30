@@ -398,6 +398,7 @@ All automated agents and contributing engineers must adhere to the project stand
 | **[Chapter 5: Frontend Architecture & Session Security](file:///home/user/work_dir/docs/readme_drafts/ch5_frontend_security.md)** | Next.js 15 App Router, SSE subscriptions, single-session invalidation, and Zustand |
 | **[Chapter 6: Infrastructure, Deployment & Verification Guide](file:///home/user/work_dir/docs/readme_drafts/ch6_deploy_operations.md)** | Universal installer, Kustomize overlays, Kind/EKS setups, and verification playbooks |
 | **[Modular Components Architecture Plan](file:///home/user/work_dir/docs/modular-components-architecture-plan.md)** | Architectural design for selectively enabling/disabling MLOps, AI, and Simulation modules |
+| **[Documentation Modernization Plan](file:///home/user/work_dir/docs/documentation-update-plan.md)** | Phased roadmap and target matrix for synchronizing all secondary docs and guides |
 | **[Technical Foundation & Architectural Whitepaper](file:///home/user/work_dir/docs/TECHNICAL_FOUNDATION_REPORT.md)** | Deep theoretical analysis of Kubernetes internals, Informers, and Kyverno webhooks |
 | **[Local Kind E2E Testing Guide](file:///home/user/work_dir/docs/guides/local-kind-testing.md)** | Step-by-step verification guide for policy enforcement, exceptions, and MLOps |
 | **[Cluster Visualization & Live Presentation Plan](file:///home/user/work_dir/docs/cluster-visualization-plan.md)** | Observability architecture and presentation storyboard with Policy Reporter and Grafana |
