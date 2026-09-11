@@ -1,0 +1,8 @@
+# 플랫폼 확장 CRD Kustomization 매니페스트
+# 도입 배경: 상위 모듈에서 kustomize 디렉터리 참조 방식으로 CRD를 안전하게 불러오도록 지원
+# 기대 효과: Kustomize 보안 제약(Root 디렉터리 외부 파일 직접 참조 금지) 준수 및 재사용성 향상
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - kubeflow.org_notebooks.yaml

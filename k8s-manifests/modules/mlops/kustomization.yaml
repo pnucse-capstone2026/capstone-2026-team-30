@@ -1,0 +1,9 @@
+# MLOps 모듈 Kustomization 매니페스트
+# 도입 배경: Kubeflow Notebook CRD 및 컨트롤러를 독립 배포 가능한 확장 모듈로 분리
+# 기대 효과: Core 거버넌스 단독 배포 시 불필요한 MLOps 리소스 및 CRD 종속성 제거
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../crds
+  - notebook-controller.yaml
