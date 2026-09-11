@@ -1,0 +1,142 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kyverno-backend
+  namespace: kyverno-platform
+  labels:
+    app.kubernetes.io/name: kyverno-backend
+    app.kubernetes.io/part-of: kyverno-governance-platform
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: kyverno-backend
+  template:
+    metadata:
+      labels:
+        app: kyverno-backend
+    spec:
+      serviceAccountName: kyverno-backend-sa
+      initContainers:
+        - name: wait-and-migrate-db
+          image: kyverno-backend:latest
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for PostgreSQL database to be reachable..."
+              until node -e "
+                const net = require('net');
+                const client = net.connect(5432, 'postgres.kyverno-platform.svc.cluster.local', () => {
+                  client.end();
+                  process.exit(0);
+                });
+                client.on('error', () => process.exit(1));
+              " 2>/dev/null; do
+                echo "PostgreSQL is not ready yet. Retrying in 2s..."
+                sleep 2
+              done
+              echo "PostgreSQL is ready. Running Prisma DB migrations..."
+              npx prisma migrate deploy --schema=/app/apps/backend/prisma/schema.prisma || \
+              node /app/node_modules/prisma/build/index.js migrate deploy --schema=/app/apps/backend/prisma/schema.prisma
+              echo "Prisma migrations completed."
+          envFrom:
+            - secretRef:
+                name: kyverno-platform-secret
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: kyverno-platform-secret
+                  key: DATABASE_URL
+      containers:
+        - name: backend
+          image: kyverno-backend:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: kyverno-platform-secret
+            - secretRef:
+                name: backend-env-secret
+                optional: true
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: PORT
+              value: "3001"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: kyverno-platform-secret
+                  key: DATABASE_URL
+            - name: JWT_ACCESS_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: kyverno-platform-secret
+                  key: JWT_ACCESS_SECRET
+            - name: JWT_REFRESH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: kyverno-platform-secret
+                  key: JWT_REFRESH_SECRET
+            - name: AWS_REGION
+              value: "us-east-1"
+            - name: BEDROCK_MODEL_ID
+              value: "amazon.nova-lite-v1:0"
+            - name: GITOPS_PUBLISHING_MODE
+              value: "DUAL_PATH"
+            - name: GITOPS_STRATEGY
+              value: "GITHUB_PR"
+            - name: GITOPS_GITHUB_BASE_BRANCH
+              value: "main"
+            - name: GITOPS_AUTO_MERGE
+              value: "true"
+            - name: GITOPS_MIN_DURATION_HOURS
+              value: "24"
+          ports:
+            - containerPort: 3001
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3001
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 5
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3001
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kyverno-backend
+  namespace: kyverno-platform
+  labels:
+    app.kubernetes.io/name: kyverno-backend
+    app.kubernetes.io/part-of: kyverno-governance-platform
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3001
+      targetPort: 3001
+      name: http
+  selector:
+    app: kyverno-backend
