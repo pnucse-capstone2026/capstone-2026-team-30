@@ -1,0 +1,13 @@
+# ==============================================================================
+# Bare-Minimum Kind Cluster Configuration
+# ==============================================================================
+# - Single control-plane node (no workers)
+# - No host port mappings (prevents host port collisions when running multiple clusters)
+# - Minimal kubelet and apiserver footprint to conserve RAM and disk space
+# ==============================================================================
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  ipFamily: ipv4
+nodes:
+- role: control-plane

@@ -11,7 +11,9 @@
     "test": "jest --forceExit",
     "test:log": "bash ../../scripts/run-tests-with-log.sh backend",
     "test:integration": "jest --config ./test/jest-integration.json",
-    "test:integration:log": "bash ../../scripts/run-tests-with-log.sh integration"
+    "test:integration:log": "bash ../../scripts/run-tests-with-log.sh integration",
+    "test:bare:single": "bash ../../scripts/tests/run-bare-single-cluster-test.sh",
+    "test:bare:multicluster": "bash ../../scripts/tests/run-bare-multicluster-test.sh"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.1101.0",
