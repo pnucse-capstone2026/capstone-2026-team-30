@@ -104,7 +104,8 @@ export class GitOpsPublisherService {
       config.get<string>("GITHUB_TOKEN");
     this.githubRepo =
       config.get<string>("GITOPS_GITHUB_REPO") ||
-      config.get<string>("GITHUB_REPOSITORY");
+      config.get<string>("GITHUB_REPOSITORY") ||
+      "YeongrimGo/test-for";
     this.githubBaseBranch = config.get<string>(
       "GITOPS_GITHUB_BASE_BRANCH",
       "main",
@@ -426,14 +427,23 @@ export class GitOpsPublisherService {
       const targetDir = path.join(baseDir, "exceptions", namespace);
       const targetFilePath = path.join(targetDir, `${request.id}.yaml`);
 
-      fs.mkdirSync(targetDir, { recursive: true });
-      fs.writeFileSync(targetFilePath, yamlContent, "utf8");
+      let localSaved = false;
+      try {
+        fs.mkdirSync(targetDir, { recursive: true });
+        fs.writeFileSync(targetFilePath, yamlContent, "utf8");
+        this.updateKustomizationYaml(targetDir, `${request.id}.yaml`, "add");
+        localSaved = true;
 
-      this.updateKustomizationYaml(targetDir, `${request.id}.yaml`, "add");
-
-      this.logger.log(
-        `[Mock GitOps] Manifest successfully saved to ${targetFilePath} for request ${request.id} (minDurationHours: ${this.minDurationHours}h)`,
-      );
+        this.logger.log(
+          `[Mock GitOps] Manifest successfully saved to ${targetFilePath} for request ${request.id} (minDurationHours: ${this.minDurationHours}h)`,
+        );
+      } catch (fileErr) {
+        this.logger.warn(
+          `[GitOps Publisher] Local file write bypassed (container filesystem constraint): ${
+            fileErr instanceof Error ? fileErr.message : String(fileErr)
+          }`,
+        );
+      }
 
       let prUrl: string | undefined;
       if (this.gitOpsStrategy === "GITHUB_PR") {
@@ -445,8 +455,9 @@ export class GitOpsPublisherService {
         prUrl = prResult.prUrl;
       }
 
+      const published = Boolean(prUrl || localSaved);
       return {
-        publishedToGitOps: true,
+        publishedToGitOps: published,
         appliedDirectly,
         filePath: relativePath,
         prUrl,

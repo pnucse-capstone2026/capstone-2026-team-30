@@ -26,7 +26,8 @@ spec:
       serviceAccountName: kyverno-backend-sa
       containers:
         - name: backend
-          image: 945125812546.dkr.ecr.us-east-1.amazonaws.com/kyverno-backend:latest
+          # Kyverno disallow-latest-tag 준수 및 GitOps 버그 픽스 릴리즈 이미지 지정
+          image: 945125812546.dkr.ecr.us-east-1.amazonaws.com/kyverno-backend:v8-gitops-fix
           imagePullPolicy: Always
           # 호스트의 .env 환경변수를 Secret으로 주입받아 GitHub 토큰 및 설정을 동기화
           envFrom:
@@ -52,10 +53,17 @@ spec:
             # GitOps 게시 배포 전략 및 임시 예외 TTL 필터링 환경 변수
             - name: GITOPS_PUBLISHING_MODE
               value: "DUAL_PATH"
+            # GitOps 전략: GitHub PR 자동 개설 모드 활성화
             - name: GITOPS_STRATEGY
               value: "GITHUB_PR"
+            # GitOps 대상 원격 테스트 리포지토리 지정 (PR 자동 개설 목적)
+            - name: GITOPS_GITHUB_REPO
+              value: "YeongrimGo/test-for"
             - name: GITOPS_GITHUB_BASE_BRANCH
               value: "main"
+            # 긴급 운영을 위해 승인된 예외 PR의 base 브랜치 자동 병합 활성화
+            - name: GITOPS_AUTO_MERGE
+              value: "true"
             - name: GITOPS_MIN_DURATION_HOURS
               value: "24"
           ports:
