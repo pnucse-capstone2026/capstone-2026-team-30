@@ -15,6 +15,7 @@ import { KUBERNETES_ERROR } from "../../kubernetes/kubernetes.errors";
 import { MLOPS_ERROR } from "../../mlops/mlops.errors";
 import { NOTIFICATION_ERROR } from "../../notifications/notifications.errors";
 import { POLICY_ERROR } from "../../policies/policy.errors";
+import { SIMULATION_ERROR } from "../../simulation/simulation.errors";
 import { USER_ERROR } from "../../users/user.errors";
 import { VIOLATION_ERROR } from "../../violations/violation.errors";
 import type { BusinessErrorCode } from "./business-error-catalog";
@@ -68,6 +69,10 @@ export const BUSINESS_ERROR_HTTP_STATUS = {
   [POLICY_ERROR.ALREADY_EXISTS.code]: HttpStatus.CONFLICT,
   [POLICY_ERROR.INVALID_SPEC.code]: HttpStatus.BAD_REQUEST,
   [POLICY_ERROR.CREATE_FAILED.code]: HttpStatus.INTERNAL_SERVER_ERROR,
+  [SIMULATION_ERROR.INVALID_YAML.code]: HttpStatus.BAD_REQUEST,
+  [SIMULATION_ERROR.SCENARIO_NOT_FOUND.code]: HttpStatus.NOT_FOUND,
+  [SIMULATION_ERROR.DEPLOYMENT_FAILED.code]: HttpStatus.INTERNAL_SERVER_ERROR,
+  [SIMULATION_ERROR.CLEANUP_FAILED.code]: HttpStatus.INTERNAL_SERVER_ERROR,
   [VIOLATION_ERROR.NOT_FOUND.code]: HttpStatus.NOT_FOUND,
   [VIOLATION_ERROR.CLUSTER_ACCESS_DENIED.code]: HttpStatus.FORBIDDEN,
   [VIOLATION_ERROR.REPORT_LOOKUP_FAILED.code]: HttpStatus.BAD_GATEWAY,

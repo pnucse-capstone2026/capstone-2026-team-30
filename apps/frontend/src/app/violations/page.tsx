@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Search,
   ShieldAlert,
+  Sparkles,
   XCircle,
 } from "lucide-react";
 
@@ -353,6 +354,37 @@ function MyViolationsContent() {
           loading={liveViolations === null}
         />
       </section>
+
+      {/* Enforce 차단으로 PolicyReport가 생성되지 않는 경우를 위한 가이드 배너 */}
+      <div className="rounded-2xl border border-rose-500/20 bg-gradient-to-r from-rose-950/10 via-indigo-950/10 to-slate-900/10 p-4 sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-2.5 text-rose-500 shrink-0">
+              <Sparkles className="size-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-900">
+                배포가 거부되었으나 위반 목록(PolicyReport)에 나타나지 않나요?
+              </p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Kyverno의 <strong>Enforce</strong> 정책은 K8s 어드미션 단계에서
+                생성을 원천 차단하므로 클러스터에 파드가 없어 PolicyReport가
+                생성되지 않습니다.
+              </p>
+            </div>
+          </div>
+          <Link href="/diagnostics">
+            <Button
+              size="sm"
+              className="gap-2 bg-gradient-to-r from-rose-600 to-indigo-600 text-white shadow-sm hover:from-rose-500 hover:to-indigo-500 text-xs shrink-0 w-full sm:w-auto"
+            >
+              <Sparkles className="size-3.5" />
+              Enforce 차단 AI 진단 바로가기
+              <ArrowRight className="size-3" />
+            </Button>
+          </Link>
+        </div>
+      </div>
 
       <section className="rounded-2xl border border-slate-200 bg-white">
         <div className="border-b border-slate-100 px-5 py-4 sm:px-6">

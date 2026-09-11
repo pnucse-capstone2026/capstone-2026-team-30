@@ -7,6 +7,7 @@ import {
   FileClock,
   FilePlus2,
   Files,
+  FlaskConical,
   History,
   FileWarning,
   Layers,
@@ -14,6 +15,7 @@ import {
   Server,
   Settings,
   ShieldCheck,
+  Sparkles,
   type LucideIcon,
   Users,
 } from "lucide-react";
@@ -35,6 +37,8 @@ type NavigationItem = {
 const navigation: Record<"user" | "admin", NavigationItem[]> = {
   user: [
     { label: "대시보드", href: "/dashboard", icon: LayoutDashboard },
+    { label: "정책 테스트 랩", href: "/simulation", icon: FlaskConical },
+    { label: "Enforce 차단 AI 진단", href: "/diagnostics", icon: Sparkles },
     { label: "MLOps 노트북", href: "/mlops/notebooks", icon: Layers },
     { label: "클러스터", href: "/clusters", icon: Server },
     { label: "정책", href: "/policies", icon: ShieldCheck },
@@ -49,6 +53,7 @@ const navigation: Record<"user" | "admin", NavigationItem[]> = {
       href: "/admin/dashboard",
       icon: LayoutDashboard,
     },
+    { label: "정책 테스트 랩", href: "/simulation", icon: FlaskConical },
     { label: "MLOps 노트북 관리", href: "/mlops/notebooks", icon: Layers },
     { label: "MLOps 거버넌스", href: "/mlops/governance", icon: Coins },
     { label: "클러스터 관리", href: "/admin/clusters", icon: Server },

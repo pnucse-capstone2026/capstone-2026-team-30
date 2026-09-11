@@ -7,6 +7,7 @@ import { KUBERNETES_ERROR } from "../../kubernetes/kubernetes.errors";
 import { MLOPS_ERROR } from "../../mlops/mlops.errors";
 import { NOTIFICATION_ERROR } from "../../notifications/notifications.errors";
 import { POLICY_ERROR } from "../../policies/policy.errors";
+import { SIMULATION_ERROR } from "../../simulation/simulation.errors";
 import { USER_ERROR } from "../../users/user.errors";
 import { VIOLATION_ERROR } from "../../violations/violation.errors";
 
@@ -21,6 +22,7 @@ export const BUSINESS_ERRORS = [
   ...Object.values(MLOPS_ERROR),
   ...Object.values(NOTIFICATION_ERROR),
   ...Object.values(POLICY_ERROR),
+  ...Object.values(SIMULATION_ERROR),
   ...Object.values(VIOLATION_ERROR),
 ] as const;
 
