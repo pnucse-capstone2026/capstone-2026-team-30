@@ -29,6 +29,15 @@ DRY_RUN=false
 NAMESPACE="kyverno-platform"
 STORAGE_CLASS=""
 
+# Modular component enablement defaults (Backward-compatible: all true by default)
+ENABLE_MLOPS=true
+ENABLE_AI=true
+ENABLE_SIMULATION=true
+ENABLE_GITOPS=true
+MODULES_PARAM=""
+PROMPT_MODULES=false
+MODULE_FLAG_SPECIFIED=false
+
 # Color output helpers
 BOLD="\033[1m"
 GREEN="\033[0;32m"
@@ -62,9 +71,24 @@ Options:
   --dry-run                   Render manifests without applying to the cluster
   -h, --help                  Display this help message
 
+Platform Module Options:
+  --enable-mlops              Enable MLOps suite (Notebook controller, Kubeflow CRDs, GPU FinOps) [default: true]
+  --disable-mlops, --no-mlops Disable MLOps suite
+  --enable-ai                 Enable AWS Bedrock AI Diagnostics & Copilot [default: true]
+  --disable-ai, --no-ai       Disable AI Diagnostics
+  --enable-simulation         Enable Policy Simulation Lab dry-run sandbox [default: true]
+  --disable-simulation        Disable Policy Simulation Lab
+  --enable-gitops             Enable GitOps policy sync automation [default: true]
+  --disable-gitops            Disable GitOps policy sync automation
+  --modules <list>            Explicit comma-separated module list (e.g. core,simulation)
+  -i, --interactive           Launch interactive terminal prompt to configure modules
+
 Examples:
-  # Deploy with auto-detection of existing cluster:
-  ./scripts/deploy.sh
+  # Deploy lightweight core platform without MLOps:
+  ./scripts/deploy.sh --disable-mlops
+
+  # Deploy with explicit module selection:
+  ./scripts/deploy.sh --modules core,simulation
 
   # Deploy explicitly to AWS EKS with custom admin email:
   ./scripts/deploy.sh --env eks --admin-email admin@mycompany.com
@@ -117,6 +141,55 @@ while [[ $# -gt 0 ]]; do
       DRY_RUN=true
       shift
       ;;
+    --enable-mlops)
+      ENABLE_MLOPS=true
+      MODULE_FLAG_SPECIFIED=true
+      shift
+      ;;
+    --disable-mlops|--no-mlops)
+      ENABLE_MLOPS=false
+      MODULE_FLAG_SPECIFIED=true
+      shift
+      ;;
+    --enable-ai)
+      ENABLE_AI=true
+      MODULE_FLAG_SPECIFIED=true
+      shift
+      ;;
+    --disable-ai|--no-ai)
+      ENABLE_AI=false
+      MODULE_FLAG_SPECIFIED=true
+      shift
+      ;;
+    --enable-simulation)
+      ENABLE_SIMULATION=true
+      MODULE_FLAG_SPECIFIED=true
+      shift
+      ;;
+    --disable-simulation|--no-simulation)
+      ENABLE_SIMULATION=false
+      MODULE_FLAG_SPECIFIED=true
+      shift
+      ;;
+    --enable-gitops)
+      ENABLE_GITOPS=true
+      MODULE_FLAG_SPECIFIED=true
+      shift
+      ;;
+    --disable-gitops|--no-gitops)
+      ENABLE_GITOPS=false
+      MODULE_FLAG_SPECIFIED=true
+      shift
+      ;;
+    --modules)
+      MODULES_PARAM="$2"
+      MODULE_FLAG_SPECIFIED=true
+      shift 2
+      ;;
+    -i|--interactive)
+      PROMPT_MODULES=true
+      shift
+      ;;
     -h|--help)
       usage
       ;;
@@ -126,6 +199,44 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# Handle comma-separated --modules parameter if supplied
+if [ -n "${MODULES_PARAM}" ]; then
+  ENABLE_MLOPS=false
+  ENABLE_AI=false
+  ENABLE_SIMULATION=false
+  ENABLE_GITOPS=false
+  IFS=',' read -ra MOD_ARR <<< "${MODULES_PARAM}"
+  for mod_item in "${MOD_ARR[@]}"; do
+    case "$(echo "${mod_item}" | tr '[:upper:]' '[:lower:]')" in
+      core) ;; # Core is mandatory
+      mlops) ENABLE_MLOPS=true ;;
+      ai|aiagent) ENABLE_AI=true ;;
+      simulation) ENABLE_SIMULATION=true ;;
+      gitops) ENABLE_GITOPS=true ;;
+      *) log_warn "Unknown module '${mod_item}' in --modules list, ignoring." ;;
+    esac
+  done
+fi
+
+# Interactive module prompt when requested or when running interactively without explicit flags
+if [ "${PROMPT_MODULES}" = true ] || ([ -t 0 ] && [ "${MODULE_FLAG_SPECIFIED}" = false ] && [ "${DRY_RUN}" = false ] && [ "${UNINSTALL}" = false ]); then
+  log_header "Platform Module Configuration"
+  echo "Select optional platform modules to enable:"
+  echo "[1] Core Governance (Kyverno, Policies, Violations, RBAC) [Mandatory: Always Enabled]"
+
+  read -r -p "[2] MLOps Suite (Notebooks, Pipelines, Serving, GPU FinOps) [Y/n]: " resp_mlops
+  [[ "${resp_mlops}" =~ ^[Nn]$ ]] && ENABLE_MLOPS=false || ENABLE_MLOPS=true
+
+  read -r -p "[3] AI Copilot & Diagnostics (AWS Bedrock) [Y/n]: " resp_ai
+  [[ "${resp_ai}" =~ ^[Nn]$ ]] && ENABLE_AI=false || ENABLE_AI=true
+
+  read -r -p "[4] Policy Simulation Lab [Y/n]: " resp_sim
+  [[ "${resp_sim}" =~ ^[Nn]$ ]] && ENABLE_SIMULATION=false || ENABLE_SIMULATION=true
+
+  read -r -p "[5] GitOps Policy PR Sync [Y/n]: " resp_gitops
+  [[ "${resp_gitops}" =~ ^[Nn]$ ]] && ENABLE_GITOPS=false || ENABLE_GITOPS=true
+fi
 
 # Ensure kubectl CLI is available
 find_or_install_kubectl() {
@@ -173,45 +284,60 @@ log_header "PaC Kyverno Platform Universal Setup"
 log_info "Verifying cluster connection..."
 CURRENT_CONTEXT="$("${KUBECTL}" config current-context 2>/dev/null || echo "unknown")"
 if [ "${CURRENT_CONTEXT}" = "unknown" ]; then
-  log_error "Could not obtain current Kubernetes context. Check your KUBECONFIG setting."
-  exit 1
+  if [ "${DRY_RUN}" = true ]; then
+    CURRENT_CONTEXT="dry-run-context"
+    log_warn "No active Kubernetes context found. Continuing in dry-run mode."
+  else
+    log_error "Could not obtain current Kubernetes context. Check your KUBECONFIG setting."
+    exit 1
+  fi
+else
+  log_success "Connected to Kubernetes context: ${BOLD}${CURRENT_CONTEXT}${NC}"
 fi
-log_success "Connected to Kubernetes context: ${BOLD}${CURRENT_CONTEXT}${NC}"
 
 # 2. Detect cluster environment (EKS vs On-Premise)
 if [ "${ENV_TARGET}" = "auto" ]; then
-  log_info "Auto-detecting cluster environment..."
-  PROVIDER_IDS="$("${KUBECTL}" get nodes -o jsonpath='{.items[*].spec.providerID}' 2>/dev/null || echo "")"
-  if echo "${CURRENT_CONTEXT}" | grep -qE "arn:aws:eks" || echo "${PROVIDER_IDS}" | grep -qE "aws://"; then
-    ENV_TARGET="eks"
-    log_success "Detected environment: ${BOLD}AWS EKS${NC}"
-  else
+  if [ "${DRY_RUN}" = true ]; then
     ENV_TARGET="onprem"
-    log_success "Detected environment: ${BOLD}On-Premise / Generic Kubernetes${NC}"
+    log_info "[DRY-RUN] Auto-detection defaulted to 'onprem' for manifest preview."
+  else
+    log_info "Auto-detecting cluster environment..."
+    PROVIDER_IDS="$("${KUBECTL}" get nodes -o jsonpath='{.items[*].spec.providerID}' 2>/dev/null || echo "")"
+    if echo "${CURRENT_CONTEXT}" | grep -qE "arn:aws:eks" || echo "${PROVIDER_IDS}" | grep -qE "aws://"; then
+      ENV_TARGET="eks"
+      log_success "Detected environment: ${BOLD}AWS EKS${NC}"
+    else
+      ENV_TARGET="onprem"
+      log_success "Detected environment: ${BOLD}On-Premise / Generic Kubernetes${NC}"
+    fi
   fi
 else
   log_info "Environment target explicitly set to: ${BOLD}${ENV_TARGET}${NC}"
 fi
 
 # 3. Check Kyverno CRD availability
-log_info "Checking Kyverno Policy Engine installation..."
-if ! "${KUBECTL}" get crd clusterpolicies.kyverno.io >/dev/null 2>&1; then
-  log_warn "Kyverno CRD (clusterpolicies.kyverno.io) was not detected in this cluster."
-  echo -n "Would you like to install the official Kyverno release (v1.12.5) now? [Y/n]: "
-  if [ -t 0 ]; then
-    read -r KYVERNO_CHOICE
-  else
-    KYVERNO_CHOICE="Y"
-  fi
-  if [[ "${KYVERNO_CHOICE}" =~ ^[Yy]?$ ]]; then
-    log_info "Installing Kyverno v1.12.5 manifests..."
-    "${KUBECTL}" create -f https://github.com/kyverno/kyverno/releases/download/v1.12.5/install.yaml || true
-    log_info "Waiting for Kyverno admission controller readiness..."
-    "${KUBECTL}" -n kyverno rollout status deployment/kyverno-admission-controller --timeout=120s || true
-    log_success "Kyverno installed successfully."
-  fi
+if [ "${DRY_RUN}" = true ]; then
+  log_info "[DRY-RUN] Skipping live Kyverno CRD cluster presence check."
 else
-  log_success "Kyverno Policy Engine is present."
+  log_info "Checking Kyverno Policy Engine installation..."
+  if ! "${KUBECTL}" get crd clusterpolicies.kyverno.io >/dev/null 2>&1; then
+    log_warn "Kyverno CRD (clusterpolicies.kyverno.io) was not detected in this cluster."
+    echo -n "Would you like to install the official Kyverno release (v1.12.5) now? [Y/n]: "
+    if [ -t 0 ]; then
+      read -r KYVERNO_CHOICE
+    else
+      KYVERNO_CHOICE="Y"
+    fi
+    if [[ "${KYVERNO_CHOICE}" =~ ^[Yy]?$ ]]; then
+      log_info "Installing Kyverno v1.12.5 manifests..."
+      "${KUBECTL}" create -f https://github.com/kyverno/kyverno/releases/download/v1.12.5/install.yaml || true
+      log_info "Waiting for Kyverno admission controller readiness..."
+      "${KUBECTL}" -n kyverno rollout status deployment/kyverno-admission-controller --timeout=120s || true
+      log_success "Kyverno installed successfully."
+    fi
+  else
+    log_success "Kyverno Policy Engine is present."
+  fi
 fi
 
 # 4. Local image building if requested
@@ -237,7 +363,10 @@ fi
 
 # 5. Prepare namespace and secrets
 log_header "Configuring Secrets & Security Credentials"
-"${KUBECTL}" create namespace "${NAMESPACE}" --dry-run=client -o yaml | "${KUBECTL}" apply -f -
+
+if [ "${DRY_RUN}" = false ]; then
+  "${KUBECTL}" create namespace "${NAMESPACE}" --dry-run=client -o yaml | "${KUBECTL}" apply -f -
+fi
 
 # Generate random secure passwords if not provided
 if [ -z "${ADMIN_PASSWORD}" ]; then
@@ -252,7 +381,7 @@ JWT_REFRESH_SECRET="$(openssl rand -base64 32)"
 DATABASE_URL="postgresql://postgres:${POSTGRES_PASSWORD}@postgres.${NAMESPACE}.svc.cluster.local:5432/kyverno_dashboard?schema=public"
 
 log_info "Synchronizing platform secret 'kyverno-platform-secret' in namespace '${NAMESPACE}'..."
-"${KUBECTL}" create secret generic kyverno-platform-secret \
+SECRET_YAML=$("${KUBECTL}" create secret generic kyverno-platform-secret \
   --namespace="${NAMESPACE}" \
   --from-literal=POSTGRES_USER=postgres \
   --from-literal=POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
@@ -264,39 +393,70 @@ log_info "Synchronizing platform secret 'kyverno-platform-secret' in namespace '
   --from-literal=SEED_ADMIN_PASSWORD="${ADMIN_PASSWORD}" \
   --from-literal=SEED_USER_EMAIL="${USER_EMAIL}" \
   --from-literal=SEED_USER_PASSWORD="${USER_PASSWORD}" \
-  --dry-run=client -o yaml | "${KUBECTL}" apply -f -
+  --from-literal=MODULE_MLOPS_ENABLED="${ENABLE_MLOPS}" \
+  --from-literal=MODULE_AI_AGENT_ENABLED="${ENABLE_AI}" \
+  --from-literal=MODULE_SIMULATION_ENABLED="${ENABLE_SIMULATION}" \
+  --from-literal=MODULE_GITOPS_ENABLED="${ENABLE_GITOPS}" \
+  --dry-run=client -o yaml)
+
+if [ "${DRY_RUN}" = true ]; then
+  log_info "[DRY-RUN] Platform secret manifest preview generated."
+else
+  echo "${SECRET_YAML}" | "${KUBECTL}" apply -f -
+fi
 
 # Optionally synchronize host backend .env if present
 HOST_ENV="${ROOT_DIR}/apps/backend/.env"
 if [ -f "${HOST_ENV}" ]; then
   log_info "Synchronizing host backend .env to 'backend-env-secret'..."
-  "${KUBECTL}" create secret generic backend-env-secret \
+  BACKEND_SECRET_YAML=$("${KUBECTL}" create secret generic backend-env-secret \
     --namespace="${NAMESPACE}" \
     --from-env-file="${HOST_ENV}" \
-    --dry-run=client -o yaml | "${KUBECTL}" apply -f -
+    --dry-run=client -o yaml)
+  if [ "${DRY_RUN}" = false ]; then
+    echo "${BACKEND_SECRET_YAML}" | "${KUBECTL}" apply -f -
+  fi
 fi
 
 # 6. Apply manifests via Kustomize overlay
 OVERLAY_DIR="${ROOT_DIR}/k8s-manifests/overlays/${ENV_TARGET}"
+MLOPS_MODULE_DIR="${ROOT_DIR}/k8s-manifests/modules/mlops"
 log_header "Applying Kubernetes Manifests (${ENV_TARGET} overlay)"
 
 if [ "${DRY_RUN}" = true ]; then
-  log_info "[DRY-RUN] Rendering manifests with kustomize:"
+  log_info "[DRY-RUN] Rendering Core manifests with kustomize:"
   "${KUBECTL}" kustomize "${OVERLAY_DIR}"
+  if [ "${ENABLE_MLOPS}" = true ]; then
+    log_info "[DRY-RUN] Rendering MLOps extension manifests:"
+    "${KUBECTL}" kustomize "${MLOPS_MODULE_DIR}"
+  else
+    log_info "[DRY-RUN] MLOps module is disabled (skipping MLOps manifests)."
+  fi
   log_success "Dry run complete."
   exit 0
 fi
 
-log_info "Applying Kustomize overlay from: ${OVERLAY_DIR}"
+log_info "Applying Core Kustomize overlay from: ${OVERLAY_DIR}"
 "${KUBECTL}" apply -k "${OVERLAY_DIR}"
+
+# Apply MLOps module (Notebook Controller & Kubeflow CRDs) if enabled
+if [ "${ENABLE_MLOPS}" = true ]; then
+  log_info "Deploying MLOps Module (Notebook Controller & Kubeflow CRDs)..."
+  "${KUBECTL}" apply -k "${MLOPS_MODULE_DIR}"
+else
+  log_info "MLOps Module is DISABLED. Skipping Notebook Controller and Kubeflow CRDs."
+fi
 
 # 7. Apply core governance and MLOps policies if present
 POLICIES_DIR="${ROOT_DIR}/k8s-manifests/policies"
 if [ -d "${POLICIES_DIR}" ]; then
   log_info "Applying default Kyverno governance policies..."
   "${KUBECTL}" apply -f "${POLICIES_DIR}/" || true
-  if [ -d "${POLICIES_DIR}/mlops" ]; then
+  if [ "${ENABLE_MLOPS}" = true ] && [ -d "${POLICIES_DIR}/mlops" ]; then
+    log_info "Applying MLOps Kyverno policies..."
     "${KUBECTL}" apply -f "${POLICIES_DIR}/mlops/" || true
+  else
+    log_info "MLOps policies skipped (MLOps module disabled)."
   fi
 fi
 
@@ -334,6 +494,13 @@ cat <<SUMMARY
  Target Environment : ${BOLD}${ENV_TARGET}${NC}
  Target Namespace   : ${BOLD}${NAMESPACE}${NC}
  Kubernetes Context : ${BOLD}${CURRENT_CONTEXT}${NC}
+
+ ${CYAN}${BOLD}[ Active Platform Modules ]${NC}
+ - Core Governance    : ${GREEN}ENABLED${NC} (Mandatory)
+ - MLOps Platform     : $([ "${ENABLE_MLOPS}" = true ] && echo -e "${GREEN}ENABLED${NC}" || echo -e "${RED}DISABLED${NC}")
+ - AI Copilot (Bedrock): $([ "${ENABLE_AI}" = true ] && echo -e "${GREEN}ENABLED${NC}" || echo -e "${RED}DISABLED${NC}")
+ - Policy Simulation  : $([ "${ENABLE_SIMULATION}" = true ] && echo -e "${GREEN}ENABLED${NC}" || echo -e "${RED}DISABLED${NC}")
+ - GitOps Policy Sync : $([ "${ENABLE_GITOPS}" = true ] && echo -e "${GREEN}ENABLED${NC}" || echo -e "${RED}DISABLED${NC}")
 
  ${CYAN}${BOLD}[ Access Endpoints ]${NC}
  - Frontend Dashboard : ${BOLD}${UI_URL}${NC}
