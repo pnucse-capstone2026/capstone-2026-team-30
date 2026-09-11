@@ -24,6 +24,20 @@ export class HardwareTierPresetDto {
 
   @ApiProperty({ example: false })
   isGpuRequired: boolean;
+
+  @ApiProperty({
+    example: true,
+    description: "현재 클러스터 환경에서 프로비저닝 가능 여부",
+  })
+  isAvailable?: boolean;
+
+  @ApiProperty({
+    example:
+      "현재 클러스터에 GPU 노드가 없어 지원되지 않습니다 (프리티어/CPU 전용)",
+    required: false,
+    description: "비활성화 사유",
+  })
+  disabledReason?: string;
 }
 
 export class FrameworkImagePresetDto {

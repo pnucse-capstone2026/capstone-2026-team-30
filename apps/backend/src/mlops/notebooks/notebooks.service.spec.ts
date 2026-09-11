@@ -160,7 +160,7 @@ describe("NotebooksService", () => {
         frameworkImage: "JUPYTER_PYTORCH",
         customCpu: 4,
         customMemoryGb: 16,
-        customGpu: 1,
+        customGpu: 0,
         storageGb: 50,
       };
 
@@ -169,7 +169,7 @@ describe("NotebooksService", () => {
       expect(result.name).toBe("custom-nb");
       expect(result.cpuLimit).toBe("4");
       expect(result.memoryLimit).toBe("16Gi");
-      expect(result.gpuLimit).toBe("1");
+      expect(result.gpuLimit).toBe("0");
       expect(mockAdapter.ensureWorkspacePvc).toHaveBeenCalledWith(
         "cluster-1",
         "default",
@@ -177,6 +177,33 @@ describe("NotebooksService", () => {
         50,
       );
       expect(mockAdapter.createNotebook).toHaveBeenCalled();
+    });
+
+    it("should throw GPU_QUOTA_EXCEEDED when GPU tier or customGpu is requested in CPU cluster", async () => {
+      const gpuDto = {
+        name: "gpu-nb",
+        namespace: "default",
+        clusterId: "cluster-1",
+        hardwareTier: "GPU_T4_STANDARD",
+        frameworkImage: "JUPYTER_PYTORCH",
+      };
+
+      await expect(
+        service.createNotebook(gpuDto, mockNormalUser),
+      ).rejects.toThrow(BusinessException);
+
+      const customGpuDto = {
+        name: "custom-gpu-nb",
+        namespace: "default",
+        clusterId: "cluster-1",
+        hardwareTier: "CUSTOM",
+        frameworkImage: "JUPYTER_PYTORCH",
+        customGpu: 1,
+      };
+
+      await expect(
+        service.createNotebook(customGpuDto, mockNormalUser),
+      ).rejects.toThrow(BusinessException);
     });
 
     it("should throw error if notebook name already exists", async () => {

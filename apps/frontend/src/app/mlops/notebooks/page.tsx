@@ -274,7 +274,7 @@ export default function NotebooksPage() {
           </div>
         )}
 
-        {/* MLOps Copilot Drawer (현재 비활성화됨) */}
+        {/* MLOps Copilot Drawer */}
         <CopilotDrawer
           enabled={false}
           activePageName="MLOps 노트북 센터"

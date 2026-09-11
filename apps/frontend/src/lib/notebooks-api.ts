@@ -25,6 +25,8 @@ export type HardwareTierPreset = {
   memoryLimit: string;
   gpuLimit: string;
   isGpuRequired: boolean;
+  isAvailable?: boolean;
+  disabledReason?: string;
 };
 
 export type FrameworkImagePreset = {

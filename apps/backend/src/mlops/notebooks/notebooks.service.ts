@@ -34,6 +34,7 @@ export const HARDWARE_PRESETS: Record<string, HardwareTierPresetDto> = {
     memoryLimit: "2Gi",
     gpuLimit: "0",
     isGpuRequired: false,
+    isAvailable: true,
   },
   CPU_MEDIUM: {
     id: "CPU_MEDIUM",
@@ -44,6 +45,7 @@ export const HARDWARE_PRESETS: Record<string, HardwareTierPresetDto> = {
     memoryLimit: "4Gi",
     gpuLimit: "0",
     isGpuRequired: false,
+    isAvailable: true,
   },
   GPU_T4_STANDARD: {
     id: "GPU_T4_STANDARD",
@@ -54,6 +56,9 @@ export const HARDWARE_PRESETS: Record<string, HardwareTierPresetDto> = {
     memoryLimit: "16Gi",
     gpuLimit: "1",
     isGpuRequired: true,
+    isAvailable: false,
+    disabledReason:
+      "현재 클러스터에 GPU 노드가 없어 지원되지 않습니다 (프리티어/CPU 전용)",
   },
   GPU_A10G_HIGH: {
     id: "GPU_A10G_HIGH",
@@ -64,6 +69,9 @@ export const HARDWARE_PRESETS: Record<string, HardwareTierPresetDto> = {
     memoryLimit: "32Gi",
     gpuLimit: "1",
     isGpuRequired: true,
+    isAvailable: false,
+    disabledReason:
+      "현재 클러스터에 GPU 노드가 없어 지원되지 않습니다 (프리티어/CPU 전용)",
   },
 };
 
@@ -205,6 +213,10 @@ export class NotebooksService {
       const mem = dto.customMemoryGb ?? 4;
       const gpu = dto.customGpu ?? 0;
 
+      if (gpu > 0) {
+        throw new BusinessException(MLOPS_ERROR.GPU_QUOTA_EXCEEDED);
+      }
+
       resourcesLimits = {
         cpu: `${cpu}`,
         memory: `${mem}Gi`,
@@ -213,15 +225,14 @@ export class NotebooksService {
         cpu: `${Math.max(0.5, cpu / 2)}`,
         memory: `${Math.max(1, Math.floor(mem / 2))}Gi`,
       };
-
-      if (gpu > 0) {
-        resourcesLimits["nvidia.com/gpu"] = `${gpu}`;
-        resourcesRequests["nvidia.com/gpu"] = `${gpu}`;
-      }
     } else {
       const hwPreset = HARDWARE_PRESETS[dto.hardwareTier];
       if (!hwPreset) {
         throw new BusinessException(MLOPS_ERROR.INVALID_PRESET);
+      }
+
+      if (hwPreset.isAvailable === false) {
+        throw new BusinessException(MLOPS_ERROR.GPU_QUOTA_EXCEEDED);
       }
 
       resourcesLimits = {

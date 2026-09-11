@@ -19,8 +19,10 @@ async function bootstrap() {
     }),
   );
 
-  // 전역 API 프리픽스 지정 (/api/*)
-  app.setGlobalPrefix("api");
+  // 전역 API 프리픽스 지정 (/api/*, 단 /notebook 경로는 프록시 라우팅을 위해 제외)
+  app.setGlobalPrefix("api", {
+    exclude: ["notebook/(.*)"],
+  });
 
   // Swagger API 문서
   const config = new DocumentBuilder()

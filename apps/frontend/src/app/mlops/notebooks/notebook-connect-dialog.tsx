@@ -11,13 +11,24 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { NotebookItem } from "@/lib/notebooks-api";
-import { BookOpen, Check, Copy, ExternalLink, Terminal } from "lucide-react";
+import { useAuthStore } from "@/lib/auth-store";
+import {
+  BookOpen,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  ExternalLink,
+  Sparkles,
+  Terminal,
+} from "lucide-react";
 import { toast } from "sonner";
 
 type NotebookConnectDialogProps = {
   notebook: NotebookItem;
   isOpen: boolean;
   onClose: () => void;
+  clusterId?: string;
 };
 
 export function NotebookConnectDialog({
@@ -26,9 +37,16 @@ export function NotebookConnectDialog({
   onClose,
 }: NotebookConnectDialogProps) {
   const [copied, setCopied] = useState(false);
+  const [showPortForward, setShowPortForward] = useState(false);
 
+  const accessToken = useAuthStore((state) => state.accessToken);
+  const directUrl = `/notebook/${notebook.namespace}/${notebook.name}/lab${accessToken ? `?token=${encodeURIComponent(accessToken)}` : ""}`;
   const portForwardCmd = `./scripts/bin/kubectl port-forward svc/${notebook.name} 8888:80 -n ${notebook.namespace}`;
   const localUrl = `http://localhost:8888/notebook/${notebook.namespace}/${notebook.name}/lab`;
+
+  const handleOpenDirectJupyter = () => {
+    window.open(directUrl, "_blank", "noopener,noreferrer");
+  };
 
   const handleCopyCommand = async () => {
     try {
@@ -88,45 +106,86 @@ export function NotebookConnectDialog({
             </div>
           </div>
 
-          {/* 포트포워딩 연결 안내 */}
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-              <Terminal className="h-3.5 w-3.5 text-indigo-500" />
-              1. 로컬 터미널에서 포트포워딩 실행:
-            </label>
-            <div className="relative flex items-center">
-              <pre className="w-full rounded-md bg-slate-900 px-3 py-2 pr-10 font-mono text-[11px] text-emerald-400 overflow-x-auto select-all break-all whitespace-pre-wrap">
-                {portForwardCmd}
-              </pre>
-              <button
-                type="button"
-                onClick={handleCopyCommand}
-                className="absolute right-2 top-2 rounded bg-slate-800 p-1 text-slate-300 hover:bg-slate-700 hover:text-white transition"
-                title="명령어 복사"
-              >
-                {copied ? (
-                  <Check className="h-3.5 w-3.5 text-emerald-400" />
-                ) : (
-                  <Copy className="h-3.5 w-3.5" />
-                )}
-              </button>
+          {/* 1. 웹 브라우저 원클릭 바로 접속 (추천) */}
+          <div className="rounded-lg border border-indigo-200 bg-gradient-to-br from-indigo-50/80 to-white p-3 space-y-2 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-indigo-950 flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-indigo-600" />웹 브라우저
+                원클릭 접속 (인앱 리버스 프록시)
+              </span>
+              <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-medium">
+                추천 (No-CLI)
+              </span>
             </div>
-          </div>
-
-          {/* 브라우저 열기 안내 */}
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-              <ExternalLink className="h-3.5 w-3.5 text-indigo-500" />
-              2. 터미널 실행 후 JupyterLab IDE 열기:
-            </label>
+            <p className="text-[11px] text-slate-600 leading-relaxed">
+              kubectl 설치나 로컬 포트포워딩 없이, 플랫폼 인앱 프록시를 통해 새
+              탭에서 JupyterLab IDE를 바로 실행합니다.
+            </p>
             <Button
               type="button"
-              onClick={handleOpenLocalJupyter}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white gap-2 text-xs font-medium py-2 h-9"
+              onClick={handleOpenDirectJupyter}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white gap-2 text-xs font-medium py-2 h-9 shadow-sm"
             >
               <ExternalLink className="h-3.5 w-3.5" />
-              <span>JupyterLab 워크스페이스 열기</span>
+              <span>JupyterLab 워크스페이스 바로 열기</span>
             </Button>
+          </div>
+
+          {/* 2. 로컬 터미널 포트포워딩 (선택사항) */}
+          <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-2.5 space-y-2">
+            <button
+              type="button"
+              onClick={() => setShowPortForward(!showPortForward)}
+              className="flex items-center justify-between w-full text-xs font-semibold text-slate-700 hover:text-slate-900 transition"
+            >
+              <span className="flex items-center gap-1.5">
+                <Terminal className="h-3.5 w-3.5 text-slate-500" />
+                CLI 개발자를 위한 kubectl 포트포워딩 방식 (선택)
+              </span>
+              {showPortForward ? (
+                <ChevronUp className="h-3.5 w-3.5 text-slate-400" />
+              ) : (
+                <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+              )}
+            </button>
+
+            {showPortForward && (
+              <div className="space-y-2 pt-1 border-t border-slate-200">
+                <div className="space-y-1">
+                  <span className="text-[11px] text-slate-500">
+                    로컬 터미널에서 아래 명령어 실행:
+                  </span>
+                  <div className="relative flex items-center">
+                    <pre className="w-full rounded-md bg-slate-900 px-3 py-2 pr-10 font-mono text-[11px] text-emerald-400 overflow-x-auto select-all break-all whitespace-pre-wrap">
+                      {portForwardCmd}
+                    </pre>
+                    <button
+                      type="button"
+                      onClick={handleCopyCommand}
+                      className="absolute right-2 top-2 rounded bg-slate-800 p-1 text-slate-300 hover:bg-slate-700 hover:text-white transition"
+                      title="명령어 복사"
+                    >
+                      {copied ? (
+                        <Check className="h-3.5 w-3.5 text-emerald-400" />
+                      ) : (
+                        <Copy className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleOpenLocalJupyter}
+                  className="w-full gap-1.5 text-xs text-slate-700"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  <span>로컬 localhost:8888 열기</span>
+                </Button>
+              </div>
+            )}
           </div>
 
           <p className="text-[11px] text-slate-500 leading-relaxed bg-indigo-50/60 p-2 rounded border border-indigo-100">

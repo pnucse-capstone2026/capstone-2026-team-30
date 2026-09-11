@@ -25,9 +25,11 @@
     "@nestjs/schedule": "^6.1.3",
     "@nestjs/swagger": "^8.0.0",
     "@prisma/client": "^6.0.0",
+    "@types/http-proxy": "^1.17.17",
     "argon2": "^0.44.0",
     "class-transformer": "^0.5.0",
     "class-validator": "^0.14.0",
+    "http-proxy-middleware": "^4.2.0",
     "js-yaml": "^5.4.1",
     "nestjs-pino": "^4.0.0",
     "passport": "^0.7.0",
@@ -84,7 +86,7 @@
       ]
     },
     "transformIgnorePatterns": [
-      "/node_modules/\\.pnpm/(?!(@kubernetes\\+client-node|openid-client|oauth4webapi|jose)@)"
+      "/node_modules/\\.pnpm/(?!(@kubernetes\\+client-node|openid-client|oauth4webapi|jose|http-proxy-middleware)@)"
     ],
     "testEnvironment": "node"
   },

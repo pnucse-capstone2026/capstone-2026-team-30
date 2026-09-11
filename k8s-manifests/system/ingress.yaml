@@ -35,6 +35,14 @@ spec:
                 name: kyverno-backend
                 port:
                   number: 3001
+          # Kubeflow Jupyter Notebook 웹 리버스 프록시 라우팅
+          - path: /notebook
+            pathType: Prefix
+            backend:
+              service:
+                name: kyverno-backend
+                port:
+                  number: 3001
           # Next.js 프론트엔드 대시보드 UI 라우팅
           - path: /
             pathType: Prefix

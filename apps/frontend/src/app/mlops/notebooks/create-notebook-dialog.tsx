@@ -48,6 +48,26 @@ export function CreateNotebookDialog({
       return;
     }
 
+    if (specMode === "preset") {
+      const selectedTier = presets?.hardwareTiers.find(
+        (t) => t.id === hardwareTier,
+      );
+      if (selectedTier && selectedTier.isAvailable === false) {
+        setErrorMsg(
+          selectedTier.disabledReason ||
+            "선택하신 하드웨어 사양은 현재 클러스터에서 지원되지 않습니다.",
+        );
+        return;
+      }
+    } else if (specMode === "custom") {
+      if (customGpu > 0) {
+        setErrorMsg(
+          "현재 클러스터(프리티어/CPU 전용)에서는 GPU 가속기를 지원하지 않습니다.",
+        );
+        return;
+      }
+    }
+
     try {
       await createMutation.mutateAsync({
         name: name.trim().toLowerCase(),
@@ -167,42 +187,76 @@ export function CreateNotebookDialog({
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 gap-2">
-                    {presets?.hardwareTiers.map((tier) => (
-                      <label
-                        key={tier.id}
-                        className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${
-                          hardwareTier === tier.id
-                            ? "border-indigo-500 bg-indigo-500/5 ring-1 ring-indigo-500"
-                            : "border-border hover:bg-muted/50"
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="radio"
-                            name="hardwareTier"
-                            value={tier.id}
-                            checked={hardwareTier === tier.id}
-                            onChange={(e) => setHardwareTier(e.target.value)}
-                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500"
-                          />
-                          <div>
-                            <p className="text-sm font-medium">{tier.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              Limit: CPU {tier.cpuLimit} / RAM{" "}
-                              {tier.memoryLimit}
-                              {tier.isGpuRequired &&
-                                ` / GPU ${tier.gpuLimit}ea`}
-                            </p>
+                    {presets?.hardwareTiers.map((tier) => {
+                      const isDisabled = tier.isAvailable === false;
+                      return (
+                        <label
+                          key={tier.id}
+                          className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
+                            isDisabled
+                              ? "opacity-60 bg-slate-100/70 border-slate-200 cursor-not-allowed text-slate-500"
+                              : hardwareTier === tier.id
+                                ? "border-indigo-500 bg-indigo-500/5 ring-1 ring-indigo-500 cursor-pointer"
+                                : "border-border hover:bg-muted/50 cursor-pointer"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="radio"
+                              name="hardwareTier"
+                              value={tier.id}
+                              checked={hardwareTier === tier.id}
+                              disabled={isDisabled}
+                              onChange={(e) =>
+                                !isDisabled && setHardwareTier(e.target.value)
+                              }
+                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 disabled:opacity-30 disabled:cursor-not-allowed"
+                            />
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p
+                                  className={`text-sm font-medium ${
+                                    isDisabled
+                                      ? "text-slate-600 line-through decoration-slate-400"
+                                      : ""
+                                  }`}
+                                >
+                                  {tier.name}
+                                </p>
+                                {isDisabled && (
+                                  <span className="text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
+                                    지원 불가 (미구성)
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                Limit: CPU {tier.cpuLimit} / RAM{" "}
+                                {tier.memoryLimit}
+                                {tier.isGpuRequired &&
+                                  ` / GPU ${tier.gpuLimit}ea`}
+                              </p>
+                              {isDisabled && tier.disabledReason && (
+                                <p className="text-[11px] text-amber-700 mt-0.5 font-medium">
+                                  ⚠️ {tier.disabledReason}
+                                </p>
+                              )}
+                            </div>
                           </div>
-                        </div>
 
-                        {tier.isGpuRequired && (
-                          <span className="px-2 py-0.5 text-xs font-semibold rounded bg-amber-500/10 text-amber-600 border border-amber-500/20">
-                            NVIDIA GPU
-                          </span>
-                        )}
-                      </label>
-                    ))}
+                          {tier.isGpuRequired && (
+                            <span
+                              className={`px-2 py-0.5 text-xs font-semibold rounded ${
+                                isDisabled
+                                  ? "bg-slate-200/80 text-slate-400 border border-slate-300"
+                                  : "bg-amber-500/10 text-amber-600 border border-amber-500/20"
+                              }`}
+                            >
+                              NVIDIA GPU
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })}
                   </div>
                 )
               ) : (
@@ -217,13 +271,13 @@ export function CreateNotebookDialog({
                         </span>
                       </span>
                       <span className="text-muted-foreground">
-                        1 ~ 16 Cores
+                        1 ~ 4 Cores (프리티어 노드 한도)
                       </span>
                     </div>
                     <input
                       type="range"
                       min={1}
-                      max={16}
+                      max={4}
                       step={1}
                       value={customCpu}
                       onChange={(e) => setCustomCpu(Number(e.target.value))}
@@ -240,13 +294,15 @@ export function CreateNotebookDialog({
                           {customMemoryGb} GB
                         </span>
                       </span>
-                      <span className="text-muted-foreground">2 ~ 64 GB</span>
+                      <span className="text-muted-foreground">
+                        2 ~ 8 GB (프리티어 노드 한도)
+                      </span>
                     </div>
                     <input
                       type="range"
                       min={2}
-                      max={64}
-                      step={2}
+                      max={8}
+                      step={1}
                       value={customMemoryGb}
                       onChange={(e) =>
                         setCustomMemoryGb(Number(e.target.value))
@@ -255,38 +311,42 @@ export function CreateNotebookDialog({
                     />
                   </div>
 
-                  {/* GPU 개수 */}
-                  <div className="space-y-1.5">
+                  {/* GPU 개수 (프리티어 미지원) */}
+                  <div className="space-y-1.5 p-3 rounded-lg border border-amber-200/70 bg-amber-50/40">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-slate-700">
-                        NVIDIA GPU 가속기:{" "}
-                        <span
-                          className={
-                            customGpu > 0
-                              ? "text-amber-600 font-bold"
-                              : "text-slate-500 font-bold"
-                          }
-                        >
-                          {customGpu > 0
-                            ? `${customGpu} GPU`
-                            : "사용 안 함 (0)"}
+                      <span className="font-semibold text-slate-700 flex items-center gap-1.5">
+                        <span className="text-amber-900">
+                          NVIDIA GPU 가속기
+                        </span>
+                        <span className="text-[10px] bg-rose-100 text-rose-700 border border-rose-200 px-1.5 py-0.5 rounded font-medium">
+                          프리티어 미지원
                         </span>
                       </span>
-                      <span className="text-muted-foreground">0 ~ 4 GPUs</span>
+                      <span className="text-slate-500 font-bold">
+                        사용 안 함 (0)
+                      </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {[0, 1, 2, 4].map((g) => (
+                    <p className="text-[11px] text-slate-500 leading-tight">
+                      현재 EKS 클러스터(t3/m5 CPU 노드)는 프리티어 환경으로 GPU
+                      하드웨어가 구성되어 있지 않습니다.
+                    </p>
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setCustomGpu(0)}
+                        className="flex-1 py-1.5 rounded-lg border text-xs font-semibold border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500 cursor-default"
+                      >
+                        None (CPU 전용)
+                      </button>
+                      {[1, 2, 4].map((g) => (
                         <button
                           key={g}
                           type="button"
-                          onClick={() => setCustomGpu(g)}
-                          className={`flex-1 py-1.5 rounded-lg border text-xs font-medium transition-all ${
-                            customGpu === g
-                              ? "border-amber-500 bg-amber-500/10 text-amber-700 font-semibold ring-1 ring-amber-500"
-                              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                          }`}
+                          disabled
+                          title="현재 클러스터에 GPU 노드가 없어 선택할 수 없습니다."
+                          className="flex-1 py-1.5 rounded-lg border text-xs font-medium border-slate-200 bg-slate-100/80 text-slate-400 cursor-not-allowed opacity-50 line-through"
                         >
-                          {g === 0 ? "None" : `${g} GPU`}
+                          {g} GPU
                         </button>
                       ))}
                     </div>
@@ -295,8 +355,7 @@ export function CreateNotebookDialog({
                   <div className="pt-2 border-t border-indigo-100/60 flex items-center justify-between text-[11px] text-slate-500 font-mono">
                     <span>적용 사양:</span>
                     <span>
-                      CPU {customCpu} Core / RAM {customMemoryGb}GiB{" "}
-                      {customGpu > 0 && `/ GPU ${customGpu}ea`}
+                      CPU {customCpu} Core / RAM {customMemoryGb}GiB (CPU 전용)
                     </span>
                   </div>
                 </div>
