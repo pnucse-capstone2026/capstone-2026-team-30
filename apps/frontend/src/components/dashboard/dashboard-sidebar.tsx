@@ -22,6 +22,7 @@ import {
 
 import { LogoutButton } from "@/components/auth/logout-button";
 import { useAuthStore } from "@/lib/auth-store";
+import { useSystemModules, type PlatformModuleId } from "@/lib/system-modules";
 
 type DashboardSidebarProps = {
   variant?: "user" | "admin";
@@ -32,14 +33,30 @@ type NavigationItem = {
   label: string;
   href: string;
   icon: LucideIcon;
+  moduleId?: PlatformModuleId;
 };
 
 const navigation: Record<"user" | "admin", NavigationItem[]> = {
   user: [
     { label: "대시보드", href: "/dashboard", icon: LayoutDashboard },
-    { label: "정책 테스트 랩", href: "/simulation", icon: FlaskConical },
-    { label: "Enforce 차단 AI 진단", href: "/diagnostics", icon: Sparkles },
-    { label: "MLOps 노트북", href: "/mlops/notebooks", icon: Layers },
+    {
+      label: "정책 테스트 랩",
+      href: "/simulation",
+      icon: FlaskConical,
+      moduleId: "simulation",
+    },
+    {
+      label: "Enforce 차단 AI 진단",
+      href: "/diagnostics",
+      icon: Sparkles,
+      moduleId: "aiAgent",
+    },
+    {
+      label: "MLOps 노트북",
+      href: "/mlops/notebooks",
+      icon: Layers,
+      moduleId: "mlops",
+    },
     { label: "클러스터", href: "/clusters", icon: Server },
     { label: "정책", href: "/policies", icon: ShieldCheck },
     { label: "내 리소스 위반", href: "/violations", icon: FileWarning },
@@ -53,9 +70,24 @@ const navigation: Record<"user" | "admin", NavigationItem[]> = {
       href: "/admin/dashboard",
       icon: LayoutDashboard,
     },
-    { label: "정책 테스트 랩", href: "/simulation", icon: FlaskConical },
-    { label: "MLOps 노트북 관리", href: "/mlops/notebooks", icon: Layers },
-    { label: "MLOps 거버넌스", href: "/mlops/governance", icon: Coins },
+    {
+      label: "정책 테스트 랩",
+      href: "/simulation",
+      icon: FlaskConical,
+      moduleId: "simulation",
+    },
+    {
+      label: "MLOps 노트북 관리",
+      href: "/mlops/notebooks",
+      icon: Layers,
+      moduleId: "mlops",
+    },
+    {
+      label: "MLOps 거버넌스",
+      href: "/mlops/governance",
+      icon: Coins,
+      moduleId: "mlops",
+    },
     { label: "클러스터 관리", href: "/admin/clusters", icon: Server },
     { label: "정책 관리", href: "/admin/policies", icon: ShieldCheck },
     { label: "사용자 관리", href: "/admin/users", icon: Users },
@@ -84,9 +116,13 @@ export function DashboardSidebar({
   activeHref,
 }: DashboardSidebarProps) {
   const user = useAuthStore((state) => state.user);
-  const items = navigation[variant].filter(
-    (item) => user?.role === "ADMIN" || item.href !== "/admin/users",
-  );
+  const { isModuleEnabled } = useSystemModules();
+  const items = navigation[variant].filter((item) => {
+    if (user?.role !== "ADMIN" && item.href === "/admin/users") return false;
+    // 비활성화된 기능 모듈 메뉴 자동 숨김
+    if (item.moduleId && !isModuleEnabled(item.moduleId)) return false;
+    return true;
+  });
   const currentHref =
     activeHref ?? (variant === "admin" ? "/admin/dashboard" : "/dashboard");
   const profileActive = currentHref === "/me";
