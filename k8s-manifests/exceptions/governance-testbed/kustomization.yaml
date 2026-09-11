@@ -1,11 +1,4 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - 5cb6f69b-6747-459a-bdc3-baea8dbd4934.yaml
-  - 68766a0a-db64-48db-9e72-d3fc433a31c4.yaml
-  - c5369b16-7a22-4120-bb4f-ae7d0a762a41.yaml
-  - 924f1263-c6e8-44e6-a714-e386e5748f46.yaml
-  - 8f2fe1ee-b999-4e15-ab7e-cfaedfdebe63.yaml
-  - 7021be6b-6134-4ecd-aa60-b114231f5241.yaml
-  - 7cf96ca6-d785-4efb-b75f-bf8188fc2dde.yaml
-  - 2a77c5e9-8c64-4c73-b91f-d18cc67792a3.yaml
+  - pac-exception-sample.yaml

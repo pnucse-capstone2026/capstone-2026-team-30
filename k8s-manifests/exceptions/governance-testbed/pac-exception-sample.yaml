@@ -3,20 +3,20 @@ kind: PolicyException
 metadata:
   labels:
     app.kubernetes.io/managed-by: pac-kyverno-dashboard
-    pac.kyverno.io/request-id: c5369b16-7a22-4120-bb4f-ae7d0a762a41
-  name: pac-exception-c5369b16-7a22-4120-bb4f-ae7d0a762a41
+    pac.kyverno.io/request-id: sample-exception-001
+  name: pac-exception-sample
   namespace: governance-testbed
 spec:
   exceptions:
-    - policyName: disallow-latest-tag
+    - policyName: disallow-privileged-containers
       ruleNames:
-        - disallow-latest-tag
+        - disallow-privileged-containers
   match:
     any:
       - resources:
           kinds:
             - Pod
           names:
-            - legacy-batch-worker
+            - user-network-debugger
           namespaces:
             - governance-testbed
