@@ -19,6 +19,7 @@ import {
 import { DashboardPageShell } from "@/components/dashboard/dashboard-page-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useAuthStore } from "@/lib/auth-store";
 import {
   cancelExceptionRequest,
   getExceptionRequest,
@@ -47,6 +48,9 @@ type PageProps = {
 
 export default function MyExceptionRequestDetailPage({ params }: PageProps) {
   const { id } = use(params);
+  const user = useAuthStore((state) => state.user);
+  const sidebarVariant = user?.role === "ADMIN" ? "admin" : "user";
+
   const [request, setRequest] = useState<ExceptionRequest | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -112,8 +116,8 @@ export default function MyExceptionRequestDetailPage({ params }: PageProps) {
 
   return (
     <DashboardPageShell
-      variant="user"
-      activeHref="/exceptions"
+      variant={sidebarVariant}
+      activeHref={user?.role === "ADMIN" ? "/admin/exceptions" : "/exceptions"}
       title="예외 신청 상세"
       description="내가 신청한 정책 예외의 검토 상태와 적용 조건을 확인합니다."
       actions={
@@ -123,7 +127,11 @@ export default function MyExceptionRequestDetailPage({ params }: PageProps) {
             variant="outline"
             className="h-10 rounded-xl border-slate-200 bg-white"
           >
-            <Link href="/exceptions">
+            <Link
+              href={
+                user?.role === "ADMIN" ? "/admin/exceptions" : "/exceptions"
+              }
+            >
               <ArrowLeft className="size-4" />
               목록
             </Link>
@@ -132,7 +140,13 @@ export default function MyExceptionRequestDetailPage({ params }: PageProps) {
             asChild
             className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]"
           >
-            <Link href="/exceptions/new">
+            <Link
+              href={
+                user?.role === "ADMIN"
+                  ? "/admin/exceptions/new"
+                  : "/exceptions/new"
+              }
+            >
               <FilePlus2 className="size-4" />
               {canRequestAgain ? "다시 신청" : "새 예외 신청"}
             </Link>

@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuthStore } from "@/lib/auth-store";
 import { useDataStore } from "@/lib/data-store";
 import {
   exceptionStatusClassName,
@@ -44,6 +45,9 @@ const modeOptions: PolicyMode[] = ["enforce", "audit"];
 const statusOptions: PolicyStatus[] = ["active", "warning"];
 
 export default function PoliciesPage() {
+  const user = useAuthStore((state) => state.user);
+  const sidebarVariant = user?.role === "ADMIN" ? "admin" : "user";
+
   const [livePolicies, setLivePolicies] = useState<KyvernoPolicy[] | null>(
     null,
   );
@@ -142,7 +146,8 @@ export default function PoliciesPage() {
 
   return (
     <DashboardPageShell
-      activeHref="/policies"
+      variant={sidebarVariant}
+      activeHref={user?.role === "ADMIN" ? "/admin/policies" : "/policies"}
       title="정책"
       description="내가 지켜야 하는 Kyverno 정책과 예외 신청 기준을 확인합니다."
     >

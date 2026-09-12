@@ -146,6 +146,9 @@ function MyViolationsContent() {
   const fetchViolations = useDataStore((state) => state.fetchViolations);
   const violationsLoading = useDataStore((state) => state.violationsLoading);
 
+  const user = useAuthStore((state) => state.user);
+  const sidebarVariant = user?.role === "ADMIN" ? "admin" : "user";
+
   const authStatus = useAuthStore((state) => state.status);
   const initializeAuth = useAuthStore((state) => state.initialize);
 
@@ -291,7 +294,8 @@ function MyViolationsContent() {
 
   return (
     <DashboardPageShell
-      activeHref="/violations"
+      variant={sidebarVariant}
+      activeHref={user?.role === "ADMIN" ? "/admin/violations" : "/violations"}
       title="내 리소스 위반"
       description="내가 배포한 리소스가 어떤 정책을 위반했는지 확인합니다."
       actions={
@@ -312,7 +316,13 @@ function MyViolationsContent() {
             asChild
             className="hidden h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b] sm:inline-flex"
           >
-            <Link href="/exceptions/new">
+            <Link
+              href={
+                user?.role === "ADMIN"
+                  ? "/admin/exceptions/new"
+                  : "/exceptions/new"
+              }
+            >
               <FilePlus2 className="size-4" />
               예외 신청
             </Link>
@@ -629,7 +639,7 @@ function MyViolationsContent() {
                           className="h-9 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]"
                         >
                           <Link
-                            href={`/exceptions/new?policy=${encodeURIComponent(violation.policyName)}&rule=${encodeURIComponent(violation.ruleName)}&cluster=${encodeURIComponent(violation.clusterId || violation.clusterName)}&resource=${encodeURIComponent(violation.resourceName)}&kind=${encodeURIComponent(violation.resourceKind)}&namespace=${encodeURIComponent(violation.namespace || "")}`}
+                            href={`${user?.role === "ADMIN" ? "/admin/exceptions/new" : "/exceptions/new"}?policy=${encodeURIComponent(violation.policyName)}&rule=${encodeURIComponent(violation.ruleName)}&cluster=${encodeURIComponent(violation.clusterId || violation.clusterName)}&resource=${encodeURIComponent(violation.resourceName)}&kind=${encodeURIComponent(violation.resourceKind)}&namespace=${encodeURIComponent(violation.namespace || "")}`}
                           >
                             <FilePlus2 className="size-4" />
                             예외 신청

@@ -120,6 +120,7 @@ spec:
 
 export default function EnforceDiagnosticsPage() {
   const user = useAuthStore((state) => state.user);
+  const sidebarVariant = user?.role === "ADMIN" ? "admin" : "user";
 
   const [manifestYaml, setManifestYaml] = useState<string>(
     PRESET_SAMPLES[0].yaml,
@@ -189,7 +190,7 @@ export default function EnforceDiagnosticsPage() {
       <DashboardPageShell
         title="Enforce 차단 매니페스트 AI 진단"
         description="Enforce 정책으로 인해 입구(Admission)에서 거부되어 PolicyReport가 생성되지 않는 매니페스트의 원인을 규명하고 즉시 통과 가능한 수정안을 제공합니다."
-        variant="user"
+        variant={sidebarVariant}
         activeHref="/diagnostics"
       >
         <div className="space-y-6">
@@ -510,7 +511,13 @@ export default function EnforceDiagnosticsPage() {
                         업무 특성상 규정 수정을 할 수 없고 예외가 필요하신가요?
                       </span>
                     </div>
-                    <Link href="/exceptions/new">
+                    <Link
+                      href={
+                        user?.role === "ADMIN"
+                          ? "/admin/exceptions/new"
+                          : "/exceptions/new"
+                      }
+                    >
                       <Button
                         size="sm"
                         className="w-full sm:w-auto gap-2 bg-gradient-to-r from-amber-500 to-orange-500 font-semibold text-slate-950 hover:from-amber-400 hover:to-orange-400 text-xs shadow-sm"

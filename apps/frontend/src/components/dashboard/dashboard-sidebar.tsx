@@ -77,6 +77,12 @@ const navigation: Record<"user" | "admin", NavigationItem[]> = {
       moduleId: "simulation",
     },
     {
+      label: "Enforce 차단 AI 진단",
+      href: "/diagnostics",
+      icon: Sparkles,
+      moduleId: "aiAgent",
+    },
+    {
       label: "MLOps 노트북 관리",
       href: "/mlops/notebooks",
       icon: Layers,

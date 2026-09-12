@@ -67,6 +67,9 @@ function ExceptionRequestContent() {
   const paramRepo = searchParams.get("repo") || "";
   const paramPr = searchParams.get("pr") || "";
 
+  const user = useAuthStore((state) => state.user);
+  const sidebarVariant = user?.role === "ADMIN" ? "admin" : "user";
+
   const [policyName, setPolicyName] = useState(paramPolicy);
   const [ruleNames, setRuleNames] = useState(paramRule);
   const [resourceKind, setResourceKind] = useState(paramKind || "Pod");
@@ -258,7 +261,7 @@ function ExceptionRequestContent() {
         expiresAt,
       });
       toast.success("예외 신청이 생성되었습니다.");
-      router.push("/exceptions");
+      router.push(user?.role === "ADMIN" ? "/admin/exceptions" : "/exceptions");
       router.refresh();
     } catch (error) {
       setErrorMessage(
@@ -273,7 +276,12 @@ function ExceptionRequestContent() {
 
   return (
     <main className="flex min-h-dvh bg-[#f4f7fb] text-slate-950">
-      <DashboardSidebar variant="user" activeHref="/exceptions/new" />
+      <DashboardSidebar
+        variant={sidebarVariant}
+        activeHref={
+          user?.role === "ADMIN" ? "/admin/exceptions" : "/exceptions/new"
+        }
+      />
 
       <div className="min-w-0 flex-1">
         <header className="sticky top-0 z-20 flex h-20 items-center border-b border-slate-200 bg-white/95 px-5 backdrop-blur-sm sm:px-8">
@@ -298,7 +306,11 @@ function ExceptionRequestContent() {
               variant="outline"
               className="hidden h-10 rounded-xl border-slate-200 bg-white text-slate-700 sm:inline-flex"
             >
-              <Link href="/dashboard">
+              <Link
+                href={
+                  user?.role === "ADMIN" ? "/admin/dashboard" : "/dashboard"
+                }
+              >
                 <ArrowLeft className="size-4" />
                 대시보드
               </Link>
@@ -720,7 +732,15 @@ function ExceptionRequestContent() {
                     variant="outline"
                     className="h-10 rounded-xl border-slate-200 bg-white text-slate-700"
                   >
-                    <Link href="/dashboard">취소</Link>
+                    <Link
+                      href={
+                        user?.role === "ADMIN"
+                          ? "/admin/exceptions"
+                          : "/dashboard"
+                      }
+                    >
+                      취소
+                    </Link>
                   </Button>
                   <Button
                     type="submit"

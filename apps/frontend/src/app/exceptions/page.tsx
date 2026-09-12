@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuthStore } from "@/lib/auth-store";
 import { useDataStore } from "@/lib/data-store";
 import {
   AlertCircle,
@@ -69,6 +70,9 @@ export default function MyExceptionRequestsPage() {
   const cachedRequests = useDataStore((state) => state.exceptions);
   const fetchExceptions = useDataStore((state) => state.fetchExceptions);
   const exceptionsLoading = useDataStore((state) => state.exceptionsLoading);
+
+  const user = useAuthStore((state) => state.user);
+  const sidebarVariant = user?.role === "ADMIN" ? "admin" : "user";
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -213,7 +217,12 @@ export default function MyExceptionRequestsPage() {
 
   return (
     <main className="flex min-h-dvh bg-[#f4f7fb] text-slate-950">
-      <DashboardSidebar variant="user" activeHref="/exceptions" />
+      <DashboardSidebar
+        variant={sidebarVariant}
+        activeHref={
+          user?.role === "ADMIN" ? "/admin/exceptions" : "/exceptions"
+        }
+      />
 
       <div className="min-w-0 flex-1">
         <header className="sticky top-0 z-20 flex h-20 items-center border-b border-slate-200 bg-white/95 px-5 backdrop-blur-sm sm:px-8">
@@ -237,7 +246,13 @@ export default function MyExceptionRequestsPage() {
               asChild
               className="hidden h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b] sm:inline-flex"
             >
-              <Link href="/exceptions/new">
+              <Link
+                href={
+                  user?.role === "ADMIN"
+                    ? "/admin/exceptions/new"
+                    : "/exceptions/new"
+                }
+              >
                 <FilePlus2 className="size-4" />
                 예외 신청
               </Link>

@@ -80,6 +80,9 @@ export default function ClustersPage() {
   >(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  const user = useAuthStore((state) => state.user);
+  const sidebarVariant = user?.role === "ADMIN" ? "admin" : "user";
+
   const authStatus = useAuthStore((state) => state.status);
   const initializeAuth = useAuthStore((state) => state.initialize);
 
@@ -264,7 +267,8 @@ export default function ClustersPage() {
 
   return (
     <DashboardPageShell
-      activeHref="/clusters"
+      variant={sidebarVariant}
+      activeHref={user?.role === "ADMIN" ? "/admin/clusters" : "/clusters"}
       title="클러스터"
       description="내가 접근 가능한 클러스터와 정책 적용 상태를 확인합니다."
       actions={

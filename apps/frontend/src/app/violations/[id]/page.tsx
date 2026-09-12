@@ -54,6 +54,9 @@ export default function MyViolationDetailPage({
 }: MyViolationDetailPageProps) {
   const { id: rawId } = use(params);
   const id = decodeURIComponent(rawId);
+  const user = useAuthStore((state) => state.user);
+  const sidebarVariant = user?.role === "ADMIN" ? "admin" : "user";
+
   const [violation, setViolation] = useState<PolicyViolation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -108,7 +111,10 @@ export default function MyViolationDetailPage({
   if (!violation) {
     return (
       <DashboardPageShell
-        activeHref="/violations"
+        variant={sidebarVariant}
+        activeHref={
+          user?.role === "ADMIN" ? "/admin/violations" : "/violations"
+        }
         title="위반 상세"
         description="정책 위반 원인과 조치 방향을 확인합니다."
       >
@@ -121,7 +127,13 @@ export default function MyViolationDetailPage({
             삭제되었습니다.
           </p>
           <Button asChild className="mt-4 rounded-xl bg-[#0b2342] text-white">
-            <Link href="/violations">목록으로 돌아가기</Link>
+            <Link
+              href={
+                user?.role === "ADMIN" ? "/admin/violations" : "/violations"
+              }
+            >
+              목록으로 돌아가기
+            </Link>
           </Button>
         </div>
       </DashboardPageShell>
@@ -132,7 +144,8 @@ export default function MyViolationDetailPage({
 
   return (
     <DashboardPageShell
-      activeHref="/violations"
+      variant={sidebarVariant}
+      activeHref={user?.role === "ADMIN" ? "/admin/violations" : "/violations"}
       title="위반 상세"
       description="정책 위반 원인과 조치 방향을 확인합니다."
       actions={
@@ -141,7 +154,9 @@ export default function MyViolationDetailPage({
           variant="outline"
           className="hidden h-10 rounded-xl border-slate-200 bg-white sm:inline-flex"
         >
-          <Link href="/violations">
+          <Link
+            href={user?.role === "ADMIN" ? "/admin/violations" : "/violations"}
+          >
             <ArrowLeft className="size-4" />
             목록
           </Link>
@@ -193,7 +208,7 @@ export default function MyViolationDetailPage({
               className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]"
             >
               <Link
-                href={`/exceptions/new?policy=${encodeURIComponent(violation.policyName)}&rule=${encodeURIComponent(violation.ruleName)}&cluster=${encodeURIComponent(violation.clusterId || violation.clusterName)}&resource=${encodeURIComponent(violation.resourceName)}&kind=${encodeURIComponent(violation.resourceKind)}&namespace=${encodeURIComponent(violation.namespace || "")}`}
+                href={`${user?.role === "ADMIN" ? "/admin/exceptions/new" : "/exceptions/new"}?policy=${encodeURIComponent(violation.policyName)}&rule=${encodeURIComponent(violation.ruleName)}&cluster=${encodeURIComponent(violation.clusterId || violation.clusterName)}&resource=${encodeURIComponent(violation.resourceName)}&kind=${encodeURIComponent(violation.resourceKind)}&namespace=${encodeURIComponent(violation.namespace || "")}`}
               >
                 <FilePlus2 className="size-4" />
                 예외 신청 작성

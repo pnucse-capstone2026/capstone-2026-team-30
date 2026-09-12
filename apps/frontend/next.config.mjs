@@ -6,7 +6,10 @@ const nextConfig = {
   async rewrites() {
     const backendUrl =
       process.env.INTERNAL_BACKEND_URL ||
-      "http://kyverno-backend.kyverno-platform.svc.cluster.local:3001";
+      process.env.BACKEND_URL ||
+      (process.env.KUBERNETES_SERVICE_HOST
+        ? "http://kyverno-backend.kyverno-platform.svc.cluster.local:3001"
+        : "http://127.0.0.1:3001");
     return [
       {
         source: "/api/:path*",

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowDownRight,
@@ -43,9 +44,18 @@ const toneStyles = {
  * 사용자 메인 대시보드 페이지 컴포넌트입니다.
  */
 export default function UserDashboardPage() {
+  const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const authStatus = useAuthStore((state) => state.status);
   const initializeAuth = useAuthStore((state) => state.initialize);
+
+  const sidebarVariant = user?.role === "ADMIN" ? "admin" : "user";
+
+  useEffect(() => {
+    if (authStatus === "authenticated" && user?.role === "ADMIN") {
+      router.replace("/admin/dashboard");
+    }
+  }, [authStatus, user, router]);
 
   const liveClusters = useDataStore((state) => state.clusters);
   const livePolicies = useDataStore((state) => state.policies);
@@ -132,7 +142,7 @@ export default function UserDashboardPage() {
 
   return (
     <main className="flex min-h-dvh bg-[#f4f7fb] text-slate-950">
-      <DashboardSidebar variant="user" />
+      <DashboardSidebar variant={sidebarVariant} />
 
       <div className="min-w-0 flex-1">
         <header className="sticky top-0 z-20 flex h-20 items-center border-b border-slate-200 bg-white/95 px-5 backdrop-blur-sm sm:px-8">
