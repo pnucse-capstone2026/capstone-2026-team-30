@@ -28,6 +28,7 @@ UNINSTALL=false
 DRY_RUN=false
 NAMESPACE="kyverno-platform"
 STORAGE_CLASS=""
+SKIP_ROLLOUT=false
 
 # Modular component enablement defaults (Backward-compatible: all true by default)
 ENABLE_MLOPS=true
@@ -186,6 +187,10 @@ while [[ $# -gt 0 ]]; do
       MODULE_FLAG_SPECIFIED=true
       shift 2
       ;;
+    --skip-rollout)
+      SKIP_ROLLOUT=true
+      shift
+      ;;
     -i|--interactive)
       PROMPT_MODULES=true
       shift
@@ -322,13 +327,14 @@ else
   log_info "Checking Kyverno Policy Engine installation..."
   if ! "${KUBECTL}" get crd clusterpolicies.kyverno.io >/dev/null 2>&1; then
     log_warn "Kyverno CRD (clusterpolicies.kyverno.io) was not detected in this cluster."
-    echo -n "Would you like to install the official Kyverno release (v1.12.5) now? [Y/n]: "
-    if [ -t 0 ]; then
-      read -r KYVERNO_CHOICE
+    if [ "${SKIP_ROLLOUT}" = true ] || [ ! -t 0 ]; then
+      KYVERNO_CHOICE="n"
+      log_info "[SKIP] Skipping Kyverno runtime install in automated/skip-rollout mode."
     else
-      KYVERNO_CHOICE="Y"
+      echo -n "Would you like to install the official Kyverno release (v1.12.5) now? [Y/n]: "
+      read -r -t 10 KYVERNO_CHOICE || KYVERNO_CHOICE="n"
     fi
-    if [[ "${KYVERNO_CHOICE}" =~ ^[Yy]?$ ]]; then
+    if [[ "${KYVERNO_CHOICE}" =~ ^[Yy]$ ]]; then
       log_info "Installing Kyverno v1.12.5 manifests..."
       "${KUBECTL}" create -f https://github.com/kyverno/kyverno/releases/download/v1.12.5/install.yaml || true
       log_info "Waiting for Kyverno admission controller readiness..."
@@ -462,14 +468,18 @@ fi
 
 # 8. Wait for workload rollouts
 log_header "Verifying Rollout Status"
-log_info "1/3. Waiting for PostgreSQL database to be ready..."
-"${KUBECTL}" rollout status deployment/postgres -n "${NAMESPACE}" --timeout=180s
+if [ "${SKIP_ROLLOUT}" = true ]; then
+  log_info "[SKIP] Skipping workload rollout status check (--skip-rollout specified)."
+else
+  log_info "1/3. Waiting for PostgreSQL database to be ready..."
+  "${KUBECTL}" rollout status deployment/postgres -n "${NAMESPACE}" --timeout=180s
 
-log_info "2/3. Waiting for Backend & DB Migrations to complete..."
-"${KUBECTL}" rollout status deployment/kyverno-backend -n "${NAMESPACE}" --timeout=240s
+  log_info "2/3. Waiting for Backend & DB Migrations to complete..."
+  "${KUBECTL}" rollout status deployment/kyverno-backend -n "${NAMESPACE}" --timeout=240s
 
-log_info "3/3. Waiting for Frontend Dashboard to be ready..."
-"${KUBECTL}" rollout status deployment/kyverno-frontend -n "${NAMESPACE}" --timeout=180s
+  log_info "3/3. Waiting for Frontend Dashboard to be ready..."
+  "${KUBECTL}" rollout status deployment/kyverno-frontend -n "${NAMESPACE}" --timeout=180s
+fi
 
 # 9. Determine external access endpoint
 log_header "Deployment Summary & Credentials"
