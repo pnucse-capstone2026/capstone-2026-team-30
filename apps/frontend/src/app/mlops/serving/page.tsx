@@ -14,7 +14,6 @@ import {
 import { DeployModelDialog } from "./deploy-model-dialog";
 import { CanaryTrafficSlider } from "./canary-traffic-slider";
 import { ApiTestConsoleDialog } from "./api-test-console-dialog";
-import { CopilotDrawer } from "@/components/mlops/copilot-drawer";
 import {
   Server,
   Activity,
@@ -308,13 +307,6 @@ export default function ServingPage() {
             ))}
           </div>
         )}
-
-        {/* MLOps Copilot Drawer */}
-        <CopilotDrawer
-          enabled={false}
-          activePageName="MLOps 모델 서빙 센터 (KServe)"
-          onRefreshList={() => refetch()}
-        />
       </DashboardPageShell>
     </ProtectedRoute>
   );

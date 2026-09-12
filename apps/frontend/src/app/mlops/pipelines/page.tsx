@@ -11,7 +11,6 @@ import { usePipelineRuns, usePipelineRunDetail } from "@/hooks/use-pipelines";
 import { PipelineExecutionForm } from "./pipeline-execution-form";
 import { DagRunMonitor } from "./dag-run-monitor";
 import { LogDrawer } from "./log-drawer";
-import { CopilotDrawer } from "@/components/mlops/copilot-drawer";
 import {
   Workflow,
   CheckCircle2,
@@ -327,13 +326,6 @@ export default function PipelinesPage() {
             onClose={() => setActiveLogPod(null)}
           />
         )}
-
-        {/* MLOps Copilot Drawer */}
-        <CopilotDrawer
-          enabled={false}
-          activePageName="MLOps 파이프라인 스튜디오"
-          onRefreshList={() => refetch()}
-        />
       </DashboardPageShell>
     </ProtectedRoute>
   );

@@ -22,13 +22,12 @@ import { ServingService } from "./serving/serving.service";
 import { ServingController } from "./serving/serving.controller";
 
 import { MlopsAssistantController } from "./ai-assistant/mlops-assistant.controller";
-import { MlopsAssistantService } from "./ai-assistant/mlops-assistant.service";
 import { MlopsIntentParserService } from "./ai-assistant/mlops-intent-parser.service";
 import { WorkloadDiagnosticService } from "./ai-assistant/workload-diagnostic.service";
 
 /**
  * MLOps 자율 통합 플랫폼 기능을 제공하는 NestJS 모듈입니다.
- * Kubeflow Notebook Self-Service API, GPU Quota 관리, Idle 모니터링, KFP 파이프라인, KServe 모델 서빙 센터 서비스 및 AI MLOps Copilot 서비스를 등록합니다.
+ * Kubeflow Notebook Self-Service API, GPU Quota 관리, Idle 모니터링, KFP 파이프라인, KServe 모델 서빙 센터 서비스 및 AI 워크로드 실패 진단 서비스를 등록합니다.
  */
 @Module({
   imports: [
@@ -57,7 +56,6 @@ import { WorkloadDiagnosticService } from "./ai-assistant/workload-diagnostic.se
     PipelinesService,
     KServeAdapter,
     ServingService,
-    MlopsAssistantService,
     MlopsIntentParserService,
     WorkloadDiagnosticService,
   ],
@@ -73,7 +71,6 @@ import { WorkloadDiagnosticService } from "./ai-assistant/workload-diagnostic.se
     PipelinesService,
     KServeAdapter,
     ServingService,
-    MlopsAssistantService,
     MlopsIntentParserService,
     WorkloadDiagnosticService,
   ],

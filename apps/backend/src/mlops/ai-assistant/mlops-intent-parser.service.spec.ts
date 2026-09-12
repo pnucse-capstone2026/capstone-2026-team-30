@@ -36,30 +36,4 @@ describe("MlopsIntentParserService", () => {
       expect(result).toBeNull();
     });
   });
-
-  describe("buildProposedAction", () => {
-    it("should build CREATE_NOTEBOOK proposed action", () => {
-      const action = service.buildProposedAction("CREATE_NOTEBOOK", {
-        name: "my-notebook",
-        hardwareTier: "GPU_T4_STANDARD",
-        frameworkImage: "JUPYTER_PYTORCH",
-      });
-
-      expect(action).toBeDefined();
-      expect(action?.actionType).toBe("CREATE_NOTEBOOK");
-      expect(action?.payload.name).toBe("my-notebook");
-      expect(action?.payload.hardwareTier).toBe("GPU_T4_STANDARD");
-    });
-
-    it("should build DEPLOY_SERVED_MODEL proposed action", () => {
-      const action = service.buildProposedAction("DEPLOY_SERVED_MODEL", {
-        name: "resnet-serving",
-        framework: "PYTORCH",
-      });
-
-      expect(action).toBeDefined();
-      expect(action?.actionType).toBe("DEPLOY_SERVED_MODEL");
-      expect(action?.payload.name).toBe("resnet-serving");
-    });
-  });
 });

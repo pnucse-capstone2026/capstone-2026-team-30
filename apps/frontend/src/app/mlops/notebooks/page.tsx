@@ -11,7 +11,6 @@ import { useNotebooks } from "@/hooks/use-notebooks";
 import { CreateNotebookDialog } from "./create-notebook-dialog";
 import { NotebookStatusBadge } from "./notebook-status-badge";
 import { NotebookActions } from "./notebook-actions";
-import { CopilotDrawer } from "@/components/mlops/copilot-drawer";
 import { MlopsDiagnosticModal } from "@/components/mlops/mlops-diagnostic-modal";
 import {
   BookOpen,
@@ -273,13 +272,6 @@ export default function NotebooksPage() {
             ))}
           </div>
         )}
-
-        {/* MLOps Copilot Drawer */}
-        <CopilotDrawer
-          enabled={false}
-          activePageName="MLOps 노트북 센터"
-          onRefreshList={() => refetch()}
-        />
 
         {/* MLOps Diagnostic Modal */}
         {diagnosticTarget && (
