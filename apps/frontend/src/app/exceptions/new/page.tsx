@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Clock3,
   FileText,
+  GitPullRequest,
   Menu,
   Paperclip,
   Send,
@@ -63,6 +64,8 @@ function ExceptionRequestContent() {
   const paramResource = searchParams.get("resource") || "";
   const paramKind = searchParams.get("kind") || "";
   const paramNamespace = searchParams.get("namespace") || "";
+  const paramRepo = searchParams.get("repo") || "";
+  const paramPr = searchParams.get("pr") || "";
 
   const [policyName, setPolicyName] = useState(paramPolicy);
   const [ruleNames, setRuleNames] = useState(paramRule);
@@ -165,7 +168,9 @@ function ExceptionRequestContent() {
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [reasonValue, setReasonValue] = useState(
-    "긴급 배포 일정으로 인해 리소스 limits 설정을 다음 릴리스에 포함해야 합니다. 예외 기간 동안 사용량을 모니터링하고 종료일 전에 requests/limits를 적용하겠습니다.",
+    paramPr
+      ? `[GitHub PR #${paramPr}${paramRepo ? ` (${paramRepo})` : ""}] 사전 거버넌스 검증 결과에 따른 일시적 정책 예외 신청입니다.`
+      : "긴급 배포 일정으로 인해 리소스 limits 설정을 다음 릴리스에 포함해야 합니다. 예외 기간 동안 사용량을 모니터링하고 종료일 전에 requests/limits를 적용하겠습니다.",
   );
   const [endDateValue, setEndDateValue] = useState(defaultEndDate);
 
@@ -321,12 +326,21 @@ function ExceptionRequestContent() {
                 종료일을 명확히 입력해야 합니다.
               </p>
             </div>
-            {paramResource && (
+            {paramPr ? (
+              <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-700">
+                <GitPullRequest className="size-4 shrink-0 text-blue-600" />
+                <span>
+                  <strong>GitHub PR #{paramPr}</strong>
+                  {paramRepo ? ` (${paramRepo})` : ""} 검증 결과로부터 자동
+                  입력됨
+                </span>
+              </div>
+            ) : paramResource ? (
               <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs text-emerald-700">
-                <CheckCircle2 className="size-4" />
+                <CheckCircle2 className="size-4 shrink-0" />
                 선택된 정책 오류 리소스 정보가 자동으로 바인딩되었습니다.
               </div>
-            )}
+            ) : null}
           </section>
 
           <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -655,6 +669,13 @@ function ExceptionRequestContent() {
                   <textarea
                     id="attachmentNote"
                     name="attachmentNote"
+                    defaultValue={
+                      paramPr
+                        ? paramRepo
+                          ? `GitHub PR: https://github.com/${paramRepo}/pull/${paramPr}`
+                          : `GitHub PR #${paramPr}`
+                        : undefined
+                    }
                     className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-3 focus:ring-blue-500/10"
                     placeholder="관련 변경 요청 번호, 배포 문서, 검토 링크 등을 입력하세요."
                   />
