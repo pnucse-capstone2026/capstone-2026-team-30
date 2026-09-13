@@ -96,6 +96,14 @@ export class GitOpsService {
 
     let suggestedDiff: string | undefined;
     let exceptionDeepLink: string | undefined;
+    let selfCorrectionResult:
+      | {
+          corrected: boolean;
+          attempts: number;
+          suggestedPatch?: string;
+          guidance?: string;
+        }
+      | undefined;
 
     // 3. 위반 발생 시: 예외 딥링크 생성 및 AI 자가 재검증 루프 (Self-Correction Loop)
     if (isBlocked && dryRunResult.allViolations.length > 0) {
@@ -114,12 +122,23 @@ export class GitOpsService {
       });
 
       // AI 교정 및 자가 재검증 수행
-      suggestedDiff = await this.executeSelfCorrectionLoop(
+      const outcome = await this.executeSelfCorrectionLoop(
         dto,
         clusterId,
         dryRunResult.allViolations,
       );
+      suggestedDiff = outcome.suggestedDiff;
+      selfCorrectionResult = outcome.selfCorrectionResult;
     }
+
+    // PR 코멘트 마크다운 본문 빌드
+    const commentMarkdown = this.buildPrCommentMarkdown({
+      dto,
+      dryRunResult,
+      status,
+      suggestedDiff,
+      exceptionDeepLink,
+    });
 
     // 4. GitHub PR Bot 연동: 코멘트 작성 및 Commit Status 등록
     let commentUrl: string | undefined;
@@ -130,7 +149,7 @@ export class GitOpsService {
         dto,
         dryRunResult,
         status,
-        suggestedDiff,
+        commentBody: commentMarkdown,
         exceptionDeepLink,
       });
       commentUrl = gitHubResult.commentUrl;
@@ -144,13 +163,16 @@ export class GitOpsService {
 
     return {
       valid: dryRunResult.valid,
+      dryRunPassed: dryRunResult.valid,
       blocked: isBlocked,
       totalResources: dryRunResult.totalResources,
       blockedCount: dryRunResult.blockedCount,
       status,
       commentUrl,
+      commentMarkdown,
       commitStatus,
       suggestedDiff,
+      selfCorrectionResult,
       exceptionDeepLink,
       violations: dryRunResult.allViolations,
     };
@@ -172,7 +194,15 @@ export class GitOpsService {
     dto: GitOpsPrReviewDto,
     clusterId: string,
     violations: KyvernoViolationDetail[],
-  ): Promise<string | undefined> {
+  ): Promise<{
+    suggestedDiff?: string;
+    selfCorrectionResult: {
+      corrected: boolean;
+      attempts: number;
+      suggestedPatch?: string;
+      guidance?: string;
+    };
+  }> {
     try {
       const primaryViolation = violations[0];
 
@@ -185,7 +215,14 @@ export class GitOpsService {
       });
 
       if (!firstExplanation.suggestedFixYaml) {
-        return firstExplanation.summary;
+        return {
+          suggestedDiff: `<!-- AI Auto-fix could not pass deterministic policy dry-run verification -->\n# 권장 조치 가이드\n${firstExplanation.summary}\n\n## 조치 단계:\n${(firstExplanation.resolutionSteps || []).map((step, idx) => `${idx + 1}. ${step}`).join("\n")}`,
+          selfCorrectionResult: {
+            corrected: false,
+            attempts: 1,
+            guidance: firstExplanation.summary,
+          },
+        };
       }
 
       // 2. 1차 Server-Side Dry-Run 재검증 실행
@@ -200,7 +237,14 @@ export class GitOpsService {
         this.logger.log(
           `[Self-Correction] 1st AI proposed fix passed dry-run validation successfully for PR #${dto.pullNumber}`,
         );
-        return firstExplanation.suggestedFixYaml;
+        return {
+          suggestedDiff: firstExplanation.suggestedFixYaml,
+          selfCorrectionResult: {
+            corrected: true,
+            attempts: 1,
+            suggestedPatch: firstExplanation.suggestedFixYaml,
+          },
+        };
       }
 
       this.logger.warn(
@@ -244,7 +288,14 @@ export class GitOpsService {
           this.logger.log(
             `[Self-Correction] 2nd AI proposed fix passed dry-run validation successfully for PR #${dto.pullNumber}`,
           );
-          return secondExplanation.suggestedFixYaml;
+          return {
+            suggestedDiff: secondExplanation.suggestedFixYaml,
+            selfCorrectionResult: {
+              corrected: true,
+              attempts: 2,
+              suggestedPatch: secondExplanation.suggestedFixYaml,
+            },
+          };
         }
       }
 
@@ -254,14 +305,28 @@ export class GitOpsService {
       );
 
       const finalExplanation = secondExplanation || firstExplanation;
-      return `<!-- AI Auto-fix could not pass deterministic policy dry-run verification -->\n# 권장 조치 가이드\n${finalExplanation.summary}\n\n## 조치 단계:\n${(finalExplanation.resolutionSteps || []).map((step, idx) => `${idx + 1}. ${step}`).join("\n")}`;
+      return {
+        suggestedDiff: `<!-- AI Auto-fix could not pass deterministic policy dry-run verification -->\n# 권장 조치 가이드\n${finalExplanation.summary}\n\n## 조치 단계:\n${(finalExplanation.resolutionSteps || []).map((step, idx) => `${idx + 1}. ${step}`).join("\n")}`,
+        selfCorrectionResult: {
+          corrected: false,
+          attempts: 2,
+          guidance: finalExplanation.summary,
+        },
+      };
     } catch (err) {
       this.logger.warn(
         `Failed to generate AI fix for PR #${dto.pullNumber}: ${
           (err as Error).message
         }`,
       );
-      return undefined;
+      return {
+        suggestedDiff: undefined,
+        selfCorrectionResult: {
+          corrected: false,
+          attempts: 1,
+          guidance: (err as Error).message,
+        },
+      };
     }
   }
 
@@ -272,11 +337,10 @@ export class GitOpsService {
     dto: GitOpsPrReviewDto;
     dryRunResult: ManifestDryRunValidationResult;
     status: "PASSED" | "BLOCKED" | "ERROR";
-    suggestedDiff?: string;
+    commentBody: string;
     exceptionDeepLink?: string;
   }): Promise<{ commentUrl?: string; commitStatus: string }> {
-    const { dto, dryRunResult, status, suggestedDiff, exceptionDeepLink } =
-      params;
+    const { dto, dryRunResult, commentBody, exceptionDeepLink } = params;
     const [owner, repo] = dto.repository.split("/");
 
     if (!owner || !repo) {
@@ -287,15 +351,6 @@ export class GitOpsService {
     }
 
     const octokit = new Octokit({ auth: this.githubToken });
-
-    // 1. PR 코멘트 마크다운 본문 빌드
-    const commentBody = this.buildPrCommentMarkdown({
-      dto,
-      dryRunResult,
-      status,
-      suggestedDiff,
-      exceptionDeepLink,
-    });
 
     let commentUrl: string | undefined;
     try {
@@ -374,11 +429,18 @@ export class GitOpsService {
     url.searchParams.set("repo", params.repository);
     url.searchParams.set("pr", String(params.pullNumber));
     url.searchParams.set("cluster", params.clusterId);
+    url.searchParams.set("clusterId", params.clusterId);
     url.searchParams.set("namespace", params.namespace);
-    if (params.policyName) url.searchParams.set("policy", params.policyName);
+    if (params.policyName) {
+      url.searchParams.set("policy", params.policyName);
+      url.searchParams.set("policyName", params.policyName);
+    }
     if (params.ruleName) url.searchParams.set("rule", params.ruleName);
     if (params.kind) url.searchParams.set("kind", params.kind);
-    if (params.resource) url.searchParams.set("resource", params.resource);
+    if (params.resource) {
+      url.searchParams.set("resource", params.resource);
+      url.searchParams.set("resourceName", params.resource);
+    }
 
     return url.toString();
   }
@@ -445,7 +507,7 @@ export class GitOpsService {
           "<!-- AI Auto-fix could not pass deterministic policy dry-run verification -->",
         )
       ) {
-        markdown += `\n### 🤖 AI 권장 조치 가이드 (Manual Review Required)
+        markdown += `\n### 🤖 AI 권장 조치 가이드 (Manual Review Required) \`[AI Self-Correction Incomplete / Safe Guidance]\`
 ${suggestedDiff}
 `;
       } else {

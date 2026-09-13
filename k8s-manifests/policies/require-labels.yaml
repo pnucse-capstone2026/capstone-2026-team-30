@@ -1,0 +1,55 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-labels
+  annotations:
+    policies.kyverno.io/title: Require Labels
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: Medium
+    policies.kyverno.io/subject: Pod, Deployment
+    policies.kyverno.io/description: >-
+      모든 Pod 및 Deployment에 조직 표준 식별을 위한 app.kubernetes.io/name 및 team 레이블이 필수적으로 포함되어야 합니다.
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    - name: check-for-labels-deployment
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+                - local-path-storage
+      validate:
+        message: "Deployment metadata.labels에 'app.kubernetes.io/name' 및 'team' 레이블이 반드시 지정되어야 합니다."
+        pattern:
+          metadata:
+            labels:
+              app.kubernetes.io/name: "?*"
+              team: "?*"
+    - name: check-for-labels-pod
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+                - local-path-storage
+      validate:
+        message: "Pod metadata.labels에 'app.kubernetes.io/name' 및 'team' 레이블이 반드시 지정되어야 합니다."
+        pattern:
+          metadata:
+            labels:
+              app.kubernetes.io/name: "?*"
+              team: "?*"

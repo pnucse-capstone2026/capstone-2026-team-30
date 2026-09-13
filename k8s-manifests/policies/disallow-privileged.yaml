@@ -1,0 +1,66 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-privileged
+  annotations:
+    policies.kyverno.io/title: Disallow Privileged
+    policies.kyverno.io/category: Pod Security Standards (PSS)
+    policies.kyverno.io/severity: Critical
+    policies.kyverno.io/subject: Pod, Deployment
+    policies.kyverno.io/description: >-
+      보안상 치명적인 privileged: true 설정이 지정된 Pod 및 Deployment 생성을 차단합니다.
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    - name: disallow-privileged-pod
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+                - local-path-storage
+      validate:
+        message: "privileged: true 옵션이 설정된 특권 컨테이너는 보안 정책상 실행될 수 없습니다."
+        pattern:
+          spec:
+            =(ephemeralContainers):
+              - =(securityContext):
+                  =(privileged): "!true"
+            =(initContainers):
+              - =(securityContext):
+                  =(privileged): "!true"
+            containers:
+              - =(securityContext):
+                  =(privileged): "!true"
+    - name: disallow-privileged-deployment
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+                - local-path-storage
+      validate:
+        message: "privileged: true 옵션이 설정된 특권 컨테이너는 보안 정책상 배포될 수 없습니다."
+        pattern:
+          spec:
+            template:
+              spec:
+                =(initContainers):
+                  - =(securityContext):
+                      =(privileged): "!true"
+                containers:
+                  - =(securityContext):
+                      =(privileged): "!true"

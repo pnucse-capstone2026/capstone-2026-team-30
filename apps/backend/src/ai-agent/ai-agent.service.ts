@@ -58,8 +58,9 @@ Output format MUST be a valid JSON object matching the following structure witho
 
 Guidelines:
 1. Translate technical jargon into plain, intuitive Korean.
-2. Provide concrete, copy-pasteable YAML fixes whenever manifest is provided.
-3. Be supportive and instructional, avoiding punitive tone.`;
+2. Provide concrete, copy-pasteable YAML fixes whenever manifest is provided (e.g. adding missing labels, setting resource requests/limits, fixing image tags).
+3. Be supportive and instructional, avoiding punitive tone.
+4. For critical security violations involving privileged containers (securityContext.privileged: true, hostNetwork, hostPID), do NOT provide suggestedFixYaml (set suggestedFixYaml to null). Explain that arbitrary privilege removal breaks workloads requiring raw kernel/device access, and instruct the developer to submit a PolicyException or re-architect the workload safely.`;
 
     let feedbackSection = "";
     if (dto.previousAttemptYaml || dto.validationFeedback) {

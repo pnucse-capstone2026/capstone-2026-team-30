@@ -1,4 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
+import * as yaml from "js-yaml";
 import {
   ExplainKyvernoErrorDto,
   KyvernoErrorExplanationResultDto,
@@ -73,23 +74,15 @@ export class KyvernoRuleTemplateEngine {
     {
       id: "DISALLOW_PRIVILEGED",
       pattern:
-        /privileged|securityContext|disallow-privileged-containers|capability/i,
+        /privileged|securityContext|disallow-privileged-containers|disallow-privileged|capability/i,
       summary:
-        "보안상 매우 위험한 Privileged(특권 권한) 모드로 컨테이너를 실행하려 하여 배포가 거부되었습니다.",
+        "보안상 매우 위험한 Privileged(특권 권한) 모드로 컨테이너를 실행하려 하여 배포가 거부되었습니다. 특권 권한은 시스템에 심각한 위해를 초래할 수 있어 자동 교정이 제한됩니다.",
       resolutionSteps: [
-        "spec.template.spec.containers[].securityContext 설정을 찾습니다.",
+        "spec.template.spec.containers[].securityContext 설정을 확인합니다.",
         "privileged: true 구문을 제거하거나 false로 지정합니다.",
-        "allowPrivilegeEscalation: false 구문을 추가하여 루트 권한 상승을 방지하세요.",
+        "해당 컨테이너에 특권 권한이 불가피하게 필요한 경우, 플랫폼 거버넌스 팀에 PolicyException(정책 예외)을 신청하세요.",
       ],
-      suggestedFixYaml: `spec:
-  template:
-    spec:
-      containers:
-        - name: app
-          securityContext:
-            privileged: false
-            allowPrivilegeEscalation: false
-            runAsNonRoot: true`,
+      suggestedFixYaml: undefined,
       governanceRationale:
         "Privileged 컨테이너가 탈옥당할 경우 호스트 노드의 모든 루트 권한이 노출되어 클러스터 전체가 장악될 수 있는 치명적 보안 위험을 차단합니다.",
     },
@@ -174,10 +167,48 @@ export class KyvernoRuleTemplateEngine {
         this.logger.log(
           `Rule engine matched pattern [${template.id}] for error message`,
         );
+
+        let suggestedFixYaml = template.suggestedFixYaml;
+
+        // 원본 매니페스트가 주어졌고 필수 라벨 누락 위반인 경우, 원본 YAML에 필수 라벨을 직접 주입하여 완전한 수정본 매니페스트 생성
+        if (template.id === "REQUIRE_LABELS" && dto.resourceManifest) {
+          try {
+            const parsed = yaml.load(dto.resourceManifest) as Record<
+              string,
+              unknown
+            >;
+            if (parsed && typeof parsed === "object") {
+              parsed.metadata = (parsed.metadata || {}) as Record<
+                string,
+                unknown
+              >;
+              const metadata = parsed.metadata as Record<string, unknown>;
+              metadata.labels = (metadata.labels || {}) as Record<
+                string,
+                string
+              >;
+              const labels = metadata.labels as Record<string, string>;
+
+              const resourceName =
+                (metadata.name as string) || "governed-workload";
+              if (!labels["app.kubernetes.io/name"]) {
+                labels["app.kubernetes.io/name"] = resourceName;
+              }
+              if (!labels["team"]) {
+                labels["team"] = "platform";
+              }
+
+              suggestedFixYaml = yaml.dump(parsed);
+            }
+          } catch {
+            suggestedFixYaml = template.suggestedFixYaml;
+          }
+        }
+
         return {
           summary: template.summary,
           resolutionSteps: template.resolutionSteps,
-          suggestedFixYaml: template.suggestedFixYaml,
+          suggestedFixYaml,
           governanceRationale: template.governanceRationale,
           provider: "RULE_ENGINE_FALLBACK",
           latencyMs,

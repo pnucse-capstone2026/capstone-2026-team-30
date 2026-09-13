@@ -68,11 +68,31 @@ spec:
 }
 
 /**
+ * AI Self-Correction 실행 결과 상세 DTO
+ */
+export class SelfCorrectionResultDto {
+  @ApiProperty({ description: "자가 교정 및 dry-run 재검증 통과 여부" })
+  corrected: boolean;
+
+  @ApiProperty({ description: "자가 교정 시도 횟수" })
+  attempts: number;
+
+  @ApiPropertyOptional({ description: "자가 교정된 YAML 패치" })
+  suggestedPatch?: string;
+
+  @ApiPropertyOptional({ description: "안전 조치 권장 가이드" })
+  guidance?: string;
+}
+
+/**
  * GitOps PR 검증 결과 응답 DTO
  */
 export class GitOpsPrReviewResultDto {
   @ApiProperty({ description: "전체 매니페스트 유효성 통과 여부" })
   valid: boolean;
+
+  @ApiProperty({ description: "Server-Side Dry-Run 어드미션 통과 여부" })
+  dryRunPassed: boolean;
 
   @ApiProperty({ description: "Kyverno Enforce 정책에 의한 배포 차단 여부" })
   blocked: boolean;
@@ -92,6 +112,9 @@ export class GitOpsPrReviewResultDto {
   @ApiPropertyOptional({ description: "등록된 GitHub PR 코멘트 URL" })
   commentUrl?: string;
 
+  @ApiPropertyOptional({ description: "생성된 PR Bot 마크다운 코멘트 전문" })
+  commentMarkdown?: string;
+
   @ApiPropertyOptional({
     description: "GitHub Commit Status 전송 상태",
     enum: ["success", "failure", "skipped"],
@@ -102,6 +125,12 @@ export class GitOpsPrReviewResultDto {
     description: "AI 자동 교정 제안 diff 또는 가이드라인 (통과 시 생략)",
   })
   suggestedDiff?: string;
+
+  @ApiPropertyOptional({
+    description: "AI Self-Correction 실행 결과 상세",
+    type: SelfCorrectionResultDto,
+  })
+  selfCorrectionResult?: SelfCorrectionResultDto;
 
   @ApiPropertyOptional({
     description: "원클릭 정책 예외 신청 딥링크 URL",
