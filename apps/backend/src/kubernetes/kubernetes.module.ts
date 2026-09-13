@@ -9,6 +9,8 @@ import { SingleClusterProvider } from "./single-cluster.provider";
 import { K8sResourceWatcher } from "./k8s-watcher.util";
 import { ClusterOverviewService } from "./cluster-overview.service";
 import { K8sInformerService } from "./k8s-informer.service";
+import { IncidentsModule } from "../incidents/incidents.module";
+import { AdmissionIncidentWatcherService } from "./watchers/admission-incident-watcher.service";
 
 export type ClusterProviderMode = "single" | "multi";
 
@@ -40,7 +42,7 @@ function resolveClusterProvider(config: ConfigService): ClusterProvider {
 }
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, IncidentsModule],
   controllers: [ClustersController],
   providers: [
     {
@@ -52,6 +54,7 @@ function resolveClusterProvider(config: ConfigService): ClusterProvider {
     KyvernoAdapter,
     K8sResourceWatcher,
     ClusterOverviewService,
+    AdmissionIncidentWatcherService,
   ],
   exports: [
     ClusterProvider,
@@ -59,6 +62,7 @@ function resolveClusterProvider(config: ConfigService): ClusterProvider {
     KyvernoAdapter,
     K8sResourceWatcher,
     ClusterOverviewService,
+    AdmissionIncidentWatcherService,
   ],
 })
 export class KubernetesModule {}

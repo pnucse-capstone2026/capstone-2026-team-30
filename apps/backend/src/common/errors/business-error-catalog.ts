@@ -4,6 +4,7 @@ import { AUTH_ERROR } from "../../auth/auth.errors";
 import { EXCEPTION_LIFECYCLE_ERROR } from "../../exception-lifecycle/exception-lifecycle.errors";
 import { EXCEPTION_REQUEST_ERROR } from "../../exception-requests/exception-request.errors";
 import { GITOPS_ERROR } from "../../gitops/gitops.errors";
+import { INCIDENT_ERROR } from "../../incidents/incidents.errors";
 import { KUBERNETES_ERROR } from "../../kubernetes/kubernetes.errors";
 import { MLOPS_ERROR } from "../../mlops/mlops.errors";
 import { NOTIFICATION_ERROR } from "../../notifications/notifications.errors";
@@ -20,6 +21,7 @@ export const BUSINESS_ERRORS = [
   ...Object.values(EXCEPTION_LIFECYCLE_ERROR),
   ...Object.values(EXCEPTION_REQUEST_ERROR),
   ...Object.values(GITOPS_ERROR),
+  ...Object.values(INCIDENT_ERROR),
   ...Object.values(KUBERNETES_ERROR),
   ...Object.values(MLOPS_ERROR),
   ...Object.values(NOTIFICATION_ERROR),

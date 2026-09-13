@@ -48,6 +48,14 @@ export const PERMISSIONS = [
   { key: "mlops.governance", description: "Manage MLOps Governance & FinOps." },
   { key: "mlops.pipelines", description: "Manage MLOps Kubeflow Pipelines." },
   { key: "mlops.serving", description: "Manage MLOps Model Serving Center." },
+  {
+    key: "incidents.read",
+    description: "Read admission block deployment incidents.",
+  },
+  {
+    key: "incidents.manage",
+    description: "Manage and resolve admission block deployment incidents.",
+  },
 ] as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[number]["key"];
@@ -66,6 +74,8 @@ export const ROLE_PERMISSIONS: Record<Role, PermissionKey[]> = {
     "mlops.governance",
     "mlops.pipelines",
     "mlops.serving",
+    "incidents.read",
+    "incidents.manage",
   ],
   [Role.REQUESTER]: [
     "policies.read",
@@ -77,14 +87,14 @@ export const ROLE_PERMISSIONS: Record<Role, PermissionKey[]> = {
     "mlops.notebooks",
     "mlops.pipelines",
     "mlops.serving",
+    "incidents.read",
   ],
   [Role.VIEWER]: [
     "policies.read",
     "violations.read",
     "exception_requests.read",
     "notifications.read",
-    "mlops.pipelines",
-    "mlops.serving",
+    "incidents.read",
   ],
 };
 

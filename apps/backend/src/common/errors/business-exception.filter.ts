@@ -12,6 +12,7 @@ import { AUTH_ERROR } from "../../auth/auth.errors";
 import { EXCEPTION_LIFECYCLE_ERROR } from "../../exception-lifecycle/exception-lifecycle.errors";
 import { EXCEPTION_REQUEST_ERROR } from "../../exception-requests/exception-request.errors";
 import { GITOPS_ERROR } from "../../gitops/gitops.errors";
+import { INCIDENT_ERROR } from "../../incidents/incidents.errors";
 import { KUBERNETES_ERROR } from "../../kubernetes/kubernetes.errors";
 import { MLOPS_ERROR } from "../../mlops/mlops.errors";
 import { NOTIFICATION_ERROR } from "../../notifications/notifications.errors";
@@ -54,6 +55,10 @@ export const BUSINESS_ERROR_HTTP_STATUS = {
   [GITOPS_ERROR.GITHUB_API_ERROR.code]: HttpStatus.BAD_GATEWAY,
   [GITOPS_ERROR.UNAUTHORIZED_CI_TOKEN.code]: HttpStatus.UNAUTHORIZED,
   [GITOPS_ERROR.CLUSTER_NOT_FOUND.code]: HttpStatus.NOT_FOUND,
+  [INCIDENT_ERROR.NOT_FOUND.code]: HttpStatus.NOT_FOUND,
+  [INCIDENT_ERROR.CLUSTER_ACCESS_DENIED.code]: HttpStatus.FORBIDDEN,
+  [INCIDENT_ERROR.ALREADY_RESOLVED.code]: HttpStatus.BAD_REQUEST,
+  [INCIDENT_ERROR.INVALID_STATUS_TRANSITION.code]: HttpStatus.CONFLICT,
   [KUBERNETES_ERROR.CLUSTER_NOT_CONFIGURED.code]: HttpStatus.NOT_FOUND,
   [MLOPS_ERROR.NOTEBOOK_NOT_FOUND.code]: HttpStatus.NOT_FOUND,
   [MLOPS_ERROR.NOTEBOOK_ALREADY_EXISTS.code]: HttpStatus.CONFLICT,
