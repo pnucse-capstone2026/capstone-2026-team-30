@@ -99,6 +99,31 @@ export class ExplainKyvernoErrorDto {
   @Min(1)
   @IsOptional()
   violationCount?: number;
+
+  /**
+   * 1차 자가 교정 시도 시 생성했던 매니페스트 YAML 문자열 (피드백 재시도용)
+   */
+  @ApiPropertyOptional({
+    description:
+      "Previous attempted manifest YAML generated during self-correction loop",
+    example: "apiVersion: v1\nkind: Pod\n...",
+  })
+  @IsString()
+  @IsOptional()
+  previousAttemptYaml?: string;
+
+  /**
+   * 1차 교정본에 대한 Server-Side Dry-Run 재검증 실패 피드백 및 위반 사유
+   */
+  @ApiPropertyOptional({
+    description:
+      "Feedback and error details from dry-run re-validation failure",
+    example:
+      "Policy 'disallow-latest-tag' rule 'require-image-tag' still failed: image tag cannot be latest",
+  })
+  @IsString()
+  @IsOptional()
+  validationFeedback?: string;
 }
 
 /**

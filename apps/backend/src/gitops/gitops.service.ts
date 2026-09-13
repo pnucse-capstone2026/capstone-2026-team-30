@@ -159,6 +159,10 @@ export class GitOpsService {
   /**
    * AI 자동 교정 패치 자체 재검증 루프 (Self-Correction Loop)
    *
+   * 1차 AI 제안 YAML을 Server-Side Dry-Run으로 재검증하고,
+   * 실패 시 1차 실패 피드백을 주입하여 최대 1회 재시도(Retry with Feedback)합니다.
+   * 2차 시도까지 모두 실패할 경우 잘못된 diff 대신 안내 가이드 마크다운으로 안전하게 폴백합니다.
+   *
    * @param dto PR 요청 DTO
    * @param clusterId 클러스터 식별자
    * @param violations 발생한 정책 위반 목록
@@ -171,47 +175,86 @@ export class GitOpsService {
   ): Promise<string | undefined> {
     try {
       const primaryViolation = violations[0];
-      const explanation = await this.aiAgentService.explainKyvernoError({
+
+      // 1. 1차 AI 수정안 생성 요청
+      const firstExplanation = await this.aiAgentService.explainKyvernoError({
         errorMessage: primaryViolation.reason,
         policyYaml: `policy: ${primaryViolation.policyName}`,
         resourceManifest: dto.manifestYaml,
         clusterContext: `cluster: ${clusterId}, namespace: ${dto.targetNamespace}`,
       });
 
-      if (!explanation.suggestedFixYaml) {
-        return explanation.summary;
+      if (!firstExplanation.suggestedFixYaml) {
+        return firstExplanation.summary;
       }
 
-      // 1차 재검증: AI가 제안한 수정 YAML에 대해 Server-Side Dry-Run 재실행
-      const reValidation = await this.simulationService.validateManifestDryRun(
-        explanation.suggestedFixYaml,
-        dto.targetNamespace,
-        clusterId,
-      );
-
-      if (reValidation.valid) {
-        this.logger.log(
-          `[Self-Correction] AI proposed fix passed dry-run validation successfully for PR #${dto.pullNumber}`,
+      // 2. 1차 Server-Side Dry-Run 재검증 실행
+      const firstValidation =
+        await this.simulationService.validateManifestDryRun(
+          firstExplanation.suggestedFixYaml,
+          dto.targetNamespace,
+          clusterId,
         );
-        return explanation.suggestedFixYaml;
-      }
 
-      // =========================================================================
-      // TODO: [Task 1.2 Self-Correction Loop 아웃라인]
-      // 1. 재검증 실패 시 (reValidation.valid === false):
-      //    - reValidation.allViolations의 상세 실패 사유를 수집
-      //    - AI 프롬프트에 "이전 제안이 다음 Kyverno 규칙에 의해 여전히 거부되었습니다" 피드백 주입
-      //    - 최대 1회 재시도 (Retry with Feedback) 수행
-      // 2. 2회 시도 후에도 통과하지 못할 경우:
-      //    - 잘못된 코드 제안을 원천 차단하기 위해 diff 출력을 생략
-      //    - 사람이 검토하여 조치할 수 있도록 explanation.summary 및 explanation.resolutionSteps만 반환
-      // =========================================================================
+      if (firstValidation.valid) {
+        this.logger.log(
+          `[Self-Correction] 1st AI proposed fix passed dry-run validation successfully for PR #${dto.pullNumber}`,
+        );
+        return firstExplanation.suggestedFixYaml;
+      }
 
       this.logger.warn(
-        `[Self-Correction] AI proposed fix failed dry-run re-validation. Falling back to guidance summary. (TODO: implement retry with feedback)`,
+        `[Self-Correction] 1st AI fix failed dry-run re-validation for PR #${dto.pullNumber}. Retrying with feedback...`,
       );
 
-      return `<!-- AI Auto-fix could not pass deterministic policy dry-run verification -->\n# 권장 조치 가이드\n${explanation.summary}\n\n## 조치 단계:\n${(explanation.resolutionSteps || []).map((step, idx) => `${idx + 1}. ${step}`).join("\n")}`;
+      // 3. 2차 시도 (Retry with Feedback): 위반 내역 및 실패 사유 수집
+      const unresolvedViolations =
+        firstValidation.allViolations &&
+        firstValidation.allViolations.length > 0
+          ? firstValidation.allViolations
+              .map(
+                (v) =>
+                  `- [Policy: ${v.policyName}] [Rule: ${v.ruleName || "-"}] ${v.reason}`,
+              )
+              .join("\n")
+          : "Dry-Run rejected the manifest with unhandled errors.";
+
+      const validationFeedback = `이전 수정본이 여전히 다음 정책 위반으로 거부되었습니다. 해당 규칙을 엄격히 준수하도록 YAML을 다시 수정하세요:\n${unresolvedViolations}`;
+
+      // 4. 피드백 컨텍스트를 주입하여 2차 AI 수정안 생성 요청
+      const secondExplanation = await this.aiAgentService.explainKyvernoError({
+        errorMessage: `${primaryViolation.reason}\n\n[Re-validation Failures]:\n${unresolvedViolations}`,
+        policyYaml: `policy: ${primaryViolation.policyName}`,
+        resourceManifest: dto.manifestYaml,
+        clusterContext: `cluster: ${clusterId}, namespace: ${dto.targetNamespace}`,
+        previousAttemptYaml: firstExplanation.suggestedFixYaml,
+        validationFeedback,
+      });
+
+      // 2차 생성된 YAML이 존재하는 경우 2차 Server-Side Dry-Run 재검증 수행
+      if (secondExplanation.suggestedFixYaml) {
+        const secondValidation =
+          await this.simulationService.validateManifestDryRun(
+            secondExplanation.suggestedFixYaml,
+            dto.targetNamespace,
+            clusterId,
+          );
+
+        if (secondValidation.valid) {
+          this.logger.log(
+            `[Self-Correction] 2nd AI proposed fix passed dry-run validation successfully for PR #${dto.pullNumber}`,
+          );
+          return secondExplanation.suggestedFixYaml;
+        }
+      }
+
+      // 5. 2차 실패 시 안전 폴백 (Safe Fallback): 잘못된 코드 diff 노출을 원천 차단하고 가이드 반환
+      this.logger.warn(
+        `[Self-Correction] All self-correction attempts failed dry-run re-validation for PR #${dto.pullNumber}. Falling back to safe guidance.`,
+      );
+
+      const finalExplanation = secondExplanation || firstExplanation;
+      return `<!-- AI Auto-fix could not pass deterministic policy dry-run verification -->\n# 권장 조치 가이드\n${finalExplanation.summary}\n\n## 조치 단계:\n${(finalExplanation.resolutionSteps || []).map((step, idx) => `${idx + 1}. ${step}`).join("\n")}`;
     } catch (err) {
       this.logger.warn(
         `Failed to generate AI fix for PR #${dto.pullNumber}: ${
@@ -397,11 +440,23 @@ export class GitOpsService {
     }
 
     if (suggestedDiff) {
-      markdown += `\n### 🤖 AI 자동 교정 제안 (Self-Corrected Recommendation)
-\`\`\`yaml
+      if (
+        suggestedDiff.startsWith(
+          "<!-- AI Auto-fix could not pass deterministic policy dry-run verification -->",
+        )
+      ) {
+        markdown += `\n### 🤖 AI 권장 조치 가이드 (Manual Review Required)
+${suggestedDiff}
+`;
+      } else {
+        markdown += `\n### 🤖 AI 자동 교정 제안 \`[AI Self-Correction Passed]\`
+> **Server-Side Dry-Run 검증 통과**: 아래 제안된 매니페스트는 클러스터의 Kyverno 정책을 완벽히 준수하도록 자체 재검증되었습니다.
+
+\`\`\`suggestion
 ${suggestedDiff}
 \`\`\`
 `;
+      }
     }
 
     if (exceptionDeepLink) {

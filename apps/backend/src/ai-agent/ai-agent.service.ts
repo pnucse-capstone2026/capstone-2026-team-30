@@ -61,6 +61,21 @@ Guidelines:
 2. Provide concrete, copy-pasteable YAML fixes whenever manifest is provided.
 3. Be supportive and instructional, avoiding punitive tone.`;
 
+    let feedbackSection = "";
+    if (dto.previousAttemptYaml || dto.validationFeedback) {
+      feedbackSection = `
+[Previous Attempted Manifest]
+${dto.previousAttemptYaml || "N/A"}
+
+[Dry-Run Re-validation Feedback / Unresolved Violations]
+${dto.validationFeedback || "N/A"}
+
+[Self-Correction Instruction]
+The previous attempted manifest fix was rejected by Server-Side Dry-Run validation.
+Strictly resolve all the unresolved Kyverno violations above while adhering to Kubernetes specifications.
+`;
+    }
+
     const userPrompt = `
 [Kyverno Error Message]
 ${dto.errorMessage}
@@ -73,7 +88,7 @@ ${dto.resourceManifest || "N/A"}
 
 [Cluster Environment Context]
 ${dto.clusterContext || "N/A"}
-
+${feedbackSection}
 Please analyze the failure above and generate the JSON response.
 `;
 

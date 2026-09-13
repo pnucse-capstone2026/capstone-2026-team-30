@@ -128,9 +128,9 @@ spec:
     expect(mockCreateComment).toHaveBeenCalled();
   });
 
-  it("should return BLOCKED, dispatch failure status and build deep-link when dry-run fails", async () => {
+  it("should return BLOCKED and AI fix immediately when 1st dry-run passes", async () => {
     simulationService.validateManifestDryRun
-      // 1차 dry-run 실패
+      // 1. 초기 PR dry-run 검증 실패
       .mockResolvedValueOnce({
         valid: false,
         allowed: false,
@@ -164,7 +164,7 @@ spec:
           },
         ],
       })
-      // AI 수정안 재검증 성공
+      // 2. 1차 AI 수정안 dry-run 재검증 즉시 통과
       .mockResolvedValueOnce({
         valid: true,
         allowed: true,
@@ -200,11 +200,24 @@ spec:
         state: "failure",
       }),
     );
+
+    expect(mockCreateComment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.stringContaining("[AI Self-Correction Passed]"),
+      }),
+    );
+    expect(mockCreateComment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.stringContaining("```suggestion\nimage: test:1.0.0\n```"),
+      }),
+    );
+    expect(aiAgentService.explainKyvernoError).toHaveBeenCalledTimes(1);
+    expect(simulationService.validateManifestDryRun).toHaveBeenCalledTimes(2);
   });
 
-  it("should fallback to guidance when AI fix fails self-correction re-validation", async () => {
+  it("should retry with feedback and return 2nd AI fix when 1st attempt fails and 2nd attempt passes", async () => {
     simulationService.validateManifestDryRun
-      // 1차 dry-run 실패
+      // 1. 초기 PR dry-run 검증 실패
       .mockResolvedValueOnce({
         valid: false,
         allowed: false,
@@ -221,13 +234,136 @@ spec:
             allowed: false,
             status: "BLOCKED",
             violations: [
-              { policyName: "p1", ruleName: "r1", reason: "denied" },
+              {
+                policyName: "require-non-root",
+                ruleName: "check-run-as-non-root",
+                reason: "Container must run as non-root user",
+              },
             ],
           },
         ],
-        allViolations: [{ policyName: "p1", ruleName: "r1", reason: "denied" }],
+        allViolations: [
+          {
+            policyName: "require-non-root",
+            ruleName: "check-run-as-non-root",
+            reason: "Container must run as non-root user",
+          },
+        ],
       })
-      // AI 수정안 2차 dry-run도 실패
+      // 2. 1차 AI 수정안 dry-run 재검증 실패
+      .mockResolvedValueOnce({
+        valid: false,
+        allowed: false,
+        totalResources: 1,
+        blockedCount: 1,
+        passedCount: 0,
+        errorCount: 0,
+        results: [
+          {
+            apiVersion: "v1",
+            kind: "Pod",
+            name: "test-pod",
+            namespace: "test-ns",
+            allowed: false,
+            status: "BLOCKED",
+            violations: [
+              {
+                policyName: "require-read-only-rootfs",
+                ruleName: "check-read-only-rootfs",
+                reason: "Root filesystem must be read-only",
+              },
+            ],
+          },
+        ],
+        allViolations: [
+          {
+            policyName: "require-read-only-rootfs",
+            ruleName: "check-read-only-rootfs",
+            reason: "Root filesystem must be read-only",
+          },
+        ],
+      })
+      // 3. 2차 AI 수정안 dry-run 재검증 통과
+      .mockResolvedValueOnce({
+        valid: true,
+        allowed: true,
+        totalResources: 1,
+        blockedCount: 0,
+        passedCount: 1,
+        errorCount: 0,
+        results: [],
+        allViolations: [],
+      });
+
+    // 1차 AI 설명 응답
+    aiAgentService.explainKyvernoError.mockResolvedValueOnce({
+      summary: "Non-root 설정 필요",
+      suggestedFixYaml: `securityContext:\n  runAsNonRoot: true`,
+    });
+
+    // 2차 AI 설명 응답 (피드백 반영)
+    aiAgentService.explainKyvernoError.mockResolvedValueOnce({
+      summary: "Non-root 및 ReadOnlyRootFilesystem 설정 완료",
+      suggestedFixYaml: `securityContext:\n  runAsNonRoot: true\n  readOnlyRootFilesystem: true`,
+    });
+
+    const result = await service.reviewPullRequest(baseDto);
+
+    expect(result.valid).toBe(false);
+    expect(result.blocked).toBe(true);
+    expect(result.status).toBe("BLOCKED");
+    expect(result.suggestedDiff).toBe(
+      `securityContext:\n  runAsNonRoot: true\n  readOnlyRootFilesystem: true`,
+    );
+
+    // AI 서비스 호출 2회 및 피드백 전달 확인
+    expect(aiAgentService.explainKyvernoError).toHaveBeenCalledTimes(2);
+    expect(aiAgentService.explainKyvernoError).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        previousAttemptYaml: `securityContext:\n  runAsNonRoot: true`,
+        validationFeedback: expect.stringContaining("require-read-only-rootfs"),
+      }),
+    );
+
+    // Dry-run 검증 총 3회 실행 확인 (PR 초기 1회 + 1차 fix 1회 + 2차 fix 1회)
+    expect(simulationService.validateManifestDryRun).toHaveBeenCalledTimes(3);
+
+    expect(mockCreateComment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.stringContaining("[AI Self-Correction Passed]"),
+      }),
+    );
+  });
+
+  it("should fallback to safe guidance when both 1st and 2nd AI fixes fail self-correction re-validation", async () => {
+    simulationService.validateManifestDryRun
+      // 1. 초기 PR dry-run 실패
+      .mockResolvedValueOnce({
+        valid: false,
+        allowed: false,
+        totalResources: 1,
+        blockedCount: 1,
+        passedCount: 0,
+        errorCount: 0,
+        results: [
+          {
+            apiVersion: "v1",
+            kind: "Pod",
+            name: "test-pod",
+            namespace: "test-ns",
+            allowed: false,
+            status: "BLOCKED",
+            violations: [
+              { policyName: "p1", ruleName: "r1", reason: "denied 1st" },
+            ],
+          },
+        ],
+        allViolations: [
+          { policyName: "p1", ruleName: "r1", reason: "denied 1st" },
+        ],
+      })
+      // 2. 1차 AI 수정안 dry-run 재검증 실패
       .mockResolvedValueOnce({
         valid: false,
         allowed: false,
@@ -237,20 +373,64 @@ spec:
         errorCount: 0,
         results: [],
         allViolations: [
-          { policyName: "p1", ruleName: "r1", reason: "still denied" },
+          { policyName: "p1", ruleName: "r1", reason: "still denied 1st" },
+        ],
+      })
+      // 3. 2차 AI 수정안 dry-run 재검증 실패
+      .mockResolvedValueOnce({
+        valid: false,
+        allowed: false,
+        totalResources: 1,
+        blockedCount: 1,
+        passedCount: 0,
+        errorCount: 0,
+        results: [],
+        allViolations: [
+          { policyName: "p1", ruleName: "r1", reason: "still denied 2nd" },
         ],
       });
 
+    // 1차 AI 설명 응답
     aiAgentService.explainKyvernoError.mockResolvedValueOnce({
-      summary: "보안 컨텍스트 필요",
+      summary: "보안 컨텍스트 1차 시도",
       resolutionSteps: ["Step 1: runAsNonRoot 설정"],
-      suggestedFixYaml: `bad: yaml`,
+      suggestedFixYaml: `bad: yaml 1`,
+    });
+
+    // 2차 AI 설명 응답
+    aiAgentService.explainKyvernoError.mockResolvedValueOnce({
+      summary: "보안 컨텍스트 2차 시도 여전히 오류",
+      resolutionSteps: [
+        "Step 1: runAsNonRoot 설정",
+        "Step 2: 관리자 문의 필요",
+      ],
+      suggestedFixYaml: `bad: yaml 2`,
     });
 
     const result = await service.reviewPullRequest(baseDto);
 
+    expect(result.suggestedDiff).toContain(
+      "<!-- AI Auto-fix could not pass deterministic policy dry-run verification -->",
+    );
     expect(result.suggestedDiff).toContain("권장 조치 가이드");
-    expect(result.suggestedDiff).toContain("Step 1: runAsNonRoot 설정");
+    expect(result.suggestedDiff).toContain(
+      "보안 컨텍스트 2차 시도 여전히 오류",
+    );
+    expect(result.suggestedDiff).toContain("Step 2: 관리자 문의 필요");
+
+    // 안전 폴백 시 마크다운에 suggestion 블록 대신 안전 가이드 블록 포함 확인
+    expect(mockCreateComment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.stringContaining(
+          "AI 권장 조치 가이드 (Manual Review Required)",
+        ),
+      }),
+    );
+    expect(mockCreateComment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.not.stringContaining("[AI Self-Correction Passed]"),
+      }),
+    );
   });
 
   it("should throw CLUSTER_NOT_FOUND when clusterProvider does not recognize cluster", async () => {
