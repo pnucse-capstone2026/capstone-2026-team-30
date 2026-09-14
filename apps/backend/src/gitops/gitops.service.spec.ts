@@ -7,27 +7,23 @@ import { ClusterProvider } from "../kubernetes/cluster-provider";
 import { BusinessException } from "../common/errors/business.exception";
 import { GITOPS_ERROR } from "./gitops.errors";
 import { GitOpsPrReviewDto } from "./dto/gitops-pr-review.dto";
+import {
+  VCS_PROVIDER_TOKEN,
+  VcsProvider,
+} from "./providers/vcs-provider.interface";
 
-// Octokit 모킹
-const mockCreateComment = jest.fn().mockResolvedValue({
-  data: { html_url: "https://github.com/org/repo/pull/42#issuecomment-1" },
-});
-const mockCreateCommitStatus = jest.fn().mockResolvedValue({ data: {} });
+// VcsProvider 모킹
+const mockPostReviewComment = jest
+  .fn()
+  .mockResolvedValue("https://github.com/org/repo/pull/42#issuecomment-1");
+const mockSetCommitStatus = jest.fn().mockResolvedValue(undefined);
 
-jest.mock("@octokit/rest", () => {
-  return {
-    Octokit: jest.fn().mockImplementation(() => ({
-      rest: {
-        issues: {
-          createComment: mockCreateComment,
-        },
-        repos: {
-          createCommitStatus: mockCreateCommitStatus,
-        },
-      },
-    })),
-  };
-});
+const mockVcsProvider: jest.Mocked<VcsProvider> = {
+  providerType: "GITHUB",
+  createPullRequest: jest.fn(),
+  postReviewComment: mockPostReviewComment,
+  setCommitStatus: mockSetCommitStatus,
+};
 
 describe("GitOpsService", () => {
   let service: GitOpsService;
@@ -67,6 +63,7 @@ describe("GitOpsService", () => {
         { provide: AiAgentService, useValue: aiAgentService },
         { provide: ClusterProvider, useValue: clusterProvider },
         { provide: ConfigService, useValue: configService },
+        { provide: VCS_PROVIDER_TOKEN, useValue: mockVcsProvider },
       ],
     }).compile();
 
@@ -117,15 +114,14 @@ spec:
     expect(result.blocked).toBe(false);
     expect(result.status).toBe("PASSED");
     expect(result.commitStatus).toBe("success");
-    expect(mockCreateCommitStatus).toHaveBeenCalledWith(
+    expect(mockSetCommitStatus).toHaveBeenCalledWith(
       expect.objectContaining({
-        owner: "org",
-        repo: "repo",
-        sha: "a1b2c3d4e5f6",
+        repository: "org/repo",
+        commitSha: "a1b2c3d4e5f6",
         state: "success",
       }),
     );
-    expect(mockCreateComment).toHaveBeenCalled();
+    expect(mockPostReviewComment).toHaveBeenCalled();
   });
 
   it("should return BLOCKED and AI fix immediately when 1st dry-run passes", async () => {
@@ -195,20 +191,22 @@ spec:
     expect(result.exceptionDeepLink).toContain("pr=42");
     expect(result.exceptionDeepLink).toContain("policy=disallow-latest-tag");
 
-    expect(mockCreateCommitStatus).toHaveBeenCalledWith(
+    expect(mockSetCommitStatus).toHaveBeenCalledWith(
       expect.objectContaining({
         state: "failure",
       }),
     );
 
-    expect(mockCreateComment).toHaveBeenCalledWith(
+    expect(mockPostReviewComment).toHaveBeenCalledWith(
       expect.objectContaining({
-        body: expect.stringContaining("[AI Self-Correction Passed]"),
+        commentMarkdown: expect.stringContaining("[AI Self-Correction Passed]"),
       }),
     );
-    expect(mockCreateComment).toHaveBeenCalledWith(
+    expect(mockPostReviewComment).toHaveBeenCalledWith(
       expect.objectContaining({
-        body: expect.stringContaining("```suggestion\nimage: test:1.0.0\n```"),
+        commentMarkdown: expect.stringContaining(
+          "```suggestion\nimage: test:1.0.0\n```",
+        ),
       }),
     );
     expect(aiAgentService.explainKyvernoError).toHaveBeenCalledTimes(1);
@@ -329,9 +327,9 @@ spec:
     // Dry-run 검증 총 3회 실행 확인 (PR 초기 1회 + 1차 fix 1회 + 2차 fix 1회)
     expect(simulationService.validateManifestDryRun).toHaveBeenCalledTimes(3);
 
-    expect(mockCreateComment).toHaveBeenCalledWith(
+    expect(mockPostReviewComment).toHaveBeenCalledWith(
       expect.objectContaining({
-        body: expect.stringContaining("[AI Self-Correction Passed]"),
+        commentMarkdown: expect.stringContaining("[AI Self-Correction Passed]"),
       }),
     );
   });
@@ -419,16 +417,18 @@ spec:
     expect(result.suggestedDiff).toContain("Step 2: 관리자 문의 필요");
 
     // 안전 폴백 시 마크다운에 suggestion 블록 대신 안전 가이드 블록 포함 확인
-    expect(mockCreateComment).toHaveBeenCalledWith(
+    expect(mockPostReviewComment).toHaveBeenCalledWith(
       expect.objectContaining({
-        body: expect.stringContaining(
+        commentMarkdown: expect.stringContaining(
           "AI 권장 조치 가이드 (Manual Review Required)",
         ),
       }),
     );
-    expect(mockCreateComment).toHaveBeenCalledWith(
+    expect(mockPostReviewComment).toHaveBeenCalledWith(
       expect.objectContaining({
-        body: expect.not.stringContaining("[AI Self-Correction Passed]"),
+        commentMarkdown: expect.not.stringContaining(
+          "[AI Self-Correction Passed]",
+        ),
       }),
     );
   });

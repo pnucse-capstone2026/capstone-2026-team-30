@@ -1,11 +1,15 @@
 import * as fs from "fs";
 import * as path from "path";
-import { Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PolicyExceptionRequest } from "@prisma/client";
 import { dumpYaml, loadYaml } from "@kubernetes/client-node";
 import { buildPolicyExceptionManifest } from "../kubernetes/policy-exception-manifest";
 import { ClusterProvider } from "../kubernetes/cluster-provider";
+import {
+  VCS_PROVIDER_TOKEN,
+  VcsProvider,
+} from "./providers/vcs-provider.interface";
 
 export type PublishingMode = "DUAL_PATH" | "STRICT_GITOPS" | "RUNTIME_ONLY";
 export type GitOpsStrategy = "LOCAL_FILE" | "GITHUB_PR";
@@ -86,7 +90,10 @@ export class GitOpsPublisherService {
 
   constructor(
     config: ConfigService,
-    private readonly clusterProvider?: ClusterProvider,
+    @Optional() private readonly clusterProvider?: ClusterProvider,
+    @Optional()
+    @Inject(VCS_PROVIDER_TOKEN)
+    private readonly vcsProvider?: VcsProvider,
   ) {
     const mode = config
       .get<string>("GITOPS_PUBLISHING_MODE", "DUAL_PATH")
@@ -188,6 +195,35 @@ export class GitOpsPublisherService {
         }
       } catch {
         // clusterNotConfigured 시 전역 기본 설정으로 fallback
+      }
+    }
+
+    if (this.vcsProvider) {
+      try {
+        const result = await this.vcsProvider.createPullRequest({
+          requestId: request.id,
+          policyName: request.policyName,
+          resourceKind: request.resourceKind,
+          resourceName: request.resourceName,
+          namespace: request.resourceNamespace || "default",
+          clusterId: request.targetClusterId,
+          clusterDisplayName: request.targetClusterDisplayName,
+          yamlContent,
+          relativePath: targetPath,
+          targetRepo,
+          targetBaseBranch,
+        });
+        return {
+          prUrl: result.prUrl,
+          prNumber: result.prNumber,
+        };
+      } catch (err) {
+        this.logger.error(
+          `Failed to create PR via VcsProvider (${this.vcsProvider.providerType}): ${
+            (err as Error).message
+          }`,
+        );
+        return {};
       }
     }
 

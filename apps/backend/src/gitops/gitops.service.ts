@@ -1,6 +1,5 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { Octokit } from "@octokit/rest";
 import { ClusterProvider } from "../kubernetes/cluster-provider";
 import { SimulationService } from "../simulation/simulation.service";
 import { AiAgentService } from "../ai-agent/ai-agent.service";
@@ -14,18 +13,21 @@ import {
   KyvernoViolationDetail,
   ManifestDryRunValidationResult,
 } from "../simulation/dto/dry-run-validation.dto";
+import {
+  VCS_PROVIDER_TOKEN,
+  VcsProvider,
+} from "./providers/vcs-provider.interface";
 
 /**
  * GitOps PR 거버넌스 게이트 및 PR Bot 검증 서비스
  *
- * 개발자가 생성한 GitHub PR의 매니페스트 변경사항에 대해
+ * 개발자가 생성한 PR의 매니페스트 변경사항에 대해
  * 클러스터의 실제 Kyverno 정책과 Server-Side Dry-Run으로 대조하고,
  * 위반 발생 시 AI 자가 재검증 루프 및 PR 인라인 코멘트/Commit Status를 기록합니다.
  */
 @Injectable()
 export class GitOpsService {
   private readonly logger = new Logger(GitOpsService.name);
-  private readonly githubToken?: string;
   private readonly platformBaseUrl: string;
 
   constructor(
@@ -33,10 +35,9 @@ export class GitOpsService {
     private readonly aiAgentService: AiAgentService,
     private readonly clusterProvider: ClusterProvider,
     private readonly configService: ConfigService,
+    @Inject(VCS_PROVIDER_TOKEN)
+    private readonly vcsProvider: VcsProvider,
   ) {
-    this.githubToken =
-      this.configService.get<string>("GITOPS_GITHUB_TOKEN") ||
-      this.configService.get<string>("GITHUB_TOKEN");
     this.platformBaseUrl = this.configService.get<string>(
       "PLATFORM_BASE_URL",
       "http://localhost:3000",
@@ -140,26 +141,16 @@ export class GitOpsService {
       exceptionDeepLink,
     });
 
-    // 4. GitHub PR Bot 연동: 코멘트 작성 및 Commit Status 등록
-    let commentUrl: string | undefined;
-    let commitStatus: string | undefined;
-
-    if (this.githubToken) {
-      const gitHubResult = await this.publishGitHubFeedback({
-        dto,
-        dryRunResult,
-        status,
-        commentBody: commentMarkdown,
-        exceptionDeepLink,
-      });
-      commentUrl = gitHubResult.commentUrl;
-      commitStatus = gitHubResult.commitStatus;
-    } else {
-      this.logger.warn(
-        "GitHub token not configured (GITOPS_GITHUB_TOKEN or GITHUB_TOKEN). Skipping GitHub PR comment and status dispatch.",
-      );
-      commitStatus = "skipped";
-    }
+    // 4. VCS PR Bot 연동: 코멘트 작성 및 Commit Status 등록 (VcsProvider에 위임)
+    const vcsResult = await this.publishVcsFeedback({
+      dto,
+      dryRunResult,
+      status,
+      commentBody: commentMarkdown,
+      exceptionDeepLink,
+    });
+    const commentUrl = vcsResult.commentUrl;
+    const commitStatus = vcsResult.commitStatus;
 
     return {
       valid: dryRunResult.valid,
@@ -331,9 +322,9 @@ export class GitOpsService {
   }
 
   /**
-   * GitHub Octokit을 활용하여 PR 인라인 코멘트 및 Commit Status를 게시합니다.
+   * VcsProvider를 활용하여 PR 인라인 코멘트 및 Commit Status를 게시합니다.
    */
-  private async publishGitHubFeedback(params: {
+  private async publishVcsFeedback(params: {
     dto: GitOpsPrReviewDto;
     dryRunResult: ManifestDryRunValidationResult;
     status: "PASSED" | "BLOCKED" | "ERROR";
@@ -350,27 +341,12 @@ export class GitOpsService {
       return { commitStatus: "skipped" };
     }
 
-    const octokit = new Octokit({ auth: this.githubToken });
-
-    let commentUrl: string | undefined;
-    try {
-      const commentRes = await octokit.rest.issues.createComment({
-        owner,
-        repo,
-        issue_number: dto.pullNumber,
-        body: commentBody,
-      });
-      commentUrl = commentRes.data.html_url;
-      this.logger.log(
-        `Posted governance gate comment to PR #${dto.pullNumber}: ${commentUrl}`,
-      );
-    } catch (err) {
-      this.logger.error(
-        `Failed to create GitHub PR comment for #${dto.pullNumber}: ${
-          (err as Error).message
-        }`,
-      );
-    }
+    // 1. PR 마크다운 코멘트 전송 (VcsProvider에 위임)
+    const commentUrl = await this.vcsProvider.postReviewComment({
+      repository: dto.repository,
+      pullNumber: dto.pullNumber,
+      commentMarkdown: commentBody,
+    });
 
     // 2. Commit Status 전송
     // 정책: Enforce 차단 시 'failure', 통과 또는 Audit 경고 시 'success' (with warnings)
@@ -388,26 +364,14 @@ export class GitOpsService {
       statusDescription = "Passed with Kyverno audit warnings";
     }
 
-    try {
-      await octokit.rest.repos.createCommitStatus({
-        owner,
-        repo,
-        sha: dto.commitSha,
-        state: commitStatus,
-        context: "kyverno/governance-gate",
-        description: statusDescription,
-        target_url: exceptionDeepLink || this.platformBaseUrl,
-      });
-      this.logger.log(
-        `Dispatched commit status '${commitStatus}' to commit ${dto.commitSha.slice(0, 7)}`,
-      );
-    } catch (err) {
-      this.logger.error(
-        `Failed to create GitHub commit status for ${dto.commitSha}: ${
-          (err as Error).message
-        }`,
-      );
-    }
+    await this.vcsProvider.setCommitStatus({
+      repository: dto.repository,
+      commitSha: dto.commitSha,
+      state: commitStatus,
+      context: "kyverno/governance-gate",
+      description: statusDescription,
+      targetUrl: exceptionDeepLink || this.platformBaseUrl,
+    });
 
     return { commentUrl, commitStatus };
   }

@@ -7,6 +7,11 @@ import { GitOpsPublisherService } from "./gitops-publisher.service";
 import { GitOpsService } from "./gitops.service";
 import { GitOpsController } from "./gitops.controller";
 import { CiOrJwtAuthGuard } from "./guards/ci-or-jwt-auth.guard";
+import { GitHubVcsProvider } from "./providers/github-vcs.provider";
+import { GitLabVcsProvider } from "./providers/gitlab-vcs.provider";
+import { LocalFileVcsProvider } from "./providers/local-file-vcs.provider";
+import { VcsProviderFactory } from "./providers/vcs-provider.factory";
+import { VCS_PROVIDER_TOKEN } from "./providers/vcs-provider.interface";
 
 /**
  * Kyverno Platform GitOps 매니페스트 배포 및 Shift-Left PR Gate 거버넌스 모듈
@@ -14,7 +19,20 @@ import { CiOrJwtAuthGuard } from "./guards/ci-or-jwt-auth.guard";
 @Module({
   imports: [ConfigModule, KubernetesModule, SimulationModule, AiAgentModule],
   controllers: [GitOpsController],
-  providers: [GitOpsPublisherService, GitOpsService, CiOrJwtAuthGuard],
-  exports: [GitOpsPublisherService, GitOpsService],
+  providers: [
+    GitHubVcsProvider,
+    GitLabVcsProvider,
+    LocalFileVcsProvider,
+    VcsProviderFactory,
+    GitOpsPublisherService,
+    GitOpsService,
+    CiOrJwtAuthGuard,
+  ],
+  exports: [
+    VCS_PROVIDER_TOKEN,
+    GitHubVcsProvider,
+    GitOpsPublisherService,
+    GitOpsService,
+  ],
 })
 export class GitOpsModule {}
