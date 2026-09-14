@@ -1,5 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsInt, IsNotEmpty, IsOptional, IsString } from "class-validator";
+import {
+  IsBoolean,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from "class-validator";
 import { KyvernoViolationDetail } from "../../simulation/dto/dry-run-validation.dto";
 
 /**
@@ -65,6 +71,16 @@ spec:
   @IsString()
   @IsNotEmpty()
   manifestYaml: string;
+
+  @ApiPropertyOptional({
+    description:
+      "비동기 작업 큐 처리 여부 (false 설정 시 동기식 검증 즉시 수행)",
+    default: true,
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  async?: boolean;
 }
 
 /**

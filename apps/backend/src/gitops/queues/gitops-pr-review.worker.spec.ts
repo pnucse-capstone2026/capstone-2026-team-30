@@ -87,6 +87,10 @@ describe("GitOpsPrReviewWorker", () => {
     workerService = module.get<GitOpsPrReviewWorker>(GitOpsPrReviewWorker);
   });
 
+  afterEach(async () => {
+    await workerService.onModuleDestroy();
+  });
+
   describe("processJob", () => {
     it("should update Check Run to in_progress, process review and complete with success when passed", async () => {
       const mockResult: GitOpsPrReviewResultDto = {

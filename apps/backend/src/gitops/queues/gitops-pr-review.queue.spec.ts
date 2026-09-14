@@ -50,6 +50,10 @@ describe("GitOpsPrReviewQueue", () => {
     queueService = module.get<GitOpsPrReviewQueue>(GitOpsPrReviewQueue);
   });
 
+  afterEach(async () => {
+    await queueService.onModuleDestroy();
+  });
+
   describe("addReviewJob", () => {
     it("should successfully add a job to BullMQ and return enqueue result", async () => {
       (mockQueue.add as jest.Mock).mockResolvedValueOnce({
@@ -90,11 +94,15 @@ describe("GitOpsPrReviewQueue", () => {
     it("should return fallback jobId if queue instance is null", async () => {
       // Create instance without injected queue and with invalid redis
       const noQueueService = new GitOpsPrReviewQueue();
-      const result = await noQueueService.addReviewJob(mockDto);
+      try {
+        const result = await noQueueService.addReviewJob(mockDto);
 
-      expect(result.id).toMatch(/^fallback-[0-9a-f-]{36}$/);
-      expect(result.status).toBe("queued");
-      expect(result.checkRunId).toBeUndefined();
+        expect(result.id).toMatch(/^fallback-[0-9a-f-]{36}$/);
+        expect(result.status).toBe("queued");
+        expect(result.checkRunId).toBeUndefined();
+      } finally {
+        await noQueueService.onModuleDestroy();
+      }
     });
   });
 

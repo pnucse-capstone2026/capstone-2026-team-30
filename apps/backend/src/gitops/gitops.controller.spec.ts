@@ -1,7 +1,11 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { ConfigService } from "@nestjs/config";
 import { GitOpsController } from "./gitops.controller";
-import { GitOpsPrReviewDto } from "./dto/gitops-pr-review.dto";
+import { GitOpsService } from "./gitops.service";
+import {
+  GitOpsPrReviewDto,
+  GitOpsPrReviewResultDto,
+} from "./dto/gitops-pr-review.dto";
 import { GitOpsPrReviewQueue } from "./queues/gitops-pr-review.queue";
 import {
   VCS_PROVIDER_TOKEN,
@@ -11,11 +15,16 @@ import {
 describe("GitOpsController", () => {
   let controller: GitOpsController;
   let prReviewQueue: { addReviewJob: jest.Mock };
+  let gitOpsService: { reviewPullRequest: jest.Mock };
   let vcsProvider: Partial<VcsProvider>;
 
   beforeEach(async () => {
     prReviewQueue = {
       addReviewJob: jest.fn(),
+    };
+
+    gitOpsService = {
+      reviewPullRequest: jest.fn(),
     };
 
     vcsProvider = {
@@ -26,6 +35,7 @@ describe("GitOpsController", () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [GitOpsController],
       providers: [
+        { provide: GitOpsService, useValue: gitOpsService },
         { provide: GitOpsPrReviewQueue, useValue: prReviewQueue },
         { provide: VCS_PROVIDER_TOKEN, useValue: vcsProvider },
         {
@@ -99,5 +109,67 @@ describe("GitOpsController", () => {
       status: "queued",
       checkRunId: undefined,
     });
+  });
+
+  it("should perform immediate synchronous review when ?sync=true is provided", async () => {
+    const dto: GitOpsPrReviewDto = {
+      repository: "org/repo",
+      pullNumber: 10,
+      commitSha: "sha123",
+      targetNamespace: "default",
+      manifestYaml: "apiVersion: v1\nkind: Pod",
+    };
+
+    const mockSyncResult: GitOpsPrReviewResultDto = {
+      valid: true,
+      dryRunPassed: true,
+      blocked: false,
+      totalResources: 1,
+      blockedCount: 0,
+      status: "PASSED",
+      violations: [],
+    };
+
+    gitOpsService.reviewPullRequest.mockResolvedValueOnce(mockSyncResult);
+    const mockRes = { status: jest.fn() } as any;
+
+    const result = await controller.reviewPullRequest(dto, "true", mockRes);
+
+    expect(mockRes.status).toHaveBeenCalledWith(201);
+    expect(gitOpsService.reviewPullRequest).toHaveBeenCalledWith(dto);
+    expect(prReviewQueue.addReviewJob).not.toHaveBeenCalled();
+    expect(vcsProvider.createCheckRun).not.toHaveBeenCalled();
+    expect(result).toEqual(mockSyncResult);
+  });
+
+  it("should perform immediate synchronous review when dto.async is false", async () => {
+    const dto: GitOpsPrReviewDto = {
+      repository: "org/repo",
+      pullNumber: 10,
+      commitSha: "sha123",
+      targetNamespace: "default",
+      manifestYaml: "apiVersion: v1\nkind: Pod",
+      async: false,
+    };
+
+    const mockSyncResult: GitOpsPrReviewResultDto = {
+      valid: false,
+      dryRunPassed: false,
+      blocked: true,
+      totalResources: 1,
+      blockedCount: 1,
+      status: "BLOCKED",
+      violations: [],
+    };
+
+    gitOpsService.reviewPullRequest.mockResolvedValueOnce(mockSyncResult);
+    const mockRes = { status: jest.fn() } as any;
+
+    const result = await controller.reviewPullRequest(dto, undefined, mockRes);
+
+    expect(mockRes.status).toHaveBeenCalledWith(201);
+    expect(gitOpsService.reviewPullRequest).toHaveBeenCalledWith(dto);
+    expect(prReviewQueue.addReviewJob).not.toHaveBeenCalled();
+    expect(result).toEqual(mockSyncResult);
   });
 });

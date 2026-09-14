@@ -158,7 +158,7 @@ SC1_PAYLOAD=$(jq -n \
     manifestYaml: $manifest
   }')
 
-SC1_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${BACKEND_URL}/api/v1/gitops/pr-review" \
+SC1_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${BACKEND_URL}/api/v1/gitops/pr-review?sync=true" \
   -H "Content-Type: application/json" \
   -H "X-CI-Token: ${CI_TOKEN}" \
   -d "${SC1_PAYLOAD}")
@@ -231,7 +231,7 @@ SC2_PAYLOAD=$(jq -n \
     manifestYaml: $manifest
   }')
 
-SC2_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${BACKEND_URL}/api/v1/gitops/pr-review" \
+SC2_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${BACKEND_URL}/api/v1/gitops/pr-review?sync=true" \
   -H "Content-Type: application/json" \
   -H "X-CI-Token: ${CI_TOKEN}" \
   -d "${SC2_PAYLOAD}")
@@ -303,7 +303,7 @@ SC3_PAYLOAD=$(jq -n \
     manifestYaml: $manifest
   }')
 
-SC3_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${BACKEND_URL}/api/v1/gitops/pr-review" \
+SC3_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${BACKEND_URL}/api/v1/gitops/pr-review?sync=true" \
   -H "Content-Type: application/json" \
   -H "X-CI-Token: ${CI_TOKEN}" \
   -d "${SC3_PAYLOAD}")
@@ -333,7 +333,7 @@ echo ""
 echo -e "${CYAN}${BOLD}>>> [시나리오 4] CI/CD 이중 인증 가드 (Dual Authentication Guard)${NC}"
 
 log_info "4-1. 올바른 X-CI-Token 헤더 전달 시 인증 성공 검증..."
-AUTH_VALID_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${BACKEND_URL}/api/v1/gitops/pr-review" \
+AUTH_VALID_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${BACKEND_URL}/api/v1/gitops/pr-review?sync=true" \
   -H "Content-Type: application/json" \
   -H "X-CI-Token: ${CI_TOKEN}" \
   -d "${SC1_PAYLOAD}")
