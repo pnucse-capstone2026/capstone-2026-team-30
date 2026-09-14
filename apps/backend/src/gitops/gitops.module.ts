@@ -12,6 +12,8 @@ import { GitLabVcsProvider } from "./providers/gitlab-vcs.provider";
 import { LocalFileVcsProvider } from "./providers/local-file-vcs.provider";
 import { VcsProviderFactory } from "./providers/vcs-provider.factory";
 import { VCS_PROVIDER_TOKEN } from "./providers/vcs-provider.interface";
+import { GitOpsPrReviewQueue } from "./queues/gitops-pr-review.queue";
+import { GitOpsPrReviewWorker } from "./queues/gitops-pr-review.worker";
 
 /**
  * Kyverno Platform GitOps 매니페스트 배포 및 Shift-Left PR Gate 거버넌스 모듈
@@ -26,6 +28,8 @@ import { VCS_PROVIDER_TOKEN } from "./providers/vcs-provider.interface";
     VcsProviderFactory,
     GitOpsPublisherService,
     GitOpsService,
+    GitOpsPrReviewQueue,
+    GitOpsPrReviewWorker,
     CiOrJwtAuthGuard,
   ],
   exports: [
@@ -33,6 +37,8 @@ import { VCS_PROVIDER_TOKEN } from "./providers/vcs-provider.interface";
     GitHubVcsProvider,
     GitOpsPublisherService,
     GitOpsService,
+    GitOpsPrReviewQueue,
+    GitOpsPrReviewWorker,
   ],
 })
 export class GitOpsModule {}
