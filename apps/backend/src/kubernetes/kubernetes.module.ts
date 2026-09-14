@@ -14,6 +14,7 @@ import { AdmissionIncidentWatcherService } from "./watchers/admission-incident-w
 import { CoreEventIncidentDetector } from "./watchers/detectors/k8s-core-event.detector";
 import { ArgoCdIncidentDetector } from "./watchers/detectors/argocd.detector";
 import { FluxCdIncidentDetector } from "./watchers/detectors/fluxcd.detector";
+import { K8sLeaderElectorService } from "./coordination/k8s-leader-elector.service";
 
 export type ClusterProviderMode = "single" | "multi";
 
@@ -53,6 +54,7 @@ function resolveClusterProvider(config: ConfigService): ClusterProvider {
       inject: [ConfigService],
       useFactory: resolveClusterProvider,
     },
+    K8sLeaderElectorService,
     K8sInformerService,
     KyvernoAdapter,
     K8sResourceWatcher,
@@ -64,6 +66,7 @@ function resolveClusterProvider(config: ConfigService): ClusterProvider {
   ],
   exports: [
     ClusterProvider,
+    K8sLeaderElectorService,
     K8sInformerService,
     KyvernoAdapter,
     K8sResourceWatcher,
