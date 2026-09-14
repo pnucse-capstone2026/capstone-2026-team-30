@@ -143,3 +143,27 @@ export class GitOpsPrReviewResultDto {
   })
   violations: KyvernoViolationDetail[];
 }
+
+/**
+ * GitOps PR 검증 비동기 수신 응답 DTO
+ */
+export class GitOpsPrReviewAsyncResponseDto {
+  @ApiProperty({
+    description: "발행된 BullMQ 비동기 작업 식별자",
+    example: "pr-acme-corp-payment-service-42-a1b2c3d4",
+  })
+  jobId: string;
+
+  @ApiProperty({
+    description: "큐 작업 상태",
+    example: "queued",
+    enum: ["queued"],
+  })
+  status: "queued";
+
+  @ApiPropertyOptional({
+    description: "생성된 GitHub Check Run 식별자 (Check Run 연동 시)",
+    example: 123456789,
+  })
+  checkRunId?: number | string;
+}

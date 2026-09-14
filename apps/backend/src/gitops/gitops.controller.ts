@@ -1,4 +1,12 @@
-import { Body, Controller, Post, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Inject,
+  Post,
+  UseGuards,
+} from "@nestjs/common";
 import {
   ApiBearerAuth,
   ApiHeader,
@@ -7,17 +15,21 @@ import {
   ApiTags,
 } from "@nestjs/swagger";
 import { CiOrJwtAuthGuard } from "./guards/ci-or-jwt-auth.guard";
-import { GitOpsService } from "./gitops.service";
 import {
+  GitOpsPrReviewAsyncResponseDto,
   GitOpsPrReviewDto,
-  GitOpsPrReviewResultDto,
 } from "./dto/gitops-pr-review.dto";
+import { GitOpsPrReviewQueue } from "./queues/gitops-pr-review.queue";
+import {
+  VCS_PROVIDER_TOKEN,
+  VcsProvider,
+} from "./providers/vcs-provider.interface";
 
 /**
  * GitOps 거버넌스 및 Shift-Left PR Gate 컨트롤러
  *
- * 개발자가 생성한 GitHub PR의 변경 매니페스트에 대해 타겟 클러스터의 실제 Kyverno 정책을
- * Server-Side Dry-Run 방식으로 사전 검증하고 결과를 PR Bot 코멘트 및 Commit Status로 자동 반영합니다.
+ * 개발자가 생성한 GitHub PR의 변경 매니페스트에 대해 BullMQ 작업 큐에 비동기 위임하여
+ * AWS Bedrock 및 GitHub API Quota를 보호하며, GitHub Check Run 라이프사이클과 연동합니다.
  */
 @ApiTags("GitOps Governance")
 @ApiBearerAuth()
@@ -30,24 +42,30 @@ import {
 @UseGuards(CiOrJwtAuthGuard)
 @Controller(["v1/gitops", "gitops"])
 export class GitOpsController {
-  constructor(private readonly gitOpsService: GitOpsService) {}
+  constructor(
+    private readonly prReviewQueue: GitOpsPrReviewQueue,
+    @Inject(VCS_PROVIDER_TOKEN)
+    private readonly vcsProvider: VcsProvider,
+  ) {}
 
   /**
-   * GitHub Pull Request 매니페스트 변경사항에 대해 Kyverno Server-Side Dry-Run 정책 검증을 수행합니다.
+   * GitHub Pull Request 매니페스트 변경사항에 대해 비동기 PR 검증 작업을 큐에 등록하고 202 Accepted를 반환합니다.
    *
    * @param dto PR 리뷰 검증 요청 데이터 (repository, pullNumber, commitSha, manifestYaml 등)
-   * @returns 종합 검증 결과, 차단 여부, 위반 목록, GitHub 코멘트 링크 및 정책 예외 신청 딥링크
+   * @returns 비동기 큐 작업 식별자 및 queued 상태
    */
   @Post("pr-review")
+  @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({
-    summary: "GitHub PR Server-Side Dry-Run 정책 검증 및 PR Bot 피드백",
+    summary:
+      "GitHub PR Server-Side Dry-Run 정책 검증 비동기 큐 등록 (HTTP 202)",
     description:
-      "PR에서 변경된 쿠버네티스 매니페스트를 타겟 클러스터의 실제 Kyverno 정책과 Server-Side Dry-Run으로 대조합니다. 위반 발생 시 AI 자가 재검증 루프를 통해 교정 diff를 생성하고 PR에 인라인 코멘트와 Commit Status를 게시합니다.",
+      "PR에서 변경된 쿠버네티스 매니페스트를 BullMQ 분산 작업 큐에 등록하여 AWS Bedrock 및 GitHub API 쿼터를 보호하며 비동기 처리합니다. 수신 즉시 GitHub Check Run을 queued 상태로 발행하고 HTTP 202 Accepted 응답을 반환합니다.",
   })
   @ApiResponse({
-    status: 200,
-    description: "정책 검증 및 PR 피드백 처리 완료",
-    type: GitOpsPrReviewResultDto,
+    status: 202,
+    description: "PR 정책 검증 작업 큐 등록 완료 (비동기 배압 제어 처리)",
+    type: GitOpsPrReviewAsyncResponseDto,
   })
   @ApiResponse({
     status: 400,
@@ -63,7 +81,35 @@ export class GitOpsController {
   })
   async reviewPullRequest(
     @Body() dto: GitOpsPrReviewDto,
-  ): Promise<GitOpsPrReviewResultDto> {
-    return this.gitOpsService.reviewPullRequest(dto);
+  ): Promise<GitOpsPrReviewAsyncResponseDto> {
+    // 1. GitHub Check Run 상태를 'queued'로 선점 발행 (가능한 경우)
+    let checkRunId: number | string | undefined;
+    if (this.vcsProvider.createCheckRun) {
+      try {
+        checkRunId = await this.vcsProvider.createCheckRun({
+          repository: dto.repository,
+          commitSha: dto.commitSha,
+          name: "kyverno/pr-review-gate",
+          status: "queued",
+          title: "Kyverno Policy Validation Queued",
+          summary:
+            "Job queued in BullMQ distributed rate limiter for Bedrock quota protection.",
+        });
+      } catch {
+        // Check Run 생성 실패 시 Commit Status fallback으로 진행되거나 무시
+      }
+    }
+
+    // 2. BullMQ 큐에 작업 Enqueue
+    const enqueueResult = await this.prReviewQueue.addReviewJob(
+      dto,
+      checkRunId,
+    );
+
+    return {
+      jobId: enqueueResult.id,
+      status: "queued",
+      checkRunId: enqueueResult.checkRunId,
+    };
   }
 }
