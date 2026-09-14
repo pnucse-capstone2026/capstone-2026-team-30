@@ -369,7 +369,7 @@ export default function EnforceDiagnosticsPage() {
                 <div className="flex h-full min-h-[400px] flex-col items-center justify-center rounded-2xl border border-indigo-200 bg-indigo-50/50 p-8 text-center shadow-sm animate-pulse">
                   <Loader2 className="size-10 text-indigo-600 animate-spin mb-4" />
                   <h3 className="text-base font-bold text-indigo-950">
-                    AWS Bedrock AI 거버넌스 분석 진행 중...
+                    AI 거버넌스 분석 진행 중...
                   </h3>
                   <p className="mt-1 text-xs text-indigo-700">
                     어드미션 웹훅 정책 룰셋과 리소스 YAML 구조를 교차 검증하고
@@ -391,8 +391,10 @@ export default function EnforceDiagnosticsPage() {
                           </CardTitle>
                         </div>
                         <Badge className="bg-rose-100 text-rose-800 border-rose-200 text-[10px] font-semibold">
-                          {result.provider === "BEDROCK"
-                            ? "Bedrock AI 분석"
+                          {result.provider &&
+                          result.provider !== "RULE_ENGINE_FALLBACK" &&
+                          result.provider !== "NONE"
+                            ? `${result.provider} AI 분석`
                             : "룰 엔진 분석"}
                         </Badge>
                       </div>

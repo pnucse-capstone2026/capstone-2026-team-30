@@ -45,7 +45,7 @@ const DEFAULT_MODULES: Record<PlatformModuleId, ModuleMetadata> = {
   aiAgent: {
     id: "aiAgent",
     name: "AI Policy Assistant",
-    description: "AWS Bedrock 기반 AI 진단 및 코파일럿",
+    description: "AI 정책 진단 및 지능형 코파일럿",
     enabled: true,
     required: false,
   },
@@ -59,7 +59,7 @@ const DEFAULT_MODULES: Record<PlatformModuleId, ModuleMetadata> = {
   gitops: {
     id: "gitops",
     name: "GitOps Policy Sync",
-    description: "GitHub PR 자동 연동 및 정책 형상 관리",
+    description: "GitOps PR 자동 연동 및 정책 형상 관리",
     enabled: true,
     required: false,
   },

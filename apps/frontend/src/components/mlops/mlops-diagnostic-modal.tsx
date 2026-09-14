@@ -104,7 +104,7 @@ export function MlopsDiagnosticModal({
                   className="border-cyan-500/40 text-cyan-300 text-[11px]"
                 >
                   <Sparkles className="size-3 mr-1" />
-                  Bedrock Claude 3.5
+                  AI Copilot
                 </Badge>
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-400">

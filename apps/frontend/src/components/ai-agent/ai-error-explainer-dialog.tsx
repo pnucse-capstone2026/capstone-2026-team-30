@@ -66,9 +66,7 @@ export function AiErrorExplainerDialog({
       });
       setResult(response);
     } catch (err: any) {
-      setError(
-        err.message || "AWS Bedrock AI 에이전트와 통신 중 오류가 발생했습니다.",
-      );
+      setError(err.message || "AI 에이전트와 통신 중 오류가 발생했습니다.");
     } finally {
       setIsLoading(false);
     }
@@ -111,7 +109,7 @@ export function AiErrorExplainerDialog({
             </div>
             <div>
               <DialogTitle className="flex items-center gap-2 text-xl">
-                Bedrock AI 거버넌스 분석 가이드
+                AI 거버넌스 분석 가이드
                 {result?.provider === "RULE_ENGINE_FALLBACK" ? (
                   <Badge
                     variant="outline"
@@ -127,7 +125,9 @@ export function AiErrorExplainerDialog({
                     className="gap-1 text-xs font-normal bg-indigo-50 text-indigo-700 border border-indigo-200"
                   >
                     <Sparkles className="h-3 w-3 text-indigo-500" />
-                    Bedrock AI{" "}
+                    {result?.provider
+                      ? `${result.provider} AI`
+                      : "AI 에이전트"}{" "}
                     {result?.latencyMs ? `(${result.latencyMs}ms)` : ""}
                   </Badge>
                 )}
