@@ -196,6 +196,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       process.env.REDIS_PASSWORD ||
       undefined;
 
+    const isTls =
+      this.configService?.get<string | boolean>("REDIS_TLS") === true ||
+      this.configService?.get<string>("REDIS_TLS") === "true" ||
+      process.env.REDIS_TLS === "true";
+
     const redisOptions: RedisOptions = {
       host,
       port,
@@ -203,11 +208,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       lazyConnect: true,
       maxRetriesPerRequest: 1,
       enableOfflineQueue: false,
-      retryStrategy: (times) => {
-        // 최대 3회 재시도 후 대기 주기 상한(3초) 설정
-        if (times > 3) return null;
-        return Math.min(times * 500, 3000);
-      },
+      ...(isTls ? { tls: {} } : {}),
+      retryStrategy: (times: number) => Math.min(times * 500, 30000),
     };
 
     this.publisherClient = new Redis(redisOptions);
@@ -249,7 +251,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       }
     });
 
-    subscriber.on("error", (err) => {
+    subscriber.on("error", (err: unknown) => {
       this.logger.debug(
         `[Redis Subscriber Notice] ${
           err instanceof Error ? err.message : String(err)

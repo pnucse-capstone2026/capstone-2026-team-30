@@ -280,10 +280,11 @@ export class IncidentsService {
   /**
    * W3C Last-Event-ID 기준으로 해당 시점 이후에 생성되거나 변경된 인시던트 목록을 조회합니다.
    * 네트워크 일시 단절 후 재연결된 클라이언트의 차분 동기화(Delta Hydration)를 지원합니다.
+   * 대량 레코드 스트리밍으로 인한 OOM 방지를 위해 최대 100건 차분 하이드레이션으로 제한합니다.
    *
    * @param user 요청자 인증 컨텍스트
    * @param lastEventId 클라이언트가 수신한 마지막 이벤트 식별자 (인시던트 UUID 또는 타임스탬프)
-   * @returns 기준 시점 이후의 인시던트 DTO 목록
+   * @returns 기준 시점 이후의 인시던트 DTO 목록 (최대 100건)
    */
   async getIncidentsSince(
     user: AuthenticatedUser,
@@ -324,6 +325,7 @@ export class IncidentsService {
         id: { not: lastEventId },
       },
       orderBy: { updatedAt: "asc" },
+      take: 100,
     });
 
     return incidents.map((item) => this.mapToDto(item));

@@ -310,6 +310,7 @@ describe("IncidentsService", () => {
           id: { not: "inc-target-0" },
         },
         orderBy: { updatedAt: "asc" },
+        take: 100,
       });
       expect(result.length).toBe(1);
       expect(result[0].id).toBe("inc-newer-1");
@@ -337,6 +338,7 @@ describe("IncidentsService", () => {
           id: { not: isoTimestamp },
         },
         orderBy: { updatedAt: "asc" },
+        take: 100,
       });
       expect(result.length).toBe(1);
     });
