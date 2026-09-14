@@ -35,7 +35,7 @@ describe("IncidentsService", () => {
     policyName: "disallow-privileged-containers",
     ruleName: "check-privileged",
     blockReason: "Privileged containers are disallowed",
-    argoAppName: "deepseek-app",
+    gitopsAppName: "deepseek-app",
     gitCommitSha: "abc1234",
     gitRepository: "https://github.com/org/gitops-repo",
     status: IncidentStatus.ACTIVE,
@@ -94,7 +94,7 @@ describe("IncidentsService", () => {
         policyName: "disallow-privileged-containers",
         ruleName: "check-privileged",
         blockReason: "Privileged containers are disallowed",
-        argoAppName: "deepseek-app",
+        gitopsAppName: "deepseek-app",
       });
 
       expect(mockPrisma.deploymentIncident.create).toHaveBeenCalledTimes(1);

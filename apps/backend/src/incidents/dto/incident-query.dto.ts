@@ -33,12 +33,12 @@ export class ListIncidentsQueryDto {
   status?: IncidentStatus;
 
   @ApiPropertyOptional({
-    description: "ArgoCD 애플리케이션 이름 필터링",
+    description: "GitOps 애플리케이션 이름 필터링 (ArgoCD, Flux 등)",
     example: "production-recommender",
   })
   @IsOptional()
   @IsString()
-  argoAppName?: string;
+  gitopsAppName?: string;
 
   @ApiPropertyOptional({
     description: "차단 정책 이름 필터링",

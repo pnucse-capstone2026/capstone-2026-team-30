@@ -3,9 +3,14 @@ import { CoreV1Event } from "@kubernetes/client-node";
 import { IncidentsService } from "../../incidents/incidents.service";
 import { ClusterProvider } from "../cluster-provider";
 import { AdmissionIncidentWatcherService } from "./admission-incident-watcher.service";
+import { CoreEventIncidentDetector } from "./detectors/k8s-core-event.detector";
+import { ArgoCdIncidentDetector } from "./detectors/argocd.detector";
+import { FluxCdIncidentDetector } from "./detectors/fluxcd.detector";
 
 describe("AdmissionIncidentWatcherService", () => {
   let service: AdmissionIncidentWatcherService;
+  let coreEventDetector: CoreEventIncidentDetector;
+  let argoCdDetector: ArgoCdIncidentDetector;
   let mockIncidentsService: {
     recordAdmissionBlock: jest.Mock;
   };
@@ -32,6 +37,9 @@ describe("AdmissionIncidentWatcherService", () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdmissionIncidentWatcherService,
+        CoreEventIncidentDetector,
+        ArgoCdIncidentDetector,
+        FluxCdIncidentDetector,
         { provide: IncidentsService, useValue: mockIncidentsService },
         { provide: ClusterProvider, useValue: mockClusterProvider },
       ],
@@ -40,6 +48,10 @@ describe("AdmissionIncidentWatcherService", () => {
     service = module.get<AdmissionIncidentWatcherService>(
       AdmissionIncidentWatcherService,
     );
+    coreEventDetector = module.get<CoreEventIncidentDetector>(
+      CoreEventIncidentDetector,
+    );
+    argoCdDetector = module.get<ArgoCdIncidentDetector>(ArgoCdIncidentDetector);
   });
 
   describe("parseAdmissionBlockMessage", () => {
@@ -97,8 +109,8 @@ describe("AdmissionIncidentWatcherService", () => {
     });
   });
 
-  describe("processArgoApplication", () => {
-    it("extracts blocked resource from syncResult and forwards to incidentsService", async () => {
+  describe("ArgoCdIncidentDetector", () => {
+    it("extracts blocked resource from syncResult and forwards with gitopsAppName", async () => {
       const mockApp = {
         metadata: { name: "payment-service" },
         spec: {
@@ -134,12 +146,15 @@ describe("AdmissionIncidentWatcherService", () => {
         },
       };
 
-      await service.processArgoApplication("cluster-alpha", mockApp as any);
-
-      expect(mockIncidentsService.recordAdmissionBlock).toHaveBeenCalledTimes(
-        1,
+      const handleIncident = jest.fn();
+      await (argoCdDetector as any).processApplication(
+        "cluster-alpha",
+        mockApp,
+        handleIncident,
       );
-      expect(mockIncidentsService.recordAdmissionBlock).toHaveBeenCalledWith(
+
+      expect(handleIncident).toHaveBeenCalledTimes(1);
+      expect(handleIncident).toHaveBeenCalledWith(
         expect.objectContaining({
           clusterId: "cluster-alpha",
           namespace: "payments",
@@ -147,7 +162,7 @@ describe("AdmissionIncidentWatcherService", () => {
           resourceName: "payment-api",
           policyName: "disallow-privileged-containers",
           ruleName: "check-privileged",
-          argoAppName: "payment-service",
+          gitopsAppName: "payment-service",
           gitCommitSha: "sha-12345",
           gitRepository: "https://github.com/org/gitops-payments",
         }),
@@ -155,8 +170,8 @@ describe("AdmissionIncidentWatcherService", () => {
     });
   });
 
-  describe("processCoreEvent", () => {
-    it("processes AdmissionWebhookDenied core event and forwards to incidentsService", async () => {
+  describe("CoreEventIncidentDetector", () => {
+    it("processes AdmissionWebhookDenied core event and forwards to incident handler", async () => {
       const mockEvent: CoreV1Event = {
         metadata: { name: "event-1" },
         reason: "AdmissionWebhookDenied",
@@ -172,12 +187,15 @@ describe("AdmissionIncidentWatcherService", () => {
         lastTimestamp: new Date(),
       };
 
-      await service.processCoreEvent("cluster-alpha", mockEvent);
-
-      expect(mockIncidentsService.recordAdmissionBlock).toHaveBeenCalledTimes(
-        1,
+      const handleIncident = jest.fn();
+      await (coreEventDetector as any).processEvent(
+        "cluster-alpha",
+        mockEvent,
+        handleIncident,
       );
-      expect(mockIncidentsService.recordAdmissionBlock).toHaveBeenCalledWith(
+
+      expect(handleIncident).toHaveBeenCalledTimes(1);
+      expect(handleIncident).toHaveBeenCalledWith(
         expect.objectContaining({
           clusterId: "cluster-alpha",
           namespace: "data-pipeline",

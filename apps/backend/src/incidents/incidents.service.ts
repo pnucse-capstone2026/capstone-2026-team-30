@@ -25,7 +25,7 @@ export interface RecordAdmissionBlockParams {
   policyName: string;
   ruleName?: string;
   blockReason: string;
-  argoAppName?: string;
+  gitopsAppName?: string;
   gitCommitSha?: string;
   gitRepository?: string;
   metadata?: Record<string, any>;
@@ -34,7 +34,7 @@ export interface RecordAdmissionBlockParams {
 /**
  * Closed-Loop Admission Block 배포 차단 인시던트 관리 서비스
  *
- * ArgoCD Sync 및 K8s API 서버에서 Kyverno Admission Webhook에 의해 차단된 워크로드
+ * GitOps Sync 및 K8s API 서버에서 Kyverno Admission Webhook에 의해 차단된 워크로드
  * 이벤트를 수신하여 영속화하고, 중복 방지(Deduplication) 및 라이프사이클을 관리합니다.
  */
 @Injectable()
@@ -47,12 +47,10 @@ export class IncidentsService {
   ) {}
 
   /**
-   * Admission Webhook 차단 이벤트를 데이터베이스에 기록합니다.
-   * 동일 리소스/정책에 대해 ACTIVE 상태인 인시던트가 이미 존재할 경우,
-   * 중복 생성하지 않고 차단 횟수(blockCount)와 최근 발생 시각을 갱신합니다.
+   * Kyverno Admission 차단 이벤트를 데이터베이스에 기록하거나 기존 인시던트를 갱신합니다.
    *
-   * @param params 차단 이벤트 세부 파라미터
-   * @returns 생성 또는 갱신된 인시던트 DTO
+   * @param params 차단 이벤트 매개변수
+   * @returns 기록 또는 갱신된 인시던트 DTO
    */
   async recordAdmissionBlock(
     params: RecordAdmissionBlockParams,
@@ -84,7 +82,7 @@ export class IncidentsService {
           lastBlockedAt: new Date(),
           blockReason: params.blockReason,
           ruleName: params.ruleName ?? existing.ruleName,
-          argoAppName: params.argoAppName ?? existing.argoAppName,
+          gitopsAppName: params.gitopsAppName ?? existing.gitopsAppName,
           gitCommitSha: params.gitCommitSha ?? existing.gitCommitSha,
           gitRepository: params.gitRepository ?? existing.gitRepository,
           metadata: mergedMetadata as Prisma.InputJsonValue,
@@ -105,7 +103,7 @@ export class IncidentsService {
         policyName: params.policyName,
         ruleName: params.ruleName,
         blockReason: params.blockReason,
-        argoAppName: params.argoAppName,
+        gitopsAppName: params.gitopsAppName,
         gitCommitSha: params.gitCommitSha,
         gitRepository: params.gitRepository,
         status: IncidentStatus.ACTIVE,
@@ -154,8 +152,11 @@ export class IncidentsService {
     if (query.status) {
       where.status = query.status;
     }
-    if (query.argoAppName) {
-      where.argoAppName = { contains: query.argoAppName, mode: "insensitive" };
+    if (query.gitopsAppName) {
+      where.gitopsAppName = {
+        contains: query.gitopsAppName,
+        mode: "insensitive",
+      };
     }
     if (query.policyName) {
       where.policyName = { contains: query.policyName, mode: "insensitive" };
@@ -305,7 +306,7 @@ export class IncidentsService {
       policyName: entity.policyName,
       ruleName: entity.ruleName,
       blockReason: entity.blockReason,
-      argoAppName: entity.argoAppName,
+      gitopsAppName: entity.gitopsAppName,
       gitCommitSha: entity.gitCommitSha,
       gitRepository: entity.gitRepository,
       status: entity.status,

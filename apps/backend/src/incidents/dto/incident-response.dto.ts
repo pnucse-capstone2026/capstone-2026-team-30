@@ -48,10 +48,10 @@ export class DeploymentIncidentDto {
   blockReason: string;
 
   @ApiPropertyOptional({
-    description: "연계된 ArgoCD 애플리케이션 이름",
+    description: "연계된 GitOps 애플리케이션 이름 (ArgoCD, Flux 등)",
     example: "deepseek-production",
   })
-  argoAppName?: string | null;
+  gitopsAppName?: string | null;
 
   @ApiPropertyOptional({
     description: "차단 발생 당시의 Git 커밋 해시",

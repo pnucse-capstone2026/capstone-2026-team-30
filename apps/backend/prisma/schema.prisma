@@ -227,7 +227,7 @@ model DeploymentIncident {
   policyName     String         @db.VarChar(253)
   ruleName       String?        @db.VarChar(253)
   blockReason    String         @db.Text
-  argoAppName    String?        @db.VarChar(253)
+  gitopsAppName  String?        @db.VarChar(253)
   gitCommitSha   String?        @db.VarChar(64)
   gitRepository  String?        @db.VarChar(512)
   status         IncidentStatus @default(ACTIVE)
@@ -243,5 +243,5 @@ model DeploymentIncident {
   @@index([clusterId, status])
   @@index([clusterId, namespace, status])
   @@index([status, lastBlockedAt])
-  @@index([argoAppName])
+  @@index([gitopsAppName])
 }

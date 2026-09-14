@@ -73,7 +73,7 @@ export class IncidentsController {
   @ApiOperation({
     summary: "배포 차단 인시던트 목록 조회",
     description:
-      "클러스터, 네임스페이스, 상태, ArgoCD 앱 이름 등의 조건으로 인시던트 목록을 페이징 조회합니다.",
+      "클러스터, 네임스페이스, 상태, GitOps 앱 이름 등의 조건으로 인시던트 목록을 페이징 조회합니다.",
   })
   @ApiResponse({
     status: 200,
