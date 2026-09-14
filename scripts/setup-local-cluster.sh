@@ -111,9 +111,17 @@ if [ "${MINIMAL_MODE}" = true ]; then
     --set "reportsController.backgroundScan=false" \
     --set "backgroundController.backgroundScanInterval=0" \
     --set admissionController.resources.requests.cpu=50m \
-    --set admissionController.resources.requests.memory=64Mi \
-    --set admissionController.resources.limits.cpu=200m \
-    --set admissionController.resources.limits.memory=256Mi \
+    --set admissionController.resources.requests.memory=128Mi \
+    --set admissionController.resources.limits.cpu=500m \
+    --set admissionController.resources.limits.memory=768Mi \
+    --set backgroundController.resources.requests.cpu=50m \
+    --set backgroundController.resources.requests.memory=128Mi \
+    --set backgroundController.resources.limits.cpu=500m \
+    --set backgroundController.resources.limits.memory=768Mi \
+    --set reportsController.resources.requests.cpu=50m \
+    --set reportsController.resources.requests.memory=128Mi \
+    --set reportsController.resources.limits.cpu=500m \
+    --set reportsController.resources.limits.memory=768Mi \
     --set features.policyExceptions.enabled=true \
     --set "features.policyExceptions.namespace=*" \
     --set features.validatingAdmissionPolicyReports.enabled=false \
@@ -125,7 +133,8 @@ else
   # 1. 4대 컨트롤러(Admission, Background, Cleanup, Reports) 전체 활성화
   # 2. backgroundScan=true 활성화하되 backgroundScanInterval을 1h로 설정하여 etcd I/O 스래싱 원천 차단
   # 3. admissionReports.enabled=false로 설정하여 매 요청마다 발생하는 임시 CRD etcd 쓰기 오버헤드 방지
-  echo ">>> Deploying Kyverno full suite (Disk I/O optimized: 1h scan interval, admission reports disabled)..."
+  # 4. 메모리 제한을 768Mi로 상향하여 cgroup 메모리 부족으로 인한 실행 바이너리 디스크 Direct Reclaim 스래싱 원천 차단
+  echo ">>> Deploying Kyverno full suite (Disk I/O optimized: 1h scan interval, admission reports disabled, 768Mi memory limit)..."
   helm upgrade --install kyverno kyverno/kyverno \
     --namespace kyverno \
     --create-namespace \
@@ -135,10 +144,23 @@ else
     --set reportsController.replicas=1 \
     --set "reportsController.backgroundScan=true" \
     --set "backgroundController.backgroundScanInterval=1h" \
+    --set "backgroundController.backgroundScanInterval=1h" \
     --set admissionController.resources.requests.cpu=50m \
-    --set admissionController.resources.requests.memory=64Mi \
-    --set admissionController.resources.limits.cpu=200m \
-    --set admissionController.resources.limits.memory=256Mi \
+    --set admissionController.resources.requests.memory=128Mi \
+    --set admissionController.resources.limits.cpu=500m \
+    --set admissionController.resources.limits.memory=768Mi \
+    --set backgroundController.resources.requests.cpu=50m \
+    --set backgroundController.resources.requests.memory=128Mi \
+    --set backgroundController.resources.limits.cpu=500m \
+    --set backgroundController.resources.limits.memory=768Mi \
+    --set cleanupController.resources.requests.cpu=50m \
+    --set cleanupController.resources.requests.memory=64Mi \
+    --set cleanupController.resources.limits.cpu=200m \
+    --set cleanupController.resources.limits.memory=256Mi \
+    --set reportsController.resources.requests.cpu=50m \
+    --set reportsController.resources.requests.memory=128Mi \
+    --set reportsController.resources.limits.cpu=500m \
+    --set reportsController.resources.limits.memory=768Mi \
     --set features.policyExceptions.enabled=true \
     --set "features.policyExceptions.namespace=*" \
     --set features.validatingAdmissionPolicyReports.enabled=false \

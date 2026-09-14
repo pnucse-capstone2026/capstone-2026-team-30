@@ -20,8 +20,8 @@ COPY apps/backend/package.json ./apps/backend/
 COPY apps/frontend/package.json ./apps/frontend/
 COPY packages/shared/package.json ./packages/shared/
 
-# 모노레포 패키지 의존성 설치
-RUN pnpm install --no-frozen-lockfile
+# 모노레포 패키지 의존성 설치 (BuildKit 캐시 마운트로 레이어 비대화 및 중복 다운로드 방지)
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --no-frozen-lockfile
 
 # 소스코드 전체 복사 및 애플리케이션 빌드
 COPY . .
