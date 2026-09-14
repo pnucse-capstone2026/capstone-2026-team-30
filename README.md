@@ -16,7 +16,7 @@
 - [1. Executive Summary & Core Mission](#1-executive-summary--core-mission)
 - [2. Platform Architecture & System Topology](#2-platform-architecture--system-topology)
 - [3. Repository Monorepo Layout](#3-repository-monorepo-layout)
-- [4. Master Context Guide: The 6 Chapters](#4-master-context-guide-the-6-chapters)
+- [4. Platform Architecture & Specification Chapters](#4-platform-architecture--specification-chapters)
   - [Chapter 1: Platform Overview & System Architecture](#chapter-1-platform-overview--system-architecture)
   - [Chapter 2: Core Governance Engine & Policy Lifecycle](#chapter-2-core-governance-engine--policy-lifecycle)
   - [Chapter 3: MLOps Platform & FinOps Suite](#chapter-3-mlops-platform--finops-suite)
@@ -30,8 +30,7 @@
   - [6.3 Default Access Credentials](#63-default-access-credentials)
 - [7. Automated Testing & Verification Suite](#7-automated-testing--verification-suite)
 - [8. Universal Cluster Deployment (EKS & On-Premise)](#8-universal-cluster-deployment-eks--on-premise)
-- [9. Agent & Developer Operational Guidelines](#9-agent--developer-operational-guidelines)
-- [10. In-Depth Documentation Index](#10-in-depth-documentation-index)
+- [9. In-Depth Documentation Index](#9-in-depth-documentation-index)
 
 ---
 
@@ -162,28 +161,28 @@ Managed via **pnpm workspaces** (`pnpm-workspace.yaml`), standardizing TypeScrip
 
 ---
 
-## 4. Master Context Guide: The 6 Chapters
+## 4. Platform Architecture & Specification Chapters
 
 The complete architectural, implementation, and operational specifications for the platform are organized into 6 modular chapters authored by dedicated leads:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                               MASTER CONTEXT GUIDE SPECIFICATIONS                                 │
+│                           PLATFORM SPECIFICATIONS & ARCHITECTURE CHAPTERS                         │
 ├───────────────┬─────────────────────────────────────────────────┬──────────────────────────────────┤
 │ Chapter       │ Title & Scope                                   │ Primary Specification Document   │
 ├───────────────┼─────────────────────────────────────────────────┼──────────────────────────────────┤
-│ **Ch 1 & 2**  │ **Platform Overview, Architecture & Core Engine**│ [ch1_2_architecture_core.md](file:///home/user/work_dir/docs/readme_drafts/ch1_2_architecture_core.md)   │
-│ **Ch 3**      │ **MLOps Suite & FinOps Governance Platform**    │ [ch3_mlops_platform.md](file:///home/user/work_dir/docs/readme_drafts/ch3_mlops_platform.md)        │
-│ **Ch 4**      │ **AI Diagnostics, Policy Simulation & GitOps**  │ [ch4_ai_simulation_gitops.md](file:///home/user/work_dir/docs/readme_drafts/ch4_ai_simulation_gitops.md)  │
-│ **Ch 5**      │ **Frontend Architecture & Session Security**     │ [ch5_frontend_security.md](file:///home/user/work_dir/docs/readme_drafts/ch5_frontend_security.md)     │
-│ **Ch 6**      │ **Infrastructure, Deployment & Verification**    │ [ch6_deploy_operations.md](file:///home/user/work_dir/docs/readme_drafts/ch6_deploy_operations.md)     │
+│ **Ch 1 & 2**  │ **Platform Overview, Architecture & Core Engine**│ [ch1_2_architecture_core.md](docs/readme_drafts/ch1_2_architecture_core.md)   │
+│ **Ch 3**      │ **MLOps Suite & FinOps Governance Platform**    │ [ch3_mlops_platform.md](docs/readme_drafts/ch3_mlops_platform.md)        │
+│ **Ch 4**      │ **AI Diagnostics, Policy Simulation & GitOps**  │ [ch4_ai_simulation_gitops.md](docs/readme_drafts/ch4_ai_simulation_gitops.md)  │
+│ **Ch 5**      │ **Frontend Architecture & Session Security**     │ [ch5_frontend_security.md](docs/readme_drafts/ch5_frontend_security.md)     │
+│ **Ch 6**      │ **Infrastructure, Deployment & Verification**    │ [ch6_deploy_operations.md](docs/readme_drafts/ch6_deploy_operations.md)     │
 └───────────────┴─────────────────────────────────────────────────┴──────────────────────────────────┘
 ```
 
 ---
 
 ### Chapter 1: Platform Overview & System Architecture
-*Detailed Specification*: [docs/readme_drafts/ch1_2_architecture_core.md](file:///home/user/work_dir/docs/readme_drafts/ch1_2_architecture_core.md#chapter-1-platform-overview--system-architecture)
+*Detailed Specification*: [docs/readme_drafts/ch1_2_architecture_core.md](docs/readme_drafts/ch1_2_architecture_core.md#chapter-1-platform-overview--system-architecture)
 
 * **Enterprise Problem Statement**: Resolving the trilemma of Kubernetes multi-tenant security compliance, runaway MLOps compute expenditures, and API server etcd I/O exhaustion.
 * **Hub-and-Spoke Topology**: Central control plane running in `kyverno-platform` managing target clusters across AWS EKS and on-premise environments via single HTTP/2 watch streams.
@@ -196,7 +195,7 @@ The complete architectural, implementation, and operational specifications for t
 ---
 
 ### Chapter 2: Core Governance Engine & Policy Lifecycle
-*Detailed Specification*: [docs/readme_drafts/ch1_2_architecture_core.md](file:///home/user/work_dir/docs/readme_drafts/ch1_2_architecture_core.md#chapter-2-core-governance-engine--policy-lifecycle)
+*Detailed Specification*: [docs/readme_drafts/ch1_2_architecture_core.md](docs/readme_drafts/ch1_2_architecture_core.md#chapter-2-core-governance-engine--policy-lifecycle)
 
 * **Policy Engine & Parser**: Dynamic ingestion of Kyverno `ClusterPolicy` and `Policy` manifests using `js-yaml`, supporting `validate`, `mutate`, `generate`, and `verifyImages` rules. Automatically synthesizes `autogen-` controller rules for Pods, Deployments, and CronJobs.
 * **PolicyReport Ingestion Pipeline**: Real-time watching of `wgpolicyk8s.io/v1alpha2` `PolicyReport` and `ClusterPolicyReport` CRDs. Features deterministic ID generation (`<clusterId>:<namespace>/<reportName>:<index>`), namespace collision protection, index shift compensation, and 44 baseline noise filter rules.
@@ -207,7 +206,7 @@ The complete architectural, implementation, and operational specifications for t
 ---
 
 ### Chapter 3: MLOps Platform & FinOps Suite
-*Detailed Specification*: [docs/readme_drafts/ch3_mlops_platform.md](file:///home/user/work_dir/docs/readme_drafts/ch3_mlops_platform.md)
+*Detailed Specification*: [docs/readme_drafts/ch3_mlops_platform.md](docs/readme_drafts/ch3_mlops_platform.md)
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -238,7 +237,7 @@ The complete architectural, implementation, and operational specifications for t
 ---
 
 ### Chapter 4: AI Diagnostics, Policy Simulation Lab & GitOps
-*Detailed Specification*: [docs/readme_drafts/ch4_ai_simulation_gitops.md](file:///home/user/work_dir/docs/readme_drafts/ch4_ai_simulation_gitops.md)
+*Detailed Specification*: [docs/readme_drafts/ch4_ai_simulation_gitops.md](docs/readme_drafts/ch4_ai_simulation_gitops.md)
 
 * **Policy Simulation Lab (`/simulation`)**: Pre-deployment dry-run sandbox isolated in `governance-testbed`. Evaluates candidate Kubernetes manifests against live admission controllers without modifying cluster state, generating instant compliance scores and pre-filling exception requests.
 * **Admission Enforce AI Diagnostics (`/diagnostics`)**: Solves the Kubernetes admission gap where blocked pods in Enforce mode never persist to etcd and fail to generate PolicyReports. Integrates AWS Bedrock Converse API (Nova Lite / Claude 3.5 Sonnet) with the heuristic `WorkloadEvaluatorService` to deliver root cause analysis and copy-paste-ready YAML patches.
@@ -248,7 +247,7 @@ The complete architectural, implementation, and operational specifications for t
 ---
 
 ### Chapter 5: Frontend Architecture, Navigation & Security Mechanisms
-*Detailed Specification*: [docs/readme_drafts/ch5_frontend_security.md](file:///home/user/work_dir/docs/readme_drafts/ch5_frontend_security.md)
+*Detailed Specification*: [docs/readme_drafts/ch5_frontend_security.md](docs/readme_drafts/ch5_frontend_security.md)
 
 * **Next.js 15 App Router Architecture**: Role-segregated routing between Developer Workspace (`/dashboard`, `/policies`, `/violations`, `/exceptions`, `/mlops/*`) and Admin Console (`/admin/*`), leveraging standalone output builds for minimal container sizes (<150MB).
 * **Global State Management**: Dual-layer state architecture pairing lightweight Zustand stores (`auth-store.ts`, `data-store.ts`, `notifications-store.ts`) with TanStack Query v5 cache invalidation.
@@ -262,7 +261,7 @@ The complete architectural, implementation, and operational specifications for t
 ---
 
 ### Chapter 6: Infrastructure, Deployment & Verification Guide
-*Detailed Specification*: [docs/readme_drafts/ch6_deploy_operations.md](file:///home/user/work_dir/docs/readme_drafts/ch6_deploy_operations.md)
+*Detailed Specification*: [docs/readme_drafts/ch6_deploy_operations.md](docs/readme_drafts/ch6_deploy_operations.md)
 
 * **Universal Deployment Engine (`install.sh` / `scripts/deploy.sh`)**: Environment-independent installer with automated EKS vs. On-Premise detection, dynamic cryptographic password and JWT generation, Kyverno health verification, and rollout tracking.
 * **Kubernetes Manifest Architecture**: Modular Kustomize base with AWS EKS overlay (ALB Ingress, gp3 StorageClass, Bedrock IRSA) and On-Premise overlay (NodePort 30080/30081, Ingress-Nginx).
@@ -284,7 +283,7 @@ The platform supports selective modularization, allowing operators to disable op
 | **`simulation`** | **Optional** | Pre-deployment What-If simulation engine is excluded |
 | **`gitops`** | **Optional** | GitHub PR creation is bypassed in favor of runtime-only exception application |
 
-* **Architectural Plan**: See [docs/modular-components-architecture-plan.md](file:///home/user/work_dir/docs/modular-components-architecture-plan.md) for detailed specifications on backend dynamic module loading (`AppModule`), runtime discovery endpoint (`GET /api/system/modules`), and frontend dynamic navigation filtering.
+* **Architectural Plan**: See [docs/modular-components-architecture-plan.md](docs/modular-components-architecture-plan.md) for detailed specifications on backend dynamic module loading (`AppModule`), runtime discovery endpoint (`GET /api/system/modules`), and frontend dynamic navigation filtering.
 
 ---
 
@@ -374,33 +373,20 @@ Deploy the full platform into any target Kubernetes cluster using the environmen
 
 ---
 
-## 9. Agent & Developer Operational Guidelines
-
-All automated agents and contributing engineers must adhere to the project standards defined in [`.agents/AGENTS.md`](file:///home/user/work_dir/.agents/AGENTS.md):
-
-* **Commit Message Format**: Strict [Conventional Commits v1.0.0](https://www.conventionalcommits.org/en/v1.0.0/) (`feat`, `fix`, `docs`, `refactor`, `chore`). Subject lines must be in lowercase imperative mood with no ending period (e.g., `feat(mlops): add idle workload reaper`).
-* **Author Identity**: All agent commits must use:
-  ```text
-  yeongrimGo-agy <yeongrimgo1106@pusan.ac.kr>
-  ```
-* **Human-in-the-Loop Approval**: Agents must display the planned commit message, author, and staged changes summary, requesting explicit confirmation before executing `git commit`.
-* **Concise Communication**: Keep explanations compact, structured, and high-signal.
-
----
-
-## 10. In-Depth Documentation Index
+## 9. In-Depth Documentation Index
 
 | Documentation Resource | Scope & Primary Focus |
 | :--- | :--- |
-| **[Chapter 1 & 2: Platform Overview & Core Governance Engine](file:///home/user/work_dir/docs/readme_drafts/ch1_2_architecture_core.md)** | Architecture, Hub-and-Spoke topology, Informer caching, PolicyExceptions, and DB models |
-| **[Chapter 3: MLOps Platform & FinOps Suite](file:///home/user/work_dir/docs/readme_drafts/ch3_mlops_platform.md)** | Kubeflow Notebooks, in-app reverse proxy, KFP pipelines, KServe, and GPU FinOps |
-| **[Chapter 4: AI Diagnostics, Policy Simulation & GitOps](file:///home/user/work_dir/docs/readme_drafts/ch4_ai_simulation_gitops.md)** | Dry-run simulation lab, AWS Bedrock Converse RCA, and GitOps PR auto-merge |
-| **[Chapter 5: Frontend Architecture & Session Security](file:///home/user/work_dir/docs/readme_drafts/ch5_frontend_security.md)** | Next.js 15 App Router, SSE subscriptions, single-session invalidation, and Zustand |
-| **[Chapter 6: Infrastructure, Deployment & Verification Guide](file:///home/user/work_dir/docs/readme_drafts/ch6_deploy_operations.md)** | Universal installer, Kustomize overlays, Kind/EKS setups, and verification playbooks |
-| **[Modular Components Architecture Plan](file:///home/user/work_dir/docs/modular-components-architecture-plan.md)** | Architectural design for selectively enabling/disabling MLOps, AI, and Simulation modules |
-| **[Documentation Modernization Plan](file:///home/user/work_dir/docs/documentation-update-plan.md)** | Phased roadmap and target matrix for synchronizing all secondary docs and guides |
-| **[Technical Foundation & Architectural Whitepaper](file:///home/user/work_dir/docs/TECHNICAL_FOUNDATION_REPORT.md)** | Deep theoretical analysis of Kubernetes internals, Informers, and Kyverno webhooks |
-| **[Local Kind E2E Testing Guide](file:///home/user/work_dir/docs/guides/local-kind-testing.md)** | Step-by-step verification guide for policy enforcement, exceptions, and MLOps |
-| **[Cluster Visualization & Live Presentation Plan](file:///home/user/work_dir/docs/cluster-visualization-plan.md)** | Observability architecture and presentation storyboard with Policy Reporter and Grafana |
-| **[Architecture Decision Records (ADRs)](file:///home/user/work_dir/docs/adr/0001-tech-stack-and-architecture.md)** | Technical decisions for Monorepo, Database access, Runtime environment, and CI/CD |
-| **[Release Patch Notes (2026-08)](file:///home/user/work_dir/docs/history/patch-notes-2026-08.md)** | Historical patch notes detailing MLOps rollouts, informer caching, and refactoring |
+| **[Chapter 1 & 2: Platform Overview & Core Governance Engine](docs/readme_drafts/ch1_2_architecture_core.md)** | Architecture, Hub-and-Spoke topology, Informer caching, PolicyExceptions, and DB models |
+| **[Chapter 3: MLOps Platform & FinOps Suite](docs/readme_drafts/ch3_mlops_platform.md)** | Kubeflow Notebooks, in-app reverse proxy, KFP pipelines, KServe, and GPU FinOps |
+| **[Chapter 4: AI Diagnostics, Policy Simulation & GitOps](docs/readme_drafts/ch4_ai_simulation_gitops.md)** | Dry-run simulation lab, AWS Bedrock Converse RCA, and GitOps PR auto-merge |
+| **[Chapter 5: Frontend Architecture & Session Security](docs/readme_drafts/ch5_frontend_security.md)** | Next.js 15 App Router, SSE subscriptions, single-session invalidation, and Zustand |
+| **[Chapter 6: Infrastructure, Deployment & Verification Guide](docs/readme_drafts/ch6_deploy_operations.md)** | Universal installer, Kustomize overlays, Kind/EKS setups, and verification playbooks |
+| **[Modular Components Architecture Plan](docs/modular-components-architecture-plan.md)** | Architectural design for selectively enabling/disabling MLOps, AI, and Simulation modules |
+| **[Documentation Modernization Plan](docs/documentation-update-plan.md)** | Phased roadmap and target matrix for synchronizing all secondary docs and guides |
+| **[Technical Foundation & Architectural Whitepaper](docs/TECHNICAL_FOUNDATION_REPORT.md)** | Deep theoretical analysis of Kubernetes internals, Informers, and Kyverno webhooks |
+| **[Local Kind E2E Testing Guide](docs/guides/local-kind-testing.md)** | Step-by-step verification guide for policy enforcement, exceptions, and MLOps |
+| **[Cluster Visualization & Live Presentation Plan](docs/cluster-visualization-plan.md)** | Observability architecture and presentation storyboard with Policy Reporter and Grafana |
+| **[Architecture Decision Records (ADRs)](docs/adr/0001-tech-stack-and-architecture.md)** | Technical decisions for Monorepo, Database access, Runtime environment, and CI/CD |
+| **[Release Patch Notes (2026-08)](docs/history/patch-notes-2026-08.md)** | Historical patch notes detailing MLOps rollouts, informer caching, and refactoring |
+| **[Agent Operational Guidelines](docs/guides/agent-operational-guidelines.md)** | Contributor and AI agent workflow, commit format, and identity guidelines |
