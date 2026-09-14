@@ -152,4 +152,45 @@ describe("IncidentsController", () => {
       done();
     });
   });
+
+  it("hydrates missed events when last-event-id header is provided", (done) => {
+    const pastIncident = {
+      ...sampleIncidentDto,
+      id: "inc-past-1",
+      updatedAt: new Date(),
+    };
+    const mockService = {
+      getIncidentsSince: jest.fn().mockResolvedValue([pastIncident]),
+    };
+    const mockEventsService = {
+      subscribe: jest
+        .fn()
+        .mockReturnValue(of({ id: "inc-live-1", data: { test: true } })),
+    };
+
+    const controller = new IncidentsController(
+      mockService as any,
+      mockEventsService as any,
+    );
+
+    const stream$ = controller.subscribeEvents(mockUser, "inc-last-0");
+    expect(mockService.getIncidentsSince).toHaveBeenCalledWith(
+      mockUser,
+      "inc-last-0",
+    );
+
+    const emitted: any[] = [];
+    stream$.subscribe({
+      next: (event) => emitted.push(event),
+      complete: () => {
+        expect(emitted.length).toBe(2);
+        // 첫 번째 이벤트는 과거 누락분 하이드레이션
+        expect(emitted[0].id).toBe("inc-past-1");
+        expect(emitted[0].type).toBe("incident:updated");
+        // 두 번째 이벤트는 실시간 스트림
+        expect(emitted[1].id).toBe("inc-live-1");
+        done();
+      },
+    });
+  });
 });

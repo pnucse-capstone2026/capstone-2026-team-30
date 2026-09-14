@@ -278,6 +278,58 @@ export class IncidentsService {
   }
 
   /**
+   * W3C Last-Event-ID 기준으로 해당 시점 이후에 생성되거나 변경된 인시던트 목록을 조회합니다.
+   * 네트워크 일시 단절 후 재연결된 클라이언트의 차분 동기화(Delta Hydration)를 지원합니다.
+   *
+   * @param user 요청자 인증 컨텍스트
+   * @param lastEventId 클라이언트가 수신한 마지막 이벤트 식별자 (인시던트 UUID 또는 타임스탬프)
+   * @returns 기준 시점 이후의 인시던트 DTO 목록
+   */
+  async getIncidentsSince(
+    user: AuthenticatedUser,
+    lastEventId: string,
+  ): Promise<DeploymentIncidentDto[]> {
+    if (!lastEventId || !lastEventId.trim()) {
+      return [];
+    }
+
+    let sinceTime: Date | null = null;
+
+    // 1. lastEventId가 기존 인시던트 UUID인 경우 해당 레코드의 최종 갱신 시점 확인
+    const target = await this.prisma.deploymentIncident.findUnique({
+      where: { id: lastEventId },
+    });
+
+    if (target) {
+      sinceTime = target.updatedAt;
+    } else {
+      // 2. ISO 타임스탬프 문자열인 경우 날짜 파싱
+      const parsed = new Date(lastEventId);
+      if (!isNaN(parsed.getTime())) {
+        sinceTime = parsed;
+      }
+    }
+
+    if (!sinceTime) {
+      return [];
+    }
+
+    const clusterFilter: Prisma.DeploymentIncidentWhereInput =
+      user.role === "ADMIN" ? {} : { clusterId: { in: user.clusterIds || [] } };
+
+    const incidents = await this.prisma.deploymentIncident.findMany({
+      where: {
+        ...clusterFilter,
+        updatedAt: { gt: sinceTime },
+        id: { not: lastEventId },
+      },
+      orderBy: { updatedAt: "asc" },
+    });
+
+    return incidents.map((item) => this.mapToDto(item));
+  }
+
+  /**
    * 사용자의 클러스터 접근 권한을 확인합니다.
    * ADMIN 권한은 모든 클러스터에 접근 가능하며, 일반 사용자는 배정된 clusterIds에 포함되어야 합니다.
    *

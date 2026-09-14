@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   MessageEvent,
   Param,
   Patch,
@@ -11,11 +12,13 @@ import {
 } from "@nestjs/common";
 import {
   ApiBearerAuth,
+  ApiHeader,
   ApiOperation,
   ApiResponse,
   ApiTags,
 } from "@nestjs/swagger";
-import { Observable } from "rxjs";
+import { concat, from, Observable } from "rxjs";
+import { mergeMap } from "rxjs/operators";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import { RequirePermissions } from "../auth/decorators/require-permissions.decorator";
@@ -47,22 +50,61 @@ export class IncidentsController {
 
   /**
    * 실시간 인시던트 변경 SSE(Server-Sent Events) 스트림을 구독합니다.
-   * 사용자 권한이 있는 클러스터의 생성/갱신 이벤트만 실시간 수신합니다.
+   * 사용자 권한이 있는 클러스터의 생성/갱신 이벤트를 실시간 수신하며,
+   * W3C Last-Event-ID 헤더가 제공될 경우 단절 시점 이후 누락된 변경분을 차분 하이드레이션(Delta Hydration)합니다.
    */
   @Sse("events")
   @RequirePermissions("incidents.read")
   @ApiOperation({
     summary: "실시간 배포 차단 인시던트 SSE 스트림 구독",
     description:
-      "사용자가 접근 가능한 클러스터의 인시던트 생성 및 상태 변경 이벤트를 실시간으로 스트리밍합니다.",
+      "사용자가 접근 가능한 클러스터의 인시던트 생성 및 상태 변경 이벤트를 실시간으로 스트리밍합니다. Last-Event-ID 헤더를 통한 일시 단절 차분 동기화를 지원합니다.",
+  })
+  @ApiHeader({
+    name: "last-event-id",
+    required: false,
+    description:
+      "W3C 표준 재연결 시점 이벤트 식별자 (인시던트 ID 또는 타임스탬프)",
   })
   subscribeEvents(
     @CurrentUser() user: AuthenticatedUser,
+    @Headers("last-event-id") lastEventId?: string,
   ): Observable<MessageEvent> {
-    return this.incidentsEventsService.subscribe(
+    const realTime$ = this.incidentsEventsService.subscribe(
       user.clusterIds || [],
       user.role === "ADMIN",
     );
+
+    if (!lastEventId || !lastEventId.trim()) {
+      return realTime$;
+    }
+
+    // W3C Last-Event-ID 기준 과거 누락 변경분 차분 하이드레이션 스트림
+    const hydration$ = from(
+      this.incidentsService.getIncidentsSince(user, lastEventId.trim()),
+    ).pipe(
+      mergeMap((incidents) =>
+        from(
+          incidents.map(
+            (incident) =>
+              ({
+                id: incident.id,
+                type: "incident:updated",
+                data: {
+                  eventType: "incident:updated",
+                  incident,
+                  timestamp:
+                    incident.updatedAt instanceof Date
+                      ? incident.updatedAt.toISOString()
+                      : String(incident.updatedAt),
+                },
+              }) as MessageEvent,
+          ),
+        ),
+      ),
+    );
+
+    return concat(hydration$, realTime$);
   }
 
   /**

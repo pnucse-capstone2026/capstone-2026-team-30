@@ -273,4 +273,72 @@ describe("IncidentsService", () => {
       ).rejects.toThrow(BusinessException);
     });
   });
+
+  describe("getIncidentsSince", () => {
+    it("returns empty array when lastEventId is empty or whitespace", async () => {
+      const result = await service.getIncidentsSince(mockUser, "");
+      expect(result).toEqual([]);
+      expect(mockPrisma.deploymentIncident.findMany).not.toHaveBeenCalled();
+    });
+
+    it("queries incidents updated after the target incident timestamp when lastEventId is an incident id", async () => {
+      const targetIncident = {
+        ...sampleIncident,
+        id: "inc-target-0",
+        updatedAt: new Date("2026-09-14T08:05:00Z"),
+      };
+      const newerIncident = {
+        ...sampleIncident,
+        id: "inc-newer-1",
+        updatedAt: new Date("2026-09-14T08:06:00Z"),
+      };
+
+      mockPrisma.deploymentIncident.findUnique.mockResolvedValue(
+        targetIncident,
+      );
+      mockPrisma.deploymentIncident.findMany.mockResolvedValue([newerIncident]);
+
+      const result = await service.getIncidentsSince(mockUser, "inc-target-0");
+
+      expect(mockPrisma.deploymentIncident.findUnique).toHaveBeenCalledWith({
+        where: { id: "inc-target-0" },
+      });
+      expect(mockPrisma.deploymentIncident.findMany).toHaveBeenCalledWith({
+        where: {
+          clusterId: { in: ["cluster-alpha", "cluster-beta"] },
+          updatedAt: { gt: targetIncident.updatedAt },
+          id: { not: "inc-target-0" },
+        },
+        orderBy: { updatedAt: "asc" },
+      });
+      expect(result.length).toBe(1);
+      expect(result[0].id).toBe("inc-newer-1");
+    });
+
+    it("queries incidents after timestamp when lastEventId is an ISO date string", async () => {
+      const isoTimestamp = "2026-09-14T08:00:00.000Z";
+      const newerIncident = {
+        ...sampleIncident,
+        id: "inc-2",
+        updatedAt: new Date("2026-09-14T08:01:00.000Z"),
+      };
+
+      mockPrisma.deploymentIncident.findUnique.mockResolvedValue(null);
+      mockPrisma.deploymentIncident.findMany.mockResolvedValue([newerIncident]);
+
+      const result = await service.getIncidentsSince(
+        mockAdminUser,
+        isoTimestamp,
+      );
+
+      expect(mockPrisma.deploymentIncident.findMany).toHaveBeenCalledWith({
+        where: {
+          updatedAt: { gt: new Date(isoTimestamp) },
+          id: { not: isoTimestamp },
+        },
+        orderBy: { updatedAt: "asc" },
+      });
+      expect(result.length).toBe(1);
+    });
+  });
 });
