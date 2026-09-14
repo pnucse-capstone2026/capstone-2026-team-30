@@ -82,4 +82,47 @@ describe("K8sInformerService", () => {
     await service.onModuleInit();
     await expect(service.onModuleDestroy()).resolves.not.toThrow();
   });
+
+  describe("Leader Election Lifecycle Integration", () => {
+    it("starts informers only on onLeaderAcquired and stops on onLeaderLost", async () => {
+      let acquiredCallback: () => void = () => {};
+      let lostCallback: () => void = () => {};
+
+      const mockLeaderElector = {
+        onLeaderAcquired: jest.fn().mockImplementation((cb) => {
+          acquiredCallback = cb;
+        }),
+        onLeaderLost: jest.fn().mockImplementation((cb) => {
+          lostCallback = cb;
+        }),
+      };
+
+      const informerService = new K8sInformerService(
+        mockClusterProvider as ClusterProvider,
+        mockLeaderElector as any,
+      );
+
+      const startSpy = jest.spyOn(informerService, "start");
+      const stopSpy = jest.spyOn(informerService, "stop");
+
+      await informerService.onModuleInit();
+
+      expect(mockLeaderElector.onLeaderAcquired).toHaveBeenCalledTimes(1);
+      expect(mockLeaderElector.onLeaderLost).toHaveBeenCalledTimes(1);
+      // 리더 획득 전에는 start()가 호출되지 않음
+      expect(startSpy).not.toHaveBeenCalled();
+
+      // 리더 획득 시뮬레이션
+      acquiredCallback();
+      expect(startSpy).toHaveBeenCalledTimes(1);
+
+      // 리더 상실 시뮬레이션
+      lostCallback();
+      expect(stopSpy).toHaveBeenCalledTimes(1);
+
+      // 모듈 종료 시뮬레이션
+      await informerService.onModuleDestroy();
+      expect(stopSpy).toHaveBeenCalledTimes(2);
+    });
+  });
 });

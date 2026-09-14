@@ -41,6 +41,8 @@ const POLICY_REPORT_VERSION = "v1alpha2";
 const POLICY_REPORT_PLURAL = "policyreports";
 const CLUSTER_POLICY_REPORT_PLURAL = "clusterpolicyreports";
 
+import { K8sLeaderElectorService } from "./coordination/k8s-leader-elector.service";
+
 /**
  * AWS EKS Control Plane의 API 스로틀링(429) 및 Cross-VPC 통신 지연을 방지하기 위해
  * Kyverno 핵심 CRD(PolicyReport, ClusterPolicyReport, ClusterPolicy, PolicyException)를
@@ -58,27 +60,61 @@ export class K8sInformerService implements OnModuleInit, OnModuleDestroy {
       obj: KubernetesObject,
     ) => void
   > = [];
+  private isRunning = false;
 
-  constructor(@Optional() private readonly clusterProvider?: ClusterProvider) {}
+  constructor(
+    @Optional() private readonly clusterProvider?: ClusterProvider,
+    @Optional() private readonly leaderElector?: K8sLeaderElectorService,
+  ) {}
 
   /**
-   * 모듈 초기화 시 등록된 모든 클러스터에 대해 Informer를 백그라운드에서 기동합니다.
+   * 모듈 초기화 시 리더 선출 상태에 따라 Informer를 기동합니다.
+   * 리더 일렉터가 주입된 경우 onLeaderAcquired 시에만 start()하고, onLeaderLost 시 stop()합니다.
    */
   async onModuleInit(): Promise<void> {
-    if (!this.clusterProvider) {
-      return;
-    }
+    if (this.leaderElector) {
+      this.leaderElector.onLeaderAcquired(() => {
+        this.logger.log(
+          "[Informer] Leader lease acquired. Starting K8s informers...",
+        );
+        this.start();
+      });
 
-    const clusters = this.clusterProvider.list();
-    for (const cluster of clusters) {
-      this.initClusterInformers(cluster);
+      this.leaderElector.onLeaderLost(() => {
+        this.logger.warn(
+          "[Informer] Leader lease lost. Stopping K8s informers...",
+        );
+        void this.stop();
+      });
+    } else {
+      this.start();
     }
   }
 
   /**
-   * 모듈 종료 시 활성화된 모든 Informer 스트림을 안전하게 중단합니다.
+   * 등록된 모든 클러스터에 대해 Informer 캐시 동기화 스트림을 기동합니다.
    */
-  async onModuleDestroy(): Promise<void> {
+  start(): void {
+    if (this.isRunning) {
+      return;
+    }
+    if (!this.clusterProvider) {
+      return;
+    }
+
+    this.isRunning = true;
+    const clusters = this.clusterProvider.list();
+    for (const cluster of clusters) {
+      this.initClusterInformers(cluster);
+    }
+    this.logger.log("[Informer] K8s Informers successfully started.");
+  }
+
+  /**
+   * 활성화된 모든 Informer 스트림을 안전하게 중단하고 캐시 레지스트리를 비웁니다.
+   */
+  async stop(): Promise<void> {
+    this.isRunning = false;
     for (const [clusterId, registry] of this.registries) {
       for (const [resourceType, informer] of registry.informers) {
         try {
@@ -92,6 +128,14 @@ export class K8sInformerService implements OnModuleInit, OnModuleDestroy {
       }
     }
     this.registries.clear();
+    this.logger.log("[Informer] K8s Informers successfully stopped.");
+  }
+
+  /**
+   * 모듈 종료 시 활성화된 모든 Informer 스트림을 안전하게 중단합니다.
+   */
+  async onModuleDestroy(): Promise<void> {
+    await this.stop();
   }
 
   /**
