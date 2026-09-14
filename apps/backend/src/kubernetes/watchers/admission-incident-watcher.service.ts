@@ -17,6 +17,8 @@ import {
   parseAdmissionBlockMessage,
 } from "./helpers/admission-message-parser";
 
+import { K8sLeaderElectorService } from "../coordination/k8s-leader-elector.service";
+
 /**
  * Closed-Loop Admission Block 감지 및 인시던트 연동 오케스트레이터 워처 서비스
  *
@@ -29,6 +31,7 @@ export class AdmissionIncidentWatcherService
 {
   private readonly logger = new Logger(AdmissionIncidentWatcherService.name);
   private readonly detectors: IncidentDetector[];
+  private isRunning = false;
 
   constructor(
     private readonly incidentsService: IncidentsService,
@@ -36,6 +39,7 @@ export class AdmissionIncidentWatcherService
     private readonly argoCdDetector: ArgoCdIncidentDetector,
     private readonly fluxCdDetector: FluxCdIncidentDetector,
     @Optional() private readonly clusterProvider?: ClusterProvider,
+    @Optional() private readonly leaderElector?: K8sLeaderElectorService,
   ) {
     this.detectors = [
       this.coreEventDetector,
@@ -45,9 +49,36 @@ export class AdmissionIncidentWatcherService
   }
 
   /**
-   * 모듈 기동 시 등록된 모든 클러스터에 대해 감지기들을 초기화합니다.
+   * 모듈 초기화 시 리더 선출 상태에 따라 감지기를 기동합니다.
+   * 리더 일렉터가 주입된 경우 onLeaderAcquired 시에만 start()하고, onLeaderLost 시 stop()합니다.
    */
   async onModuleInit(): Promise<void> {
+    if (this.leaderElector) {
+      this.leaderElector.onLeaderAcquired(() => {
+        this.logger.log(
+          "[AdmissionWatcher] Leader lease acquired. Starting admission watchers...",
+        );
+        this.start();
+      });
+
+      this.leaderElector.onLeaderLost(() => {
+        this.logger.warn(
+          "[AdmissionWatcher] Leader lease lost. Stopping admission watchers...",
+        );
+        void this.stop();
+      });
+    } else {
+      this.start();
+    }
+  }
+
+  /**
+   * 등록된 모든 클러스터에 대해 인시던트 감지기(Watcher)들을 가동합니다.
+   */
+  start(): void {
+    if (this.isRunning) {
+      return;
+    }
     if (!this.clusterProvider) {
       this.logger.debug(
         "[AdmissionWatcher] ClusterProvider not configured. Skipping watcher init.",
@@ -55,16 +86,19 @@ export class AdmissionIncidentWatcherService
       return;
     }
 
+    this.isRunning = true;
     const clusters = this.clusterProvider.list();
     for (const cluster of clusters) {
       this.initClusterWatchers(cluster);
     }
+    this.logger.log("[AdmissionWatcher] Watchers successfully started.");
   }
 
   /**
-   * 모듈 종료 시 모든 감지기 스트림을 안전하게 중단합니다.
+   * 실행 중인 모든 감지기 스트림을 즉시 중단합니다.
    */
-  async onModuleDestroy(): Promise<void> {
+  async stop(): Promise<void> {
+    this.isRunning = false;
     for (const detector of this.detectors) {
       try {
         await detector.stop();
@@ -72,6 +106,14 @@ export class AdmissionIncidentWatcherService
         // 종료 예외 무시
       }
     }
+    this.logger.log("[AdmissionWatcher] Watchers successfully stopped.");
+  }
+
+  /**
+   * 모듈 종료 시 모든 감지기 스트림을 안전하게 중단합니다.
+   */
+  async onModuleDestroy(): Promise<void> {
+    await this.stop();
   }
 
   /**

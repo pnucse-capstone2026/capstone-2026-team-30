@@ -6,6 +6,7 @@ import { AdmissionIncidentWatcherService } from "./admission-incident-watcher.se
 import { CoreEventIncidentDetector } from "./detectors/k8s-core-event.detector";
 import { ArgoCdIncidentDetector } from "./detectors/argocd.detector";
 import { FluxCdIncidentDetector } from "./detectors/fluxcd.detector";
+import { K8sLeaderElectorService } from "../coordination/k8s-leader-elector.service";
 
 describe("AdmissionIncidentWatcherService", () => {
   let service: AdmissionIncidentWatcherService;
@@ -204,6 +205,52 @@ describe("AdmissionIncidentWatcherService", () => {
           policyName: "require-run-as-non-root",
         }),
       );
+    });
+  });
+
+  describe("Leader Election Lifecycle Integration", () => {
+    it("starts watchers when leader is acquired and stops when leader is lost", async () => {
+      let acquiredCallback: () => void = () => {};
+      let lostCallback: () => void = () => {};
+
+      const mockLeaderElector = {
+        onLeaderAcquired: jest.fn().mockImplementation((cb) => {
+          acquiredCallback = cb;
+        }),
+        onLeaderLost: jest.fn().mockImplementation((cb) => {
+          lostCallback = cb;
+        }),
+      };
+
+      const watcherService = new AdmissionIncidentWatcherService(
+        mockIncidentsService as any,
+        coreEventDetector,
+        argoCdDetector,
+        new FluxCdIncidentDetector(),
+        mockClusterProvider as ClusterProvider,
+        mockLeaderElector as unknown as K8sLeaderElectorService,
+      );
+
+      const startSpy = jest.spyOn(watcherService, "start");
+      const stopSpy = jest.spyOn(watcherService, "stop");
+
+      await watcherService.onModuleInit();
+
+      expect(mockLeaderElector.onLeaderAcquired).toHaveBeenCalledTimes(1);
+      expect(mockLeaderElector.onLeaderLost).toHaveBeenCalledTimes(1);
+      expect(startSpy).not.toHaveBeenCalled();
+
+      // 리더 획득 이벤트 발생
+      acquiredCallback();
+      expect(startSpy).toHaveBeenCalledTimes(1);
+
+      // 리더 상실 이벤트 발생
+      lostCallback();
+      expect(stopSpy).toHaveBeenCalledTimes(1);
+
+      // 모듈 종료 시 stop 호출
+      await watcherService.onModuleDestroy();
+      expect(stopSpy).toHaveBeenCalledTimes(2);
     });
   });
 });
