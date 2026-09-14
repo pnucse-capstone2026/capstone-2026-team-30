@@ -46,6 +46,26 @@ export interface VcsCommitStatusParams {
 }
 
 /**
+ * GitHub Check Run 생성 및 업데이트 매개변수 규격
+ */
+export interface VcsCheckRunParams {
+  repository: string;
+  commitSha: string;
+  name: string;
+  status: "queued" | "in_progress" | "completed";
+  title?: string;
+  summary?: string;
+  conclusion?:
+    | "success"
+    | "failure"
+    | "neutral"
+    | "cancelled"
+    | "timed_out"
+    | "action_required";
+  checkRunId?: number | string;
+}
+
+/**
  * 형상 관리 및 VCS(Version Control System) 연동 공급자 추상화 인터페이스 (SPI)
  *
  * GitHub, GitLab, Gitea, Bitbucket, 로컬 파일시스템 등
@@ -69,6 +89,18 @@ export interface VcsProvider {
    * 특정 커밋 SHA에 대해 거버넌스 게이트 상태를 기록합니다.
    */
   setCommitStatus(params: VcsCommitStatusParams): Promise<void>;
+
+  /**
+   * GitHub Check Run을 생성합니다. (비동기 작업 큐 연동용)
+   */
+  createCheckRun?(
+    params: VcsCheckRunParams,
+  ): Promise<number | string | undefined>;
+
+  /**
+   * GitHub Check Run의 진행 상태 및 최종 결론(conclusion)을 업데이트합니다.
+   */
+  updateCheckRun?(params: VcsCheckRunParams): Promise<void>;
 }
 
 /**

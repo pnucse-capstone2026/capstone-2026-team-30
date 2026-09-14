@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Octokit } from "@octokit/rest";
 import {
+  VcsCheckRunParams,
   VcsCommentParams,
   VcsCommitStatusParams,
   VcsCreatePrParams,
@@ -272,6 +273,122 @@ export class GitHubVcsProvider implements VcsProvider {
         `Failed to create GitHub commit status for ${params.commitSha}: ${
           (err as Error).message
         }`,
+      );
+    }
+  }
+
+  /**
+   * GitHub Check Run을 생성합니다. (비동기 작업 큐 연동용)
+   */
+  async createCheckRun(
+    params: VcsCheckRunParams,
+  ): Promise<number | string | undefined> {
+    if (!this.githubToken) {
+      this.logger.warn(
+        "GitHub token not configured. Skipping check run creation.",
+      );
+      return undefined;
+    }
+
+    const [owner, repo] = params.repository.split("/");
+    if (!owner || !repo) {
+      this.logger.warn(`Invalid repository format: ${params.repository}`);
+      return undefined;
+    }
+
+    try {
+      const octokit = new Octokit({ auth: this.githubToken });
+      const res = await octokit.rest.checks.create({
+        owner,
+        repo,
+        name: params.name,
+        head_sha: params.commitSha,
+        status: params.status,
+        output: params.title
+          ? {
+              title: params.title,
+              summary: params.summary || "",
+            }
+          : undefined,
+      });
+
+      this.logger.log(
+        `[GitHubVcsProvider] Created Check Run #${res.data.id} (${params.status}) for ${params.commitSha.slice(0, 7)}`,
+      );
+      return res.data.id;
+    } catch (err) {
+      this.logger.warn(
+        `[GitHubVcsProvider] Failed to create Check Run, falling back to commit status: ${
+          (err as Error).message
+        }`,
+      );
+      await this.setCommitStatus({
+        repository: params.repository,
+        commitSha: params.commitSha,
+        state: "pending",
+        description: params.title || "Kyverno PR Gate Review Queued",
+        context: params.name,
+      });
+      return undefined;
+    }
+  }
+
+  /**
+   * GitHub Check Run의 진행 상태 및 최종 결론(conclusion)을 업데이트합니다.
+   */
+  async updateCheckRun(params: VcsCheckRunParams): Promise<void> {
+    if (!this.githubToken) return;
+
+    const [owner, repo] = params.repository.split("/");
+    if (!owner || !repo) return;
+
+    try {
+      const octokit = new Octokit({ auth: this.githubToken });
+
+      if (
+        params.checkRunId &&
+        (typeof params.checkRunId === "number" ||
+          !isNaN(Number(params.checkRunId)))
+      ) {
+        const checkRunIdNum =
+          typeof params.checkRunId === "number"
+            ? params.checkRunId
+            : Number(params.checkRunId);
+        await octokit.rest.checks.update({
+          owner,
+          repo,
+          check_run_id: checkRunIdNum,
+          status: params.status,
+          conclusion:
+            params.status === "completed" ? params.conclusion : undefined,
+          output: params.title
+            ? {
+                title: params.title,
+                summary: params.summary || "",
+              }
+            : undefined,
+        });
+        this.logger.log(
+          `[GitHubVcsProvider] Updated Check Run #${checkRunIdNum} to ${params.status} (${params.conclusion || "running"})`,
+        );
+      } else {
+        // checkRunId가 없거나 문자열인 경우 Commit Status로 상태 반영
+        await this.setCommitStatus({
+          repository: params.repository,
+          commitSha: params.commitSha,
+          state:
+            params.conclusion === "success"
+              ? "success"
+              : params.conclusion === "failure"
+                ? "failure"
+                : "pending",
+          description: params.title || "Kyverno PR Gate Review",
+          context: params.name,
+        });
+      }
+    } catch (err) {
+      this.logger.warn(
+        `[GitHubVcsProvider] Failed to update Check Run: ${(err as Error).message}`,
       );
     }
   }
