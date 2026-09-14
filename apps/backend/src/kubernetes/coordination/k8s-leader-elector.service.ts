@@ -36,6 +36,7 @@ export class K8sLeaderElectorService implements OnModuleInit, OnModuleDestroy {
 
   private api: CoordinationV1Api | null = null;
   private isLeader = false;
+  private lastRenewSuccessTime = 0;
   private running = false;
   private loopTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -96,6 +97,7 @@ export class K8sLeaderElectorService implements OnModuleInit, OnModuleDestroy {
       clearTimeout(this.loopTimer);
       this.loopTimer = null;
     }
+    this.lastRenewSuccessTime = 0;
     if (this.isLeader) {
       this.setLeader(false);
     }
@@ -170,6 +172,16 @@ export class K8sLeaderElectorService implements OnModuleInit, OnModuleDestroy {
       );
       this.setLeader(false);
       return false;
+    }
+
+    if (
+      this.isLeader &&
+      Date.now() - this.lastRenewSuccessTime > this.leaseDurationSeconds * 1000
+    ) {
+      this.logger.warn(
+        "[LeaderElector] Lease renewal timed out (> 15s). Self-demoting to standby.",
+      );
+      this.setLeader(false);
     }
 
     try {
@@ -315,6 +327,7 @@ export class K8sLeaderElectorService implements OnModuleInit, OnModuleDestroy {
 
     try {
       await this.createLease(newLease);
+      this.lastRenewSuccessTime = Date.now();
       this.setLeader(true);
       return true;
     } catch (err: unknown) {
@@ -349,6 +362,7 @@ export class K8sLeaderElectorService implements OnModuleInit, OnModuleDestroy {
 
     try {
       await this.replaceLease(updatedLease);
+      this.lastRenewSuccessTime = Date.now();
       this.setLeader(true);
       return true;
     } catch (err: unknown) {
@@ -390,6 +404,7 @@ export class K8sLeaderElectorService implements OnModuleInit, OnModuleDestroy {
 
     try {
       await this.replaceLease(updatedLease);
+      this.lastRenewSuccessTime = Date.now();
       this.setLeader(true);
       return true;
     } catch (err: unknown) {

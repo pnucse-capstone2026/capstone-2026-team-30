@@ -235,6 +235,54 @@ describe("K8sLeaderElectorService", () => {
     });
   });
 
+  describe("Scenario 5: 임대 갱신 연속 실패 시 좀비 리더 자진 강등 (Self-Fencing)", () => {
+    it("triggers onLeaderLost callback and demotes to standby when renewal times out (> 15s)", async () => {
+      const myHolder = service.getHolderIdentity();
+
+      // Step 1: 최초 리더 획득 (신규 생성)
+      mockCoordinationApi.readNamespacedLease.mockRejectedValueOnce({
+        statusCode: 404,
+      });
+      mockCoordinationApi.createNamespacedLease.mockResolvedValueOnce({
+        metadata: {
+          name: "kyverno-platform-watcher-lease",
+          resourceVersion: "10",
+        },
+        spec: { holderIdentity: myHolder, leaseDurationSeconds: 15 },
+      });
+
+      const acquiredCb = jest.fn();
+      const lostCb = jest.fn();
+      service.onLeaderAcquired(acquiredCb);
+      service.onLeaderLost(lostCb);
+
+      await service.tryAcquireOrRenew();
+      expect(service.isCurrentLeader()).toBe(true);
+      expect(acquiredCb).toHaveBeenCalledTimes(1);
+
+      // Step 2: 15초(leaseDurationSeconds) 초과 경과 시뮬레이션
+      const initialTime = Date.now();
+      const spyNow = jest
+        .spyOn(Date, "now")
+        .mockReturnValue(initialTime + 16000);
+
+      try {
+        // Step 3: 일시적 네트워크 장애로 갱신 실패 시뮬레이션
+        mockCoordinationApi.readNamespacedLease.mockRejectedValueOnce(
+          new Error("Network timeout / unreachable"),
+        );
+
+        const renewResult = await service.tryAcquireOrRenew();
+
+        expect(renewResult).toBe(false);
+        expect(service.isCurrentLeader()).toBe(false);
+        expect(lostCb).toHaveBeenCalledTimes(1);
+      } finally {
+        spyNow.mockRestore();
+      }
+    });
+  });
+
   describe("Lifecycle & Callback management", () => {
     it("allows unsubscribing from leader callbacks", async () => {
       const acquiredCb = jest.fn();
