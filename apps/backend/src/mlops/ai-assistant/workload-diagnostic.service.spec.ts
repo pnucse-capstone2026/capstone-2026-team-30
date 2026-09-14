@@ -1,16 +1,21 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { WorkloadDiagnosticService } from "./workload-diagnostic.service";
-import { BedrockService } from "../../ai-agent/bedrock.service";
+import {
+  LLM_PROVIDER_TOKEN,
+  LlmProvider,
+} from "../../ai-agent/providers/llm-provider.interface";
 import { MlopsIntentParserService } from "./mlops-intent-parser.service";
 import { WorkloadResourceType } from "./dto/diagnose-workload.dto";
 
 describe("WorkloadDiagnosticService", () => {
   let service: WorkloadDiagnosticService;
-  let bedrockService: jest.Mocked<BedrockService>;
+  let mockLlmProvider: jest.Mocked<LlmProvider>;
 
   beforeEach(async () => {
-    const mockBedrockService = {
-      invokeClaude: jest.fn(),
+    mockLlmProvider = {
+      providerId: "BEDROCK",
+      isAvailable: jest.fn().mockReturnValue(true),
+      chatCompletion: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -18,14 +23,13 @@ describe("WorkloadDiagnosticService", () => {
         WorkloadDiagnosticService,
         MlopsIntentParserService,
         {
-          provide: BedrockService,
-          useValue: mockBedrockService,
+          provide: LLM_PROVIDER_TOKEN,
+          useValue: mockLlmProvider,
         },
       ],
     }).compile();
 
     service = module.get<WorkloadDiagnosticService>(WorkloadDiagnosticService);
-    bedrockService = module.get(BedrockService);
   });
 
   it("should be defined", () => {
@@ -33,7 +37,9 @@ describe("WorkloadDiagnosticService", () => {
   });
 
   it("should diagnose CUDA OOM using fallback rule engine when Bedrock fails", async () => {
-    bedrockService.invokeClaude.mockRejectedValue(new Error("Bedrock timeout"));
+    mockLlmProvider.chatCompletion.mockRejectedValue(
+      new Error("Bedrock timeout"),
+    );
 
     const result = await service.diagnoseWorkload({
       resourceType: WorkloadResourceType.NOTEBOOK,
@@ -65,7 +71,7 @@ describe("WorkloadDiagnosticService", () => {
       ],
     });
 
-    bedrockService.invokeClaude.mockResolvedValue(mockDiagnosisJson);
+    mockLlmProvider.chatCompletion.mockResolvedValue(mockDiagnosisJson);
 
     const result = await service.diagnoseWorkload({
       resourceType: WorkloadResourceType.PIPELINE_RUN,

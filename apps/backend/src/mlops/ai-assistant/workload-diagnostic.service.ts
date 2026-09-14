@@ -1,5 +1,8 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { BedrockService } from "../../ai-agent/bedrock.service";
+import { Inject, Injectable, Logger } from "@nestjs/common";
+import {
+  LLM_PROVIDER_TOKEN,
+  LlmProvider,
+} from "../../ai-agent/providers/llm-provider.interface";
 import { MlopsIntentParserService } from "./mlops-intent-parser.service";
 import {
   DiagnoseWorkloadRequestDto,
@@ -14,7 +17,8 @@ export class WorkloadDiagnosticService {
   private readonly logger = new Logger(WorkloadDiagnosticService.name);
 
   constructor(
-    private readonly bedrockService: BedrockService,
+    @Inject(LLM_PROVIDER_TOKEN)
+    private readonly llmProvider: LlmProvider,
     private readonly intentParserService: MlopsIntentParserService,
   ) {}
 
@@ -73,7 +77,7 @@ ${events}`;
 
     try {
       // 대안 1-A 적용: 진단 시 긴 로그 대응을 위해 maxTokens: 3072, temperature: 0.1 설정
-      const rawResponse = await this.bedrockService.invokeClaude(
+      const rawResponse = await this.llmProvider.chatCompletion(
         systemPrompt,
         userPrompt,
         {
@@ -90,13 +94,13 @@ ${events}`;
       if (parsed && parsed.rootCause && parsed.summary) {
         return {
           ...parsed,
-          provider: "BEDROCK",
+          provider: this.llmProvider.providerId,
         };
       }
     } catch (error) {
-      // Bedrock 연동 실패 시 로깅 후 규칙 기반 진단 엔진으로 전환
+      // LLM 연동 실패 시 로깅 후 규칙 기반 진단 엔진으로 전환
       this.logger.warn(
-        `WorkloadDiagnosticService Bedrock invocation failed, switching to rule engine: ${(error as Error).message}`,
+        `WorkloadDiagnosticService LLM provider (${this.llmProvider.providerId}) invocation failed, switching to rule engine: ${(error as Error).message}`,
       );
     }
 

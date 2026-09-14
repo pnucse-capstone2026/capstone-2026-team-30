@@ -52,5 +52,5 @@ export class DiagnoseWorkloadResponseDto {
   detailedDiagnosis!: string;
   recommendedFixes!: RecommendedFix[];
   detectedErrorCode?: string;
-  provider?: "BEDROCK" | "RULE_ENGINE_FALLBACK";
+  provider?: string;
 }

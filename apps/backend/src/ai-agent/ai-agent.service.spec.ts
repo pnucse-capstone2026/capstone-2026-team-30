@@ -1,17 +1,22 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { ConfigService } from "@nestjs/config";
 import { AiAgentService } from "./ai-agent.service";
-import { BedrockService } from "./bedrock.service";
+import {
+  LLM_PROVIDER_TOKEN,
+  LlmProvider,
+} from "./providers/llm-provider.interface";
 import { KyvernoRuleTemplateEngine } from "./rule-template.engine";
 import { WorkloadEvaluatorService } from "./services/workload-evaluator.service";
 
 describe("AiAgentService", () => {
   let service: AiAgentService;
-  let bedrockService: jest.Mocked<BedrockService>;
+  let mockLlmProvider: jest.Mocked<LlmProvider>;
 
   beforeEach(async () => {
-    const mockBedrockService = {
-      invokeClaude: jest.fn(),
+    mockLlmProvider = {
+      providerId: "BEDROCK",
+      isAvailable: jest.fn().mockReturnValue(true),
+      chatCompletion: jest.fn(),
     };
 
     const mockConfigService = {
@@ -24,8 +29,8 @@ describe("AiAgentService", () => {
         KyvernoRuleTemplateEngine,
         WorkloadEvaluatorService,
         {
-          provide: BedrockService,
-          useValue: mockBedrockService,
+          provide: LLM_PROVIDER_TOKEN,
+          useValue: mockLlmProvider,
         },
         {
           provide: ConfigService,
@@ -35,7 +40,6 @@ describe("AiAgentService", () => {
     }).compile();
 
     service = module.get<AiAgentService>(AiAgentService);
-    bedrockService = module.get(BedrockService);
   });
 
   it("should be defined", () => {
@@ -50,7 +54,7 @@ describe("AiAgentService", () => {
       governanceRationale: "클러스터 침입 및 파일 변경 방지 목적으로 규정됨",
     });
 
-    bedrockService.invokeClaude.mockResolvedValue(mockResponse);
+    mockLlmProvider.chatCompletion.mockResolvedValue(mockResponse);
 
     const result = await service.explainKyvernoError({
       errorMessage: "action: deny, rule check-read-only-root-filesystem failed",
@@ -62,9 +66,9 @@ describe("AiAgentService", () => {
     expect(result.suggestedFixYaml).toBeDefined();
   });
 
-  it("should fallback gracefully to rule template engine when Bedrock throws an error", async () => {
-    bedrockService.invokeClaude.mockRejectedValue(
-      new Error("AWS credentials error"),
+  it("should fallback gracefully to rule template engine when LLM provider throws an error", async () => {
+    mockLlmProvider.chatCompletion.mockRejectedValue(
+      new Error("LLM connection error"),
     );
 
     const result = await service.explainKyvernoError({
@@ -78,9 +82,9 @@ describe("AiAgentService", () => {
     expect(result.governanceRationale).toBeDefined();
   });
 
-  it("should fallback when Bedrock API times out", async () => {
+  it("should fallback when LLM provider times out", async () => {
     // 10초 대기하도록 하여 3.5초 타임아웃 유발
-    bedrockService.invokeClaude.mockImplementation(
+    mockLlmProvider.chatCompletion.mockImplementation(
       () => new Promise((resolve) => setTimeout(() => resolve("{}"), 10000)),
     );
 

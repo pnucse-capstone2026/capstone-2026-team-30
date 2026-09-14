@@ -165,13 +165,14 @@ export class KyvernoErrorExplanationResultDto {
   governanceRationale!: string;
 
   /**
-   * 해설 결과를 제공한 프로바이더 (BEDROCK: Bedrock AI, RULE_ENGINE_FALLBACK: 룰 기반 템플릿)
+   * 해설 결과를 제공한 프로바이더 (BEDROCK, OPENAI, RULE_ENGINE_FALLBACK 등)
    */
   @ApiPropertyOptional({
-    description: "Source provider of the explanation result",
-    enum: ["BEDROCK", "RULE_ENGINE_FALLBACK"],
+    description:
+      "Source provider of the explanation result (e.g. BEDROCK, OPENAI, RULE_ENGINE_FALLBACK)",
+    example: "BEDROCK",
   })
-  provider?: "BEDROCK" | "RULE_ENGINE_FALLBACK";
+  provider?: string;
 
   /**
    * 선택 및 적용된 AI 분석 실행 모드 (SINGLE_AGENT: 단일 에이전트, MASTER_SUBAGENT: 마스터-서브 에이전트)

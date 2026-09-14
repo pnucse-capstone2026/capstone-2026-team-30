@@ -1,6 +1,9 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { BedrockService } from "./bedrock.service";
+import {
+  LLM_PROVIDER_TOKEN,
+  LlmProvider,
+} from "./providers/llm-provider.interface";
 import {
   ExplainKyvernoErrorDto,
   KyvernoErrorExplanationResultDto,
@@ -17,12 +20,13 @@ export class AiAgentService {
   private readonly timeoutMs: number;
 
   constructor(
-    private readonly bedrockService: BedrockService,
+    @Inject(LLM_PROVIDER_TOKEN)
+    private readonly llmProvider: LlmProvider,
     private readonly ruleTemplateEngine: KyvernoRuleTemplateEngine,
     private readonly workloadEvaluator: WorkloadEvaluatorService,
     config: ConfigService,
   ) {
-    // Bedrock API 응답 대기 상한 타임아웃 (기본값: 15000ms)
+    // LLM API 응답 대기 상한 타임아웃 (기본값: 15000ms)
     const configuredTimeout = Number(
       config.get<string>("AI_ANALYSIS_TIMEOUT_MS", "15000"),
     );
@@ -34,7 +38,7 @@ export class AiAgentService {
 
   /**
    * Kyverno 정책 위반 오류 메시지 및 K8s 매니페스트 context를 분석하여 쉬운 해설 리포트를 생성합니다.
-   * AWS Bedrock 통신에 타임아웃이 발생하거나 실패할 경우 룰 기반 Graceful Fallback 엔진으로 즉각 전환합니다.
+   * 설정된 LLM 프로바이더 통신에 타임아웃이 발생하거나 실패할 경우 룰 기반 Graceful Fallback 엔진으로 즉각 전환합니다.
    *
    * @param dto Kyverno 오류 메시지, 정책 YAML, 쿠버네티스 매니페스트, 클러스터 상태 정보
    * @returns 쉬운 해설, 단계별 조치 방법, 수정 매니페스트 및 보안 거버넌스 배경
@@ -108,7 +112,7 @@ Please analyze the failure above and generate the JSON response.
       );
 
       const rawResponse = (await Promise.race([
-        this.bedrockService.invokeClaude(systemPrompt, userPrompt),
+        this.llmProvider.chatCompletion(systemPrompt, userPrompt),
         timeoutPromise,
       ])) as string;
 
@@ -120,7 +124,7 @@ Please analyze the failure above and generate the JSON response.
 
       return {
         ...parsed,
-        provider: "BEDROCK",
+        provider: this.llmProvider.providerId,
         analysisMode: evalResult.mode,
         taskScope: evalResult.scope,
         latencyMs,
@@ -128,7 +132,7 @@ Please analyze the failure above and generate the JSON response.
     } catch (error) {
       const latencyMs = Date.now() - startTime;
       this.logger.warn(
-        `Fallback to rule template engine due to Bedrock call failure/timeout (${latencyMs}ms): ${(error as Error).message}`,
+        `Fallback to rule template engine due to LLM provider (${this.llmProvider.providerId}) call failure/timeout (${latencyMs}ms): ${(error as Error).message}`,
       );
 
       // 정규식 매칭 기반 오프라인 룰 템플릿 엔진으로 즉시 조치 가이드 생성
