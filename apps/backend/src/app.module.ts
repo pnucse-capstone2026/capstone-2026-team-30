@@ -18,6 +18,7 @@ import { NotificationsModule } from "./notifications/notifications.module";
 import { SimulationModule } from "./simulation/simulation.module";
 import { SystemModule } from "./system/system.module";
 import { IncidentsModule } from "./incidents/incidents.module";
+import { RedisModule } from "./redis/redis.module";
 import { createPinoHttpConfig } from "./logging/pino-http.config";
 
 /**
@@ -69,6 +70,7 @@ export const getOptionalModules = (): (Type<unknown> | DynamicModule)[] => {
     NotificationsModule,
     HealthModule,
     SystemModule,
+    RedisModule,
     IncidentsModule,
 
     // 선택적 확장 모듈 (런타임 환경변수에 따라 동적 로딩)
