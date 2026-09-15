@@ -360,11 +360,12 @@ export class KyvernoRuleTemplateEngine {
     for (const doc of docs) {
       const apiVersion = doc.apiVersion ? String(doc.apiVersion) : undefined;
       const kind = doc.kind ? String(doc.kind) : "";
-      const name = doc.metadata?.name ? String(doc.metadata.name) : "unnamed";
-      const namespace = doc.metadata?.namespace
-        ? String(doc.metadata.namespace)
+      const metadata = doc.metadata as Record<string, unknown> | undefined;
+      const name = metadata?.name ? String(metadata.name) : "unnamed";
+      const namespace = metadata?.namespace
+        ? String(metadata.namespace)
         : undefined;
-      const labels = (doc.metadata?.labels || {}) as Record<string, string>;
+      const labels = (metadata?.labels || {}) as Record<string, string>;
 
       const resourceViolations: KyvernoViolationDetail[] = [];
 
