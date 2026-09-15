@@ -1,8 +1,9 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ClusterProvider } from "../kubernetes/cluster-provider";
 import { SimulationService } from "../simulation/simulation.service";
 import { AiAgentService } from "../ai-agent/ai-agent.service";
+import { KyvernoRuleTemplateEngine } from "../ai-agent/rule-template.engine";
 import { BusinessException } from "../common/errors/business.exception";
 import { GITOPS_ERROR } from "./gitops.errors";
 import {
@@ -22,7 +23,7 @@ import {
  * GitOps PR 거버넌스 게이트 및 PR Bot 검증 서비스
  *
  * 개발자가 생성한 PR의 매니페스트 변경사항에 대해
- * 클러스터의 실제 Kyverno 정책과 Server-Side Dry-Run으로 대조하고,
+ * 2단계(Tier 1 로컬 인메모리 Fast-Fail + Tier 2 K8s Server-Side Dry-Run) 파이프라인으로 검증하고,
  * 위반 발생 시 AI 자가 재검증 루프 및 PR 인라인 코멘트/Commit Status를 기록합니다.
  */
 @Injectable()
@@ -37,6 +38,8 @@ export class GitOpsService {
     private readonly configService: ConfigService,
     @Inject(VCS_PROVIDER_TOKEN)
     private readonly vcsProvider: VcsProvider,
+    @Optional()
+    private readonly ruleTemplateEngine?: KyvernoRuleTemplateEngine,
   ) {
     this.platformBaseUrl = this.configService.get<string>(
       "PLATFORM_BASE_URL",
@@ -45,7 +48,7 @@ export class GitOpsService {
   }
 
   /**
-   * GitHub PR 매니페스트에 대해 Server-Side Dry-Run 정책 검증을 수행하고
+   * GitHub PR 매니페스트에 대해 2-Tier 정책 검증을 수행하고
    * PR 코멘트 및 Commit Status를 자동 전송합니다.
    *
    * @param dto PR 리뷰 검증 요청 데이터
@@ -64,27 +67,62 @@ export class GitOpsService {
     }
 
     this.logger.log(
-      `Starting Server-Side Dry-Run review for PR #${dto.pullNumber} (${dto.repository}) on cluster '${clusterId}', ns '${dto.targetNamespace}'`,
+      `Starting 2-Tier PR review for PR #${dto.pullNumber} (${dto.repository}) on cluster '${clusterId}', ns '${dto.targetNamespace}'`,
     );
 
-    // 2. Server-Side Dry-Run 실행 (다중 문서 지원)
+    // 2. 2-Tier 검증 파이프라인
     let dryRunResult: ManifestDryRunValidationResult;
-    try {
-      dryRunResult = await this.simulationService.validateManifestDryRun(
-        dto.manifestYaml,
-        dto.targetNamespace,
-        clusterId,
+    const engine = this.ruleTemplateEngine ?? new KyvernoRuleTemplateEngine();
+    const tier1Result = engine.preValidateManifest(dto.manifestYaml);
+
+    if (!tier1Result.valid && tier1Result.violations.length > 0) {
+      // 2.1 Tier 1 Fast-Fail: K8s API Server 및 Webhook 호출 완전 생략(Bypass)
+      this.logger.warn(
+        `[Tier 1 Fast-Fail] K8s Webhook Call Bypassed: ${tier1Result.violations.length} violations detected in ${tier1Result.latencyMs}ms for PR #${dto.pullNumber}`,
       );
-    } catch (err) {
-      if (err instanceof BusinessException) {
-        throw err;
+
+      dryRunResult = {
+        valid: false,
+        allowed: false,
+        totalResources: tier1Result.totalResources,
+        blockedCount: tier1Result.blockedCount,
+        passedCount: tier1Result.passedCount,
+        errorCount: 0,
+        results: tier1Result.results.map((r) => ({
+          apiVersion: r.apiVersion || "apps/v1",
+          kind: r.kind || "Deployment",
+          name: r.name || "workload",
+          namespace: r.namespace || dto.targetNamespace,
+          allowed: r.allowed,
+          status: r.allowed ? "PASSED" : "BLOCKED",
+          blockedReason: r.violations[0]?.reason,
+          violations: r.violations,
+        })),
+        allViolations: tier1Result.violations,
+      };
+    } else {
+      // 2.2 Tier 1 Safe Pass: 최종 권위(Authoritative) 관문으로서 실제 K8s Server-Side Dry-Run 수행
+      this.logger.log(
+        `[Tier 1 Passed] Proceeding to Tier 2 Server-Side Dry-Run validation for PR #${dto.pullNumber} (${tier1Result.latencyMs}ms)`,
+      );
+
+      try {
+        dryRunResult = await this.simulationService.validateManifestDryRun(
+          dto.manifestYaml,
+          dto.targetNamespace,
+          clusterId,
+        );
+      } catch (err) {
+        if (err instanceof BusinessException) {
+          throw err;
+        }
+        this.logger.error(
+          `Failed to run dry-run validation for PR #${dto.pullNumber}: ${
+            (err as Error).message
+          }`,
+        );
+        throw new BusinessException(GITOPS_ERROR.PR_REVIEW_FAILED);
       }
-      this.logger.error(
-        `Failed to run dry-run validation for PR #${dto.pullNumber}: ${
-          (err as Error).message
-        }`,
-      );
-      throw new BusinessException(GITOPS_ERROR.PR_REVIEW_FAILED);
     }
 
     const isBlocked = dryRunResult.blockedCount > 0;
