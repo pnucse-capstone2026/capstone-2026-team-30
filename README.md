@@ -388,5 +388,7 @@ Deploy the full platform into any target Kubernetes cluster using the environmen
 | **[Local Kind E2E Testing Guide](docs/guides/local-kind-testing.md)** | Step-by-step verification guide for policy enforcement, exceptions, and MLOps |
 | **[Cluster Visualization & Live Presentation Plan](docs/cluster-visualization-plan.md)** | Observability architecture and presentation storyboard with Policy Reporter and Grafana |
 | **[Architecture Decision Records (ADRs)](docs/adr/0001-tech-stack-and-architecture.md)** | Technical decisions for Monorepo, Database access, Runtime environment, and CI/CD |
+| **[ADR-0009: Pluggable Vendor SPI Architecture](docs/adr/0009-pluggable-vendor-decoupling-spi-architecture.md)** | Architectural decision for SPI-based LLM, VCS, and GitOps incident detector decoupling |
+| **[Vendor Integration & Provider Extension Guide](docs/guides/vendor-integration-guide.md)** | Developer guide for implementing new LLM (OpenAI), VCS (GitLab), and CD (Flux) providers |
 | **[Release Patch Notes (2026-08)](docs/history/patch-notes-2026-08.md)** | Historical patch notes detailing MLOps rollouts, informer caching, and refactoring |
 | **[Agent Operational Guidelines](docs/guides/agent-operational-guidelines.md)** | Contributor and AI agent workflow, commit format, and identity guidelines |

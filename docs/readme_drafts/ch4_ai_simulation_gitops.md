@@ -255,15 +255,19 @@ The **Enforce Diagnostics Studio** ([`apps/frontend/src/app/diagnostics/page.tsx
 
 ---
 
-### 4.2.2 AI Engine Architecture & Amazon Bedrock Universal Converse API
+### 4.2.2 AI Engine SPI Architecture & Dynamic LLM Provider Factory
 
-The AI diagnostics subsystem is implemented across:
-* **Controller**: [`AiAgentController`](file:///home/user/work_dir/apps/backend/src/ai-agent/ai-agent.controller.ts)
-* **Orchestrator Service**: [`AiAgentService`](file:///home/user/work_dir/apps/backend/src/ai-agent/ai-agent.service.ts)
-* **Bedrock Client**: [`BedrockService`](file:///home/user/work_dir/apps/backend/src/ai-agent/bedrock.service.ts)
-* **Workload Evaluator**: [`WorkloadEvaluatorService`](file:///home/user/work_dir/apps/backend/src/ai-agent/services/workload-evaluator.service.ts)
-* **Offline Rule Fallback**: [`KyvernoRuleTemplateEngine`](file:///home/user/work_dir/apps/backend/src/ai-agent/rule-template.engine.ts)
-* **DTOs**: [`ExplainKyvernoErrorDto`, `KyvernoErrorExplanationResultDto`, `AnalysisMode`, `AnalysisTaskScope`](file:///home/user/work_dir/apps/backend/src/ai-agent/dto/explain-error.dto.ts)
+The AI diagnostics subsystem is decoupled via the **Service Provider Interface (SPI)** pattern across:
+* **Controller**: [`AiAgentController`](file:///home/user/kyverno-dashboard/apps/backend/src/ai-agent/ai-agent.controller.ts)
+* **Orchestrator Service**: [`AiAgentService`](file:///home/user/kyverno-dashboard/apps/backend/src/ai-agent/ai-agent.service.ts)
+* **SPI Provider Interface**: [`LlmProvider`](file:///home/user/kyverno-dashboard/apps/backend/src/ai-agent/providers/llm-provider.interface.ts) & token `LLM_PROVIDER_TOKEN`
+* **LLM Provider Factory**: [`LlmProviderFactory`](file:///home/user/kyverno-dashboard/apps/backend/src/ai-agent/providers/llm-provider.factory.ts) (`AI_PROVIDER=BEDROCK|OPENAI|NOOP`)
+* **AWS Bedrock Provider**: [`BedrockLlmProvider`](file:///home/user/kyverno-dashboard/apps/backend/src/ai-agent/providers/bedrock-llm.provider.ts)
+* **OpenAI Provider Stub**: [`OpenAiLlmProvider`](file:///home/user/kyverno-dashboard/apps/backend/src/ai-agent/providers/openai-llm.provider.ts) (`// TODO`)
+* **NOOP Fallback Provider**: [`NoopLlmProvider`](file:///home/user/kyverno-dashboard/apps/backend/src/ai-agent/providers/noop-llm.provider.ts)
+* **Workload Evaluator**: [`WorkloadEvaluatorService`](file:///home/user/kyverno-dashboard/apps/backend/src/ai-agent/services/workload-evaluator.service.ts)
+* **Offline Rule Fallback**: [`KyvernoRuleTemplateEngine`](file:///home/user/kyverno-dashboard/apps/backend/src/ai-agent/rule-template.engine.ts)
+* **DTOs**: [`ExplainKyvernoErrorDto`, `KyvernoErrorExplanationResultDto`](file:///home/user/kyverno-dashboard/apps/backend/src/ai-agent/dto/explain-error.dto.ts)
 
 ```mermaid
 flowchart TD
@@ -453,13 +457,14 @@ flowchart TD
         DirectApply["Direct K8s API Call<br/>(Immediate Zero-Latency Enforcement)"]
     end
 
-    subgraph GitOpsBranch["Path B: Declarative VCS Engine"]
-        Strategy{"GITOPS_STRATEGY"}
-        LocalSync["Save YAML to k8s-manifests/<br/>Update kustomization.yaml"]
-        GitHubFlow["GitHub REST API Engine<br/>• Create Branch gitops/exception-&lt;id&gt;<br/>• Commit PolicyException YAML<br/>• Open Pull Request"]
+    subgraph GitOpsBranch["Path B: Declarative VCS Engine (VcsProvider SPI)"]
+        Strategy{"GITOPS_VCS_PROVIDER"}
+        LocalSync["LocalFileVcsProvider<br/>Save YAML to k8s-manifests/<br/>Update kustomization.yaml"]
+        GitHubFlow["GithubVcsProvider (Octokit REST API)<br/>• Create Branch gitops/exception-&lt;id&gt;<br/>• Commit PolicyException YAML<br/>• Open Pull Request"]
+        GitLabFlow["GitlabVcsProvider (TODO Stub)<br/>GitLab MR Engine"]
         AutoMergeCheck{"GITOPS_AUTO_MERGE<br/>enabled?"}
         AutoMergeExec["Auto-Merge Engine<br/>(Squash Merge with Retry Backoff)"]
-        ArgoSync["ArgoCD / Flux<br/>GitOps Controller Sync"]
+        ArgoSync["GitOps Engine<br/>(ArgoCD / Flux)"]
     end
 
     Approval --> GitOpsSvc
@@ -474,7 +479,8 @@ flowchart TD
     
     GitOpsBranch --> Strategy
     Strategy -- LOCAL_FILE --> LocalSync
-    Strategy -- GITHUB_PR --> GitHubFlow
+    Strategy -- GITHUB --> GitHubFlow
+    Strategy -- GITLAB --> GitLabFlow
     GitHubFlow --> LocalSync
     GitHubFlow --> AutoMergeCheck
     AutoMergeCheck -- Yes --> AutoMergeExec
