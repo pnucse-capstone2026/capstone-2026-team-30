@@ -341,6 +341,23 @@ export class K8sInformerService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * 리소스 변경 이벤트 구독 리스너를 등록합니다 (onResourceChange 별칭).
+   *
+   * @param listener 변경 통지 콜백 함수
+   * @returns 구독 해제 함수
+   */
+  registerChangeListener(
+    listener: (
+      clusterId: string,
+      resourceType: InformerResourceType,
+      eventType: "add" | "update" | "delete",
+      obj: KubernetesObject,
+    ) => void,
+  ): () => void {
+    return this.onResourceChange(listener);
+  }
+
+  /**
    * 특정 클러스터의 Informer가 활성화되어 있고 초기 캐시가 준비되었는지 확인합니다.
    */
   isInformerReady(

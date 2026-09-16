@@ -214,6 +214,52 @@ export class KyvernoAdapter {
     });
   }
 
+  /**
+   * Spoke 클러스터에서 변조 또는 삭제된 PolicyException을 Hub 원본 매니페스트로 강제 복구(Self-Healing)합니다.
+   *
+   * @param clusterId 대상 클러스터 식별자
+   * @param input PolicyException 매니페스트 입력 정보
+   */
+  async restorePolicyException(
+    clusterId: string,
+    input: Omit<PolicyExceptionManifestInput, "namespace">,
+  ): Promise<void> {
+    const connection = this.clusters.get(clusterId);
+    const manifest = buildPolicyExceptionManifest({
+      ...input,
+      namespace: connection.exceptionNamespace,
+    });
+    const existing = await this.getPolicyException(clusterId, input.name);
+
+    if (existing) {
+      const resourceVersion = (
+        existing as { metadata?: { resourceVersion?: string } }
+      ).metadata?.resourceVersion;
+      await connection.customObjectsApi.replaceNamespacedCustomObject({
+        group: KYVERNO_GROUP,
+        version: EXCEPTION_VERSION,
+        namespace: connection.exceptionNamespace,
+        plural: EXCEPTION_PLURAL,
+        name: input.name,
+        body: {
+          ...manifest,
+          metadata: {
+            ...manifest.metadata,
+            ...(resourceVersion ? { resourceVersion } : {}),
+          },
+        },
+      });
+    } else {
+      await connection.customObjectsApi.createNamespacedCustomObject({
+        group: KYVERNO_GROUP,
+        version: EXCEPTION_VERSION,
+        namespace: connection.exceptionNamespace,
+        plural: EXCEPTION_PLURAL,
+        body: manifest,
+      });
+    }
+  }
+
   async getPolicyException(
     clusterId: string,
     name: string,

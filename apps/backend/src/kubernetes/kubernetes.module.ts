@@ -15,6 +15,7 @@ import { CoreEventIncidentDetector } from "./watchers/detectors/k8s-core-event.d
 import { ArgoCdIncidentDetector } from "./watchers/detectors/argocd.detector";
 import { FluxCdIncidentDetector } from "./watchers/detectors/fluxcd.detector";
 import { K8sLeaderElectorService } from "./coordination/k8s-leader-elector.service";
+import { PolicyDriftDetectorService } from "./reconciler/policy-drift-detector.service";
 
 export type ClusterProviderMode = "single" | "multi";
 
@@ -63,6 +64,7 @@ function resolveClusterProvider(config: ConfigService): ClusterProvider {
     ArgoCdIncidentDetector,
     FluxCdIncidentDetector,
     AdmissionIncidentWatcherService,
+    PolicyDriftDetectorService,
   ],
   exports: [
     ClusterProvider,
@@ -75,6 +77,7 @@ function resolveClusterProvider(config: ConfigService): ClusterProvider {
     ArgoCdIncidentDetector,
     FluxCdIncidentDetector,
     AdmissionIncidentWatcherService,
+    PolicyDriftDetectorService,
   ],
 })
 export class KubernetesModule {}
