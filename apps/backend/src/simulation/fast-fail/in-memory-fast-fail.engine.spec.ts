@@ -1,5 +1,13 @@
-import { KubernetesObject } from "@kubernetes/client-node";
-import { InMemoryFastFailEngine } from "./in-memory-fast-fail.engine";
+import { KubernetesObject, V1PodSpec } from "@kubernetes/client-node";
+import {
+  InMemoryFastFailEngine,
+  isRecord,
+  isKubernetesObject,
+  isPodSpec,
+  extractContainers,
+  isSecurityContext,
+  isResourceRequirements,
+} from "./in-memory-fast-fail.engine";
 
 type K8sResource = KubernetesObject & {
   spec: {
@@ -251,5 +259,140 @@ describe("InMemoryFastFailEngine", () => {
 
     const violations = engine.evaluateResource(service);
     expect(violations).toHaveLength(0);
+  });
+
+  describe("Type Guard and Malformed AST Boundary Tests", () => {
+    it("should correctly identify records using isRecord", () => {
+      expect(isRecord({})).toBe(true);
+      expect(isRecord({ a: 1 })).toBe(true);
+      expect(isRecord(null)).toBe(false);
+      expect(isRecord(undefined)).toBe(false);
+      expect(isRecord([])).toBe(false);
+      expect(isRecord("string")).toBe(false);
+      expect(isRecord(123)).toBe(false);
+      expect(isRecord(true)).toBe(false);
+    });
+
+    it("should correctly identify KubernetesObject and PodSpec", () => {
+      expect(isKubernetesObject({ apiVersion: "v1", kind: "Pod" })).toBe(true);
+      expect(isKubernetesObject("invalid")).toBe(false);
+      expect(isPodSpec({ containers: [] })).toBe(true);
+      expect(isPodSpec(null)).toBe(false);
+      expect(isSecurityContext({ runAsNonRoot: true })).toBe(true);
+      expect(isSecurityContext(null)).toBe(false);
+      expect(isResourceRequirements({ limits: { cpu: "100m" } })).toBe(true);
+      expect(isResourceRequirements(undefined)).toBe(false);
+    });
+
+    it("should safely extract containers from various malformed podSpec inputs", () => {
+      expect(extractContainers(undefined)).toEqual([]);
+      expect(extractContainers({} as unknown as V1PodSpec)).toEqual([]);
+      expect(
+        extractContainers({ containers: "invalid" } as unknown as V1PodSpec),
+      ).toEqual([]);
+      expect(
+        extractContainers({
+          containers: [null, "invalid", { name: "valid" }],
+          initContainers: [undefined, { name: "valid-init" }],
+        } as unknown as V1PodSpec),
+      ).toEqual([{ name: "valid" }, { name: "valid-init" }]);
+    });
+
+    it("should safely handle null, primitive, or corrupted spec in evaluateResource without crashing", () => {
+      const corruptedSpecs = [
+        null,
+        "string-spec",
+        12345,
+        true,
+        [],
+        { containers: null },
+        { containers: "not-an-array" },
+        { containers: [null, "invalid", 123] },
+        {
+          containers: [
+            {
+              name: "bad-container",
+              securityContext: "invalid",
+              resources: 123,
+            },
+          ],
+        },
+      ];
+
+      for (const spec of corruptedSpecs) {
+        const corruptedPod = {
+          apiVersion: "v1",
+          kind: "Pod",
+          metadata: {
+            name: "corrupted-pod",
+            labels: {
+              "app.kubernetes.io/name": "test",
+              team: "infra",
+            },
+          },
+          spec,
+        } as unknown as KubernetesObject;
+
+        expect(() => {
+          const violations = engine.evaluateResource(corruptedPod);
+          expect(Array.isArray(violations)).toBe(true);
+        }).not.toThrow();
+      }
+    });
+
+    it("should safely handle corrupted template in Deployment/CronJob without crashing", () => {
+      const corruptedDeployment = {
+        apiVersion: "apps/v1",
+        kind: "Deployment",
+        metadata: {
+          name: "corrupted-deploy",
+          labels: { "app.kubernetes.io/name": "app", team: "infra" },
+        },
+        spec: {
+          template: "invalid-template-string",
+        },
+      } as unknown as KubernetesObject;
+
+      expect(() => {
+        const violations = engine.evaluateResource(corruptedDeployment);
+        expect(Array.isArray(violations)).toBe(true);
+      }).not.toThrow();
+
+      const corruptedCronJob = {
+        apiVersion: "batch/v1",
+        kind: "CronJob",
+        metadata: {
+          name: "corrupted-cron",
+          labels: { "app.kubernetes.io/name": "app", team: "infra" },
+        },
+        spec: {
+          jobTemplate: {
+            spec: {
+              template: 12345,
+            },
+          },
+        },
+      } as unknown as KubernetesObject;
+
+      expect(() => {
+        const violations = engine.evaluateResource(corruptedCronJob);
+        expect(Array.isArray(violations)).toBe(true);
+      }).not.toThrow();
+    });
+
+    it("should safely handle corrupted metadata in preValidateManifest without crashing", () => {
+      const yamlContent = `
+apiVersion: v1
+kind: Pod
+metadata: "not-an-object"
+spec:
+  containers:
+    - name: app
+      image: nginx:latest
+`;
+      const result = engine.preValidateManifest(yamlContent);
+      expect(result.valid).toBe(false);
+      expect(result.results[0].name).toBe("unnamed");
+    });
   });
 });

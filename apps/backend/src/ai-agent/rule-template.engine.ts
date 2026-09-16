@@ -4,33 +4,17 @@ import {
   ExplainKyvernoErrorDto,
   KyvernoErrorExplanationResultDto,
 } from "./dto/explain-error.dto";
-import { KyvernoViolationDetail } from "../simulation/dto/dry-run-validation.dto";
 
 /**
  * Tier 1 리소스별 선검증 결과
  */
-export interface PreValidationResourceResult {
-  apiVersion?: string;
-  kind?: string;
-  name?: string;
-  namespace?: string;
-  allowed: boolean;
-  violations: KyvernoViolationDetail[];
-}
+import {
+  InMemoryFastFailEngine,
+  PreValidationResult,
+  PreValidationResourceResult,
+} from "../simulation/fast-fail/in-memory-fast-fail.engine";
 
-/**
- * Tier 1 로컬 인메모리 선검증 종합 결과
- */
-export interface PreValidationResult {
-  valid: boolean;
-  totalResources: number;
-  blockedCount: number;
-  passedCount: number;
-  violations: KyvernoViolationDetail[];
-  results: PreValidationResourceResult[];
-  latencyMs: number;
-  tier: "TIER_1_LOCAL";
-}
+export type { PreValidationResourceResult, PreValidationResult };
 
 /**
  * 사전 정의된 정규식 매칭 패턴 및 템플릿 응답 정의 인터페이스
@@ -275,276 +259,15 @@ export class KyvernoRuleTemplateEngine {
    * @param manifestYaml 쿠버네티스 YAML 매니페스트 (단일 또는 다중 문서)
    * @returns Tier 1 검증 결과 및 발견된 위반 목록
    */
+  /**
+   * @deprecated ADR 0008 SSOT 승격에 따라 `InMemoryFastFailEngine.preValidateManifest` 사용을 권장합니다.
+   * 기존 하위 호환성을 위해 단일 진실 공급원인 InMemoryFastFailEngine으로 위임 평가합니다.
+   *
+   * @param manifestYaml 쿠버네티스 YAML 매니페스트 (단일 또는 다중 문서)
+   * @returns Tier 1 검증 결과 및 발견된 위반 목록
+   */
   preValidateManifest(manifestYaml: string): PreValidationResult {
-    const startTime = performance.now();
-    const workloadKinds = [
-      "Pod",
-      "Deployment",
-      "StatefulSet",
-      "DaemonSet",
-      "Job",
-      "CronJob",
-    ];
-
-    let docs: Array<Record<string, unknown>> = [];
-    try {
-      docs = (yaml.loadAll(manifestYaml) || []).filter(
-        (d): d is Record<string, unknown> =>
-          Boolean(d && typeof d === "object"),
-      );
-    } catch (err) {
-      const latencyMs = Number((performance.now() - startTime).toFixed(2));
-      const syntaxViolation: KyvernoViolationDetail = {
-        policyName: "yaml-syntax-error",
-        ruleName: "valid-yaml",
-        reason: `YAML 매니페스트 구문 오류: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      };
-      return {
-        valid: false,
-        totalResources: 1,
-        blockedCount: 1,
-        passedCount: 0,
-        violations: [syntaxViolation],
-        results: [
-          {
-            apiVersion: "unknown",
-            kind: "Unknown",
-            name: "malformed",
-            allowed: false,
-            violations: [syntaxViolation],
-          },
-        ],
-        latencyMs,
-        tier: "TIER_1_LOCAL",
-      };
-    }
-
-    if (docs.length === 0) {
-      const latencyMs = Number((performance.now() - startTime).toFixed(2));
-      if (manifestYaml.trim().length > 0) {
-        const syntaxViolation: KyvernoViolationDetail = {
-          policyName: "yaml-syntax-error",
-          ruleName: "valid-k8s-manifest",
-          reason:
-            "YAML 매니페스트에 유효한 쿠버네티스 리소스 객체가 정의되어 있지 않습니다.",
-        };
-        return {
-          valid: false,
-          totalResources: 0,
-          blockedCount: 1,
-          passedCount: 0,
-          violations: [syntaxViolation],
-          results: [],
-          latencyMs,
-          tier: "TIER_1_LOCAL",
-        };
-      }
-      return {
-        valid: true,
-        totalResources: 0,
-        blockedCount: 0,
-        passedCount: 0,
-        violations: [],
-        results: [],
-        latencyMs,
-        tier: "TIER_1_LOCAL",
-      };
-    }
-
-    const allViolations: KyvernoViolationDetail[] = [];
-    const resourceResults: PreValidationResourceResult[] = [];
-    let blockedCount = 0;
-
-    for (const doc of docs) {
-      const apiVersion = doc.apiVersion ? String(doc.apiVersion) : undefined;
-      const kind = doc.kind ? String(doc.kind) : "";
-      const metadata = doc.metadata as Record<string, unknown> | undefined;
-      const name = metadata?.name ? String(metadata.name) : "unnamed";
-      const namespace = metadata?.namespace
-        ? String(metadata.namespace)
-        : undefined;
-      const labels = (metadata?.labels || {}) as Record<string, string>;
-
-      const resourceViolations: KyvernoViolationDetail[] = [];
-
-      // 쿠버네티스 표준 스펙 검증: apiVersion 및 kind 필수
-      if (!apiVersion || !kind) {
-        resourceViolations.push({
-          policyName: "yaml-syntax-error",
-          ruleName: "valid-k8s-manifest",
-          reason:
-            "유효한 쿠버네티스 리소스는 apiVersion 및 kind 항목을 반드시 포함해야 합니다.",
-          path: "/kind",
-        });
-      }
-
-      const isWorkload = workloadKinds.includes(kind);
-
-      if (isWorkload) {
-        // 1. 필수 레이블 검증 (require-labels)
-        const hasAppName = Boolean(
-          labels["app.kubernetes.io/name"] || labels["app"],
-        );
-        const hasTeam = Boolean(labels["team"] || labels["owner"]);
-        if (!hasAppName || !hasTeam) {
-          resourceViolations.push({
-            policyName: "require-labels",
-            ruleName: "check-for-labels",
-            reason:
-              "metadata.labels에 'app.kubernetes.io/name' 및 'team' 레이블이 반드시 지정되어야 합니다.",
-            path: "/metadata/labels",
-          });
-        }
-
-        // 컨테이너 목록 추출
-        let podSpec: Record<string, unknown> | undefined = undefined;
-        let containerPrefix = "/spec/containers";
-        const spec = doc.spec as Record<string, unknown> | undefined;
-        if (kind === "Pod") {
-          podSpec = spec;
-          containerPrefix = "/spec/containers";
-        } else if (kind === "CronJob") {
-          const jobTemplate = spec?.jobTemplate as
-            | Record<string, unknown>
-            | undefined;
-          const jobSpec = jobTemplate?.spec as
-            | Record<string, unknown>
-            | undefined;
-          const template = jobSpec?.template as
-            | Record<string, unknown>
-            | undefined;
-          podSpec = template?.spec as Record<string, unknown> | undefined;
-          containerPrefix = "/spec/jobTemplate/spec/template/spec/containers";
-        } else {
-          const template = spec?.template as
-            | Record<string, unknown>
-            | undefined;
-          podSpec =
-            (template?.spec as Record<string, unknown> | undefined) || spec;
-          containerPrefix = template?.spec
-            ? "/spec/template/spec/containers"
-            : "/spec/containers";
-        }
-
-        const rawContainers = Array.isArray(podSpec?.containers)
-          ? (podSpec?.containers as Array<Record<string, unknown>>)
-          : [];
-        const rawInitContainers = Array.isArray(podSpec?.initContainers)
-          ? (podSpec?.initContainers as Array<Record<string, unknown>>)
-          : [];
-        const containers = [...rawContainers, ...rawInitContainers];
-
-        if (containers.length > 0) {
-          // 2. Privileged 컨테이너 차단 (disallow-privileged-containers)
-          for (let i = 0; i < containers.length; i++) {
-            const c = containers[i];
-            const secCtx = c?.securityContext as
-              | Record<string, unknown>
-              | undefined;
-            if (secCtx?.privileged === true) {
-              resourceViolations.push({
-                policyName: "disallow-privileged-containers",
-                ruleName: "disallow-privileged-containers",
-                reason:
-                  "privileged: true 옵션이 설정된 특권 컨테이너는 보안 정책상 실행될 수 없습니다.",
-                path: `${containerPrefix}/${i}/securityContext/privileged`,
-              });
-            }
-          }
-
-          // 3. root 권한 실행 차단 (require-run-as-non-root)
-          const podSecCtx = podSpec?.securityContext as
-            | Record<string, unknown>
-            | undefined;
-          const podRunAsNonRoot = podSecCtx?.runAsNonRoot === true;
-          const podRunAsUserZero = podSecCtx?.runAsUser === 0;
-
-          if (podRunAsUserZero) {
-            resourceViolations.push({
-              policyName: "require-run-as-non-root",
-              ruleName: "run-as-non-root",
-              reason: "컨테이너는 root 권한(UID 0)으로 실행될 수 없습니다.",
-              path: "/spec/template/spec/securityContext/runAsUser",
-            });
-          } else {
-            for (let i = 0; i < containers.length; i++) {
-              const c = containers[i];
-              const cSecCtx = c?.securityContext as
-                | Record<string, unknown>
-                | undefined;
-              const containerRunAsUserZero = cSecCtx?.runAsUser === 0;
-              const containerRunAsNonRoot = cSecCtx?.runAsNonRoot === true;
-              const isExplicitFalse = cSecCtx?.runAsNonRoot === false;
-
-              if (containerRunAsUserZero) {
-                resourceViolations.push({
-                  policyName: "require-run-as-non-root",
-                  ruleName: "run-as-non-root",
-                  reason: "컨테이너는 root 권한(UID 0)으로 실행될 수 없습니다.",
-                  path: `${containerPrefix}/${i}/securityContext/runAsUser`,
-                });
-              } else if (
-                isExplicitFalse ||
-                (!podRunAsNonRoot && !containerRunAsNonRoot)
-              ) {
-                resourceViolations.push({
-                  policyName: "require-run-as-non-root",
-                  ruleName: "run-as-non-root",
-                  reason:
-                    "컨테이너는 root 권한으로 실행될 수 없습니다. securityContext.runAsNonRoot: true 설정을 요구합니다.",
-                  path: `${containerPrefix}/${i}/securityContext/runAsNonRoot`,
-                });
-              }
-            }
-          }
-
-          // 4. 리소스 requests/limits 누락 검증 (require-pod-requests-limits)
-          for (let i = 0; i < containers.length; i++) {
-            const c = containers[i];
-            const res = c?.resources as Record<string, unknown> | undefined;
-            const req = res?.requests as Record<string, unknown> | undefined;
-            const lim = res?.limits as Record<string, unknown> | undefined;
-            if (!req?.cpu || !req?.memory || !lim?.cpu || !lim?.memory) {
-              resourceViolations.push({
-                policyName: "require-pod-requests-limits",
-                ruleName: "validate-resource-requests-limits",
-                reason:
-                  "모든 컨테이너는 CPU/Memory의 requests 및 limits 설정을 요구합니다.",
-                path: `${containerPrefix}/${i}/resources`,
-              });
-            }
-          }
-        }
-      }
-
-      const isAllowed = resourceViolations.length === 0;
-      if (!isAllowed) {
-        blockedCount++;
-        allViolations.push(...resourceViolations);
-      }
-
-      resourceResults.push({
-        apiVersion,
-        kind,
-        name,
-        namespace,
-        allowed: isAllowed,
-        violations: resourceViolations,
-      });
-    }
-
-    const latencyMs = Number((performance.now() - startTime).toFixed(2));
-    return {
-      valid: allViolations.length === 0,
-      totalResources: docs.length,
-      blockedCount,
-      passedCount: docs.length - blockedCount,
-      violations: allViolations,
-      results: resourceResults,
-      latencyMs,
-      tier: "TIER_1_LOCAL",
-    };
+    const fastFailEngine = new InMemoryFastFailEngine();
+    return fastFailEngine.preValidateManifest(manifestYaml);
   }
 }

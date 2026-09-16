@@ -4,6 +4,7 @@ import { GitOpsService } from "./gitops.service";
 import { SimulationService } from "../simulation/simulation.service";
 import { AiAgentService } from "../ai-agent/ai-agent.service";
 import { KyvernoRuleTemplateEngine } from "../ai-agent/rule-template.engine";
+import { InMemoryFastFailEngine } from "../simulation/fast-fail/in-memory-fast-fail.engine";
 import { ClusterProvider } from "../kubernetes/cluster-provider";
 import { BusinessException } from "../common/errors/business.exception";
 import { GITOPS_ERROR } from "./gitops.errors";
@@ -61,6 +62,7 @@ describe("GitOpsService", () => {
       providers: [
         GitOpsService,
         KyvernoRuleTemplateEngine,
+        InMemoryFastFailEngine,
         { provide: SimulationService, useValue: simulationService },
         { provide: AiAgentService, useValue: aiAgentService },
         { provide: ClusterProvider, useValue: clusterProvider },
@@ -89,7 +91,7 @@ spec:
     runAsNonRoot: true
   containers:
     - name: c1
-      image: test:latest
+      image: test:1.0.0
       resources:
         requests:
           cpu: 100m

@@ -3,7 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { ClusterProvider } from "../kubernetes/cluster-provider";
 import { SimulationService } from "../simulation/simulation.service";
 import { AiAgentService } from "../ai-agent/ai-agent.service";
-import { KyvernoRuleTemplateEngine } from "../ai-agent/rule-template.engine";
+import { InMemoryFastFailEngine } from "../simulation/fast-fail/in-memory-fast-fail.engine";
 import { BusinessException } from "../common/errors/business.exception";
 import { GITOPS_ERROR } from "./gitops.errors";
 import {
@@ -39,7 +39,7 @@ export class GitOpsService {
     @Inject(VCS_PROVIDER_TOKEN)
     private readonly vcsProvider: VcsProvider,
     @Optional()
-    private readonly ruleTemplateEngine?: KyvernoRuleTemplateEngine,
+    private readonly fastFailEngine?: InMemoryFastFailEngine,
   ) {
     this.platformBaseUrl = this.configService.get<string>(
       "PLATFORM_BASE_URL",
@@ -72,7 +72,7 @@ export class GitOpsService {
 
     // 2. 2-Tier 검증 파이프라인
     let dryRunResult: ManifestDryRunValidationResult;
-    const engine = this.ruleTemplateEngine ?? new KyvernoRuleTemplateEngine();
+    const engine = this.fastFailEngine ?? new InMemoryFastFailEngine();
     const tier1Result = engine.preValidateManifest(dto.manifestYaml);
 
     if (!tier1Result.valid && tier1Result.violations.length > 0) {
