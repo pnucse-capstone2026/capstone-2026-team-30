@@ -392,3 +392,4 @@ Deploy the full platform into any target Kubernetes cluster using the environmen
 | **[Vendor Integration & Provider Extension Guide](docs/guides/vendor-integration-guide.md)** | Developer guide for implementing new LLM (OpenAI), VCS (GitLab), and CD (Flux) providers |
 | **[Release Patch Notes (2026-08)](docs/history/patch-notes-2026-08.md)** | Historical patch notes detailing MLOps rollouts, informer caching, and refactoring |
 | **[Agent Operational Guidelines](docs/guides/agent-operational-guidelines.md)** | Contributor and AI agent workflow, commit format, and identity guidelines |
+| **[Advanced Governance Enhancements & Prompts](docs/plans/ADVANCED_GOVERNANCE_ENHANCEMENT_TASKS_AND_PROMPTS.md)** | Deep-dive analysis and ready-to-run task prompts for SSE integrity, 2-Tier Gate, BullMQ DLQ, and Drift Self-Healing |
