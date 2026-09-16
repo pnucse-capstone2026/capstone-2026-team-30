@@ -1,3 +1,4 @@
+import { HttpStatus } from "@nestjs/common";
 import type { BusinessErrorDefinition } from "../common/errors/business-error";
 
 /**
@@ -27,5 +28,11 @@ export const GITOPS_ERROR = {
     code: "GITOPS_CLUSTER_NOT_FOUND",
     message:
       "지정된 대상 클러스터를 찾을 수 없거나 연동 설정이 되어 있지 않습니다.",
+  },
+  QUEUE_UNAVAILABLE: {
+    code: "GITOPS_009",
+    message:
+      "PR 리뷰 작업 큐 서비스를 일시적으로 사용할 수 없습니다. 잠시 후 재시도하십시오.",
+    status: HttpStatus.SERVICE_UNAVAILABLE,
   },
 } as const satisfies Record<string, BusinessErrorDefinition>;

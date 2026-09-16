@@ -172,4 +172,39 @@ describe("GitOpsController", () => {
     expect(prReviewQueue.addReviewJob).not.toHaveBeenCalled();
     expect(result).toEqual(mockSyncResult);
   });
+
+  it("should failover to inline synchronous review when queue returns fallback_sync", async () => {
+    const dto: GitOpsPrReviewDto = {
+      repository: "org/repo",
+      pullNumber: 10,
+      commitSha: "sha123",
+      targetNamespace: "default",
+      manifestYaml: "apiVersion: v1\nkind: Pod",
+    };
+
+    const mockSyncResult: GitOpsPrReviewResultDto = {
+      valid: true,
+      dryRunPassed: true,
+      blocked: false,
+      totalResources: 1,
+      blockedCount: 0,
+      status: "PASSED",
+      violations: [],
+    };
+
+    prReviewQueue.addReviewJob.mockResolvedValueOnce({
+      id: "fallback-sync-12345",
+      status: "fallback_sync",
+      checkRunId: 98765,
+    });
+    gitOpsService.reviewPullRequest.mockResolvedValueOnce(mockSyncResult);
+    const mockRes = { status: jest.fn() } as any;
+
+    const result = await controller.reviewPullRequest(dto, undefined, mockRes);
+
+    expect(prReviewQueue.addReviewJob).toHaveBeenCalledWith(dto, 98765);
+    expect(mockRes.status).toHaveBeenCalledWith(201);
+    expect(gitOpsService.reviewPullRequest).toHaveBeenCalledWith(dto);
+    expect(result).toEqual(mockSyncResult);
+  });
 });

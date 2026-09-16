@@ -9,7 +9,13 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { Queue, QueueOptions } from "bullmq";
 import { v4 as uuidv4 } from "uuid";
+import { BusinessException } from "../../common/errors/business.exception";
 import { GitOpsPrReviewDto } from "../dto/gitops-pr-review.dto";
+import { GITOPS_ERROR } from "../gitops.errors";
+import {
+  VCS_PROVIDER_TOKEN,
+  VcsProvider,
+} from "../providers/vcs-provider.interface";
 
 export const GITOPS_PR_REVIEW_QUEUE_NAME = "gitops-pr-review";
 export const INJECTED_BULLMQ_QUEUE = "INJECTED_BULLMQ_QUEUE";
@@ -22,7 +28,7 @@ export interface PrReviewJobData {
 
 export interface EnqueueJobResult {
   id: string;
-  status: "queued";
+  status: "queued" | "fallback_sync";
   checkRunId?: number | string;
 }
 
@@ -49,11 +55,20 @@ export class GitOpsPrReviewQueue implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(GitOpsPrReviewQueue.name);
   private queue: Queue<PrReviewJobData> | null = null;
 
+  // 동일 PR에 대해 현재 큐에서 대기/지연 중인 이전 작업 식별자 트래커 (O(1) 선점 디바운스용)
+  private readonly activePrJobs = new Map<
+    string,
+    { jobId: string; checkRunId?: number | string; commitSha: string }
+  >();
+
   constructor(
     @Optional() private readonly configService?: ConfigService,
     @Optional()
     @Inject(INJECTED_BULLMQ_QUEUE)
     injectedQueue?: Queue<PrReviewJobData>,
+    @Optional()
+    @Inject(VCS_PROVIDER_TOKEN)
+    private readonly vcsProvider?: VcsProvider,
   ) {
     if (injectedQueue) {
       this.queue = injectedQueue;
@@ -88,7 +103,53 @@ export class GitOpsPrReviewQueue implements OnModuleInit, OnModuleDestroy {
 
     if (this.queue) {
       try {
-        // 동일 PR(repository + pullNumber)의 이전 대기 중(waiting) 작업 선점 취소(Debounce)
+        const prKey = `${dto.repository}#${dto.pullNumber}`;
+
+        // 1. O(1) 트래커를 통한 이전 활성 작업 선점 취소
+        const trackedOld = this.activePrJobs.get(prKey);
+        if (trackedOld) {
+          try {
+            const oldJob = await this.queue.getJob(trackedOld.jobId);
+            if (oldJob) {
+              const state = await oldJob.getState();
+              if (state === "waiting" || state === "delayed") {
+                await oldJob.remove();
+                this.logger.log(
+                  `[BullMQ] Preempted older pending job #${oldJob.id} (state: ${state}) for PR #${dto.pullNumber} via O(1) tracker`,
+                );
+              }
+            }
+          } catch (trackerErr) {
+            this.logger.debug(
+              `[BullMQ] Tracker job removal skipped: ${trackerErr instanceof Error ? trackerErr.message : String(trackerErr)}`,
+            );
+          }
+
+          // 선점된 이전 작업의 GitHub Check Run을 'neutral/superseded'로 종결 처리
+          if (trackedOld.checkRunId && this.vcsProvider?.updateCheckRun) {
+            try {
+              await this.vcsProvider.updateCheckRun({
+                name: "Kyverno Policy PR Review",
+                repository: dto.repository,
+                commitSha: trackedOld.commitSha,
+                status: "completed",
+                conclusion: "neutral",
+                title: "Kyverno PR Review Superseded",
+                summary: `Review superseded by newer commit ${dto.commitSha.slice(0, 7)}`,
+                checkRunId: trackedOld.checkRunId,
+              });
+              this.logger.log(
+                `[BullMQ] Marked superseded Check Run #${trackedOld.checkRunId} as completed/neutral`,
+              );
+            } catch (vcsErr) {
+              this.logger.debug(
+                `[BullMQ] Failed to update superseded Check Run: ${vcsErr instanceof Error ? vcsErr.message : String(vcsErr)}`,
+              );
+            }
+          }
+        }
+
+        // 2. 대기열(waiting)에서 동일 PR의 잔여 작업 스캔 및 취소
         try {
           const waitingJobs = await this.queue.getJobs(["waiting"]);
           for (const oldJob of waitingJobs) {
@@ -100,6 +161,26 @@ export class GitOpsPrReviewQueue implements OnModuleInit, OnModuleDestroy {
               this.logger.log(
                 `[BullMQ] Preempted older pending job #${oldJob.id} for PR #${dto.pullNumber}`,
               );
+
+              // Check Run 종결
+              const oldCheckRunId = oldJob.data?.checkRunId;
+              const oldCommitSha = oldJob.data?.dto?.commitSha;
+              if (oldCheckRunId && this.vcsProvider?.updateCheckRun) {
+                try {
+                  await this.vcsProvider.updateCheckRun({
+                    name: "Kyverno Policy PR Review",
+                    repository: dto.repository,
+                    commitSha: oldCommitSha || dto.commitSha,
+                    status: "completed",
+                    conclusion: "neutral",
+                    title: "Kyverno PR Review Superseded",
+                    summary: `Review superseded by newer commit ${dto.commitSha.slice(0, 7)}`,
+                    checkRunId: oldCheckRunId,
+                  });
+                } catch {
+                  // 무시
+                }
+              }
             }
           }
         } catch (preemptErr) {
@@ -116,6 +197,13 @@ export class GitOpsPrReviewQueue implements OnModuleInit, OnModuleDestroy {
           jobId: `pr-${dto.repository.replace(/\//g, "-")}-${dto.pullNumber}-${uuidv4().slice(0, 8)}`,
         });
 
+        // O(1) 트래커 갱신
+        this.activePrJobs.set(prKey, {
+          jobId: String(job.id),
+          checkRunId,
+          commitSha: dto.commitSha,
+        });
+
         this.logger.log(
           `[BullMQ] Enqueued PR review job #${job.id} for PR #${dto.pullNumber} (${dto.repository})`,
         );
@@ -127,20 +215,33 @@ export class GitOpsPrReviewQueue implements OnModuleInit, OnModuleDestroy {
         };
       } catch (err) {
         this.logger.error(
-          `[BullMQ] Failed to enqueue job to Redis, generating fallback jobId: ${
+          `[BullMQ] Failed to enqueue job to Redis: ${
             err instanceof Error ? err.message : String(err)
           }`,
         );
       }
     }
 
-    // Redis 큐 미연결 시 fallback 식별자 반환
-    const fallbackId = `fallback-${uuidv4()}`;
-    return {
-      id: fallbackId,
-      status: "queued",
-      checkRunId,
-    };
+    // Redis 큐 미연결 또는 Enqueue 실패 시 fallback 동기 검증 여부 확인
+    const isFallbackSync =
+      this.configService?.get<string>("GITOPS_QUEUE_FALLBACK_SYNC") ===
+        "true" || process.env.GITOPS_QUEUE_FALLBACK_SYNC === "true";
+
+    if (isFallbackSync) {
+      this.logger.warn(
+        `[BullMQ] Redis queue unavailable. Falling back to inline synchronous PR review execution for PR #${dto.pullNumber}`,
+      );
+      return {
+        id: `fallback-sync-${uuidv4()}`,
+        status: "fallback_sync",
+        checkRunId,
+      };
+    }
+
+    this.logger.error(
+      `[BullMQ] Redis queue unavailable and inline fallback sync disabled. Rejecting PR review request for PR #${dto.pullNumber}`,
+    );
+    throw new BusinessException(GITOPS_ERROR.QUEUE_UNAVAILABLE);
   }
 
   /**

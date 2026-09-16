@@ -146,6 +146,12 @@ export class GitOpsController {
       checkRunId,
     );
 
+    // Redis 장애 시 인라인 동기 검증 Failover 처리
+    if (enqueueResult.status === "fallback_sync") {
+      res?.status(HttpStatus.CREATED);
+      return await this.gitOpsService.reviewPullRequest(dto);
+    }
+
     return {
       jobId: enqueueResult.id,
       status: "queued",
