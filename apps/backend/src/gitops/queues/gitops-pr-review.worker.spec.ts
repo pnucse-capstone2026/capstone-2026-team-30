@@ -4,8 +4,8 @@ import { Job, Queue, Worker } from "bullmq";
 import {
   DEFAULT_PR_REVIEW_WORKER_OPTIONS,
   GITOPS_PR_REVIEW_DLQ_NAME,
+  GITOPS_PR_REVIEW_DLQ_TOKEN,
   GitOpsPrReviewWorker,
-  INJECTED_BULLMQ_DLQ,
   INJECTED_BULLMQ_WORKER,
   PrReviewDlqJobData,
 } from "./gitops-pr-review.worker";
@@ -71,11 +71,9 @@ describe("GitOpsPrReviewWorker", () => {
     };
 
     mockDlqQueue = {
-      add: jest
-        .fn()
-        .mockResolvedValue({
-          id: "dlq-1",
-        } as unknown as Job<PrReviewDlqJobData>),
+      add: jest.fn().mockResolvedValue({
+        id: "dlq-1",
+      } as unknown as Job<PrReviewDlqJobData>),
       close: jest.fn().mockResolvedValue(undefined),
     };
 
@@ -95,7 +93,7 @@ describe("GitOpsPrReviewWorker", () => {
           useValue: mockWorker,
         },
         {
-          provide: INJECTED_BULLMQ_DLQ,
+          provide: GITOPS_PR_REVIEW_DLQ_TOKEN,
           useValue: mockDlqQueue,
         },
       ],
@@ -267,6 +265,14 @@ describe("GitOpsPrReviewWorker", () => {
 
     it("should export correct DLQ queue name constant", () => {
       expect(GITOPS_PR_REVIEW_DLQ_NAME).toBe("gitops-pr-review-dlq");
+    });
+  });
+
+  describe("onModuleInit and DI", () => {
+    it("should retain injected worker and dlqQueue instances without recreating them", async () => {
+      await workerService.onModuleInit();
+      expect(workerService.getWorker()).toBe(mockWorker);
+      expect(workerService.getDlqQueue()).toBe(mockDlqQueue);
     });
   });
 

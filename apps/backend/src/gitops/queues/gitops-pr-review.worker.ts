@@ -22,7 +22,8 @@ import {
 
 export const GITOPS_PR_REVIEW_DLQ_NAME = "gitops-pr-review-dlq";
 export const INJECTED_BULLMQ_WORKER = "INJECTED_BULLMQ_WORKER";
-export const INJECTED_BULLMQ_DLQ = "INJECTED_BULLMQ_DLQ";
+export const GITOPS_PR_REVIEW_DLQ_TOKEN = "GITOPS_PR_REVIEW_DLQ_TOKEN";
+export const INJECTED_BULLMQ_DLQ = GITOPS_PR_REVIEW_DLQ_TOKEN;
 
 /**
  * PR 리뷰 Dead Letter Queue 작업 페이로드
@@ -68,7 +69,7 @@ export class GitOpsPrReviewWorker implements OnModuleInit, OnModuleDestroy {
     @Inject(INJECTED_BULLMQ_WORKER)
     injectedWorker?: Worker<PrReviewJobData, GitOpsPrReviewResultDto>,
     @Optional()
-    @Inject(INJECTED_BULLMQ_DLQ)
+    @Inject(GITOPS_PR_REVIEW_DLQ_TOKEN)
     injectedDlq?: Queue<PrReviewDlqJobData>,
   ) {
     if (injectedWorker) {
@@ -80,14 +81,11 @@ export class GitOpsPrReviewWorker implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * 모듈 기동 시 BullMQ 워커 및 DLQ 인스턴스를 초기화하고 이벤트 리스너를 바인딩합니다.
+   * 모듈 기동 시 BullMQ 워커 인스턴스를 초기화하고 이벤트 리스너를 바인딩합니다.
    */
   async onModuleInit(): Promise<void> {
     if (!this.worker) {
       this.initWorker();
-    }
-    if (!this.dlqQueue) {
-      this.initDlq();
     }
   }
 
@@ -308,43 +306,6 @@ export class GitOpsPrReviewWorker implements OnModuleInit, OnModuleDestroy {
         }`,
       );
       this.worker = null;
-    }
-  }
-
-  /**
-   * Redis 연결을 기반으로 BullMQ DLQ 인스턴스를 초기화합니다.
-   */
-  private initDlq(): void {
-    const host =
-      this.configService?.get<string>("REDIS_HOST") ||
-      process.env.REDIS_HOST ||
-      "localhost";
-    const port = Number(
-      this.configService?.get<number | string>("REDIS_PORT") ||
-        process.env.REDIS_PORT ||
-        6379,
-    );
-    const password =
-      this.configService?.get<string>("REDIS_PASSWORD") ||
-      process.env.REDIS_PASSWORD ||
-      undefined;
-
-    try {
-      this.dlqQueue = new Queue<PrReviewDlqJobData>(GITOPS_PR_REVIEW_DLQ_NAME, {
-        connection: {
-          host,
-          port,
-          password,
-          maxRetriesPerRequest: null,
-        },
-      });
-    } catch (err) {
-      this.logger.warn(
-        `[BullMQ] Failed to initialize DLQ ${GITOPS_PR_REVIEW_DLQ_NAME}: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
-      this.dlqQueue = null;
     }
   }
 }
