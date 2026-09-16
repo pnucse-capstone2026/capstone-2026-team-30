@@ -431,6 +431,44 @@ describe("PolicyDriftDetectorService", () => {
       expect(mockKyvernoAdapter.restorePolicyException).not.toHaveBeenCalled();
     });
 
+    it("suppresses repeated cascade auto-healing during cooldown window to prevent storm", async () => {
+      mockPrismaService.policyExceptionRequest.findFirst.mockResolvedValue(
+        sampleDbRequest,
+      );
+
+      const mutatedObj: K8sResourceWithSpec = {
+        metadata: { name: sampleExceptionName },
+        spec: { exceptions: [] },
+      };
+
+      // 1st mutation: trigger auto-heal and set cooldown
+      const firstResult = await service.handleResourceMutation(
+        sampleClusterId,
+        "policyexceptions",
+        "update",
+        mutatedObj,
+      );
+      expect(firstResult?.drifted).toBe(true);
+      expect(firstResult?.autoHealed).toBe(true);
+      expect(mockKyvernoAdapter.restorePolicyException).toHaveBeenCalledTimes(
+        1,
+      );
+
+      // 2nd mutation immediately after: cooldown active, suppress auto-heal
+      const secondResult = await service.handleResourceMutation(
+        sampleClusterId,
+        "policyexceptions",
+        "update",
+        mutatedObj,
+      );
+      expect(secondResult?.drifted).toBe(true);
+      expect(secondResult?.autoHealed).toBe(false);
+      // restorePolicyException must not be called again
+      expect(mockKyvernoAdapter.restorePolicyException).toHaveBeenCalledTimes(
+        1,
+      );
+    });
+
     it("handles database query failure gracefully without throwing unhandled exceptions", async () => {
       mockPrismaService.policyExceptionRequest.findFirst.mockRejectedValue(
         new Error("Database connection timeout"),

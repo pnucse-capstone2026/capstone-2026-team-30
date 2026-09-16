@@ -89,6 +89,11 @@ export class PolicyDriftDetectorService
   private unsubscribe?: () => void;
   private autoHealEnabled = true;
 
+  // 자가 치유(Self-Healing) 후 발생하는 재귀적 Informer 이벤트 폭풍(Loop Storm)을 방어하기 위한 쿨다운 캐시
+  // Key: `${clusterId}:${name}`, Value: 복구 시도 타임스탬프 (밀리초)
+  private readonly healingCooldownCache = new Map<string, number>();
+  private readonly HEALING_COOLDOWN_MS = 15_000;
+
   constructor(
     private readonly informerService: K8sInformerService,
     private readonly prisma: PrismaService,
@@ -125,13 +130,14 @@ export class PolicyDriftDetectorService
   }
 
   /**
-   * 모듈 파괴 시 구독을 해제합니다.
+   * 모듈 파괴 시 구독을 해제하고 쿨다운 캐시를 비웁니다.
    */
   async onModuleDestroy(): Promise<void> {
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = undefined;
     }
+    this.healingCooldownCache.clear();
     this.logger.log("[DriftDetector] Policy drift detection engine stopped.");
   }
 
@@ -239,7 +245,15 @@ export class PolicyDriftDetectorService
       }
     }
 
+    const cooldownKey = `${clusterId}:${name}`;
+    const lastHealedAt = this.healingCooldownCache.get(cooldownKey);
+    const now = Date.now();
+
     if (!isDrift) {
+      // 정상 상태 이벤트 수신 시 복구 쿨다운 해제
+      if (lastHealedAt) {
+        this.healingCooldownCache.delete(cooldownKey);
+      }
       return {
         drifted: false,
         clusterId,
@@ -247,6 +261,24 @@ export class PolicyDriftDetectorService
         eventType,
         expectedHash,
         actualHash,
+      };
+    }
+
+    // 쿨다운 기간 내 재귀적 이벤트 억제 (Informer Reconcile Storm 원천 차단)
+    if (lastHealedAt && now - lastHealedAt < this.HEALING_COOLDOWN_MS) {
+      this.logger.warn(
+        `[DriftDetector] Suppression: Self-healing cooldown active for ${clusterId}/${name} (${
+          now - lastHealedAt
+        }ms < ${this.HEALING_COOLDOWN_MS}ms). Skipping cascade auto-heal.`,
+      );
+      return {
+        drifted: true,
+        clusterId,
+        resourceName: name,
+        eventType,
+        expectedHash,
+        actualHash,
+        autoHealed: false,
       };
     }
 
@@ -300,6 +332,7 @@ export class PolicyDriftDetectorService
     // 7. Auto-Heal 모드 활성화 시 Hub 원본 매니페스트로 즉시 복구
     let autoHealed = false;
     if (this.autoHealEnabled) {
+      this.healingCooldownCache.set(cooldownKey, now);
       try {
         this.logger.log(
           `[DriftDetector] Auto-healing drift for PolicyException '${name}' on cluster '${clusterId}'...`,

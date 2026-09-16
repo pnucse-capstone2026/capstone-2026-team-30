@@ -3,6 +3,19 @@ import { K8sInformerService } from "./k8s-informer.service";
 import { ClusterProvider } from "./cluster-provider";
 import { KubeConfig } from "@kubernetes/client-node";
 
+const mockMakeInformer = jest.fn();
+
+jest.mock("@kubernetes/client-node", () => {
+  const actual = jest.requireActual("@kubernetes/client-node");
+  return {
+    ...actual,
+    makeInformer: (kubeConfig: any, path: string, listFn: any) => {
+      mockMakeInformer(kubeConfig, path, listFn);
+      return actual.makeInformer(kubeConfig, path, listFn);
+    },
+  };
+});
+
 describe("K8sInformerService", () => {
   let service: K8sInformerService;
   let mockClusterProvider: Partial<ClusterProvider>;
@@ -123,6 +136,131 @@ describe("K8sInformerService", () => {
       // 모듈 종료 시뮬레이션
       await informerService.onModuleDestroy();
       expect(stopSpy).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("PolicyException RBAC Fallback", () => {
+    const getPolicyExceptionListFn = () => {
+      const call = mockMakeInformer.mock.calls.find(
+        (args) =>
+          typeof args[1] === "string" && args[1].includes("policyexceptions"),
+      );
+      return call ? (call[2] as () => Promise<any>) : undefined;
+    };
+
+    beforeEach(() => {
+      mockMakeInformer.mockClear();
+    });
+
+    it("falls back to listNamespacedCustomObject when listClusterCustomObject returns 403 (statusCode)", async () => {
+      const listNamespacedCustomObjectMock = jest.fn().mockResolvedValue({
+        items: [
+          { metadata: { name: "namespaced-exception", namespace: "kyverno" } },
+        ],
+      });
+      const listClusterCustomObjectMock = jest.fn().mockRejectedValue({
+        statusCode: 403,
+      });
+
+      const mockCluster = {
+        id: "test-cluster",
+        displayName: "Test Cluster",
+        exceptionNamespace: "kyverno",
+        customObjectsApi: {
+          listClusterCustomObject: listClusterCustomObjectMock,
+          listNamespacedCustomObject: listNamespacedCustomObjectMock,
+        },
+      };
+
+      (mockClusterProvider.get as jest.Mock).mockReturnValue(mockCluster);
+
+      await service.onModuleInit();
+
+      const policyExceptionListFn = getPolicyExceptionListFn();
+      expect(policyExceptionListFn).toBeDefined();
+
+      const result = await policyExceptionListFn!();
+
+      expect(listClusterCustomObjectMock).toHaveBeenCalledWith({
+        group: "kyverno.io",
+        version: "v2beta1",
+        plural: "policyexceptions",
+      });
+
+      expect(listNamespacedCustomObjectMock).toHaveBeenCalledWith({
+        group: "kyverno.io",
+        version: "v2beta1",
+        namespace: "kyverno",
+        plural: "policyexceptions",
+      });
+
+      expect(result).toEqual({
+        apiVersion: "kyverno.io/v2beta1",
+        kind: "PolicyExceptionList",
+        items: [
+          { metadata: { name: "namespaced-exception", namespace: "kyverno" } },
+        ],
+      });
+    });
+
+    it("falls back to listNamespacedCustomObject when listClusterCustomObject returns response.statusCode = 403", async () => {
+      const listNamespacedCustomObjectMock = jest.fn().mockResolvedValue({
+        items: [
+          { metadata: { name: "namespaced-exception", namespace: "kyverno" } },
+        ],
+      });
+      const listClusterCustomObjectMock = jest.fn().mockRejectedValue({
+        response: { statusCode: 403 },
+      });
+
+      const mockCluster = {
+        id: "test-cluster",
+        displayName: "Test Cluster",
+        exceptionNamespace: "kyverno",
+        customObjectsApi: {
+          listClusterCustomObject: listClusterCustomObjectMock,
+          listNamespacedCustomObject: listNamespacedCustomObjectMock,
+        },
+      };
+
+      (mockClusterProvider.get as jest.Mock).mockReturnValue(mockCluster);
+
+      await service.onModuleInit();
+
+      const policyExceptionListFn = getPolicyExceptionListFn();
+      expect(policyExceptionListFn).toBeDefined();
+
+      const result = await policyExceptionListFn!();
+
+      expect(listClusterCustomObjectMock).toHaveBeenCalled();
+      expect(listNamespacedCustomObjectMock).toHaveBeenCalledWith({
+        group: "kyverno.io",
+        version: "v2beta1",
+        namespace: "kyverno",
+        plural: "policyexceptions",
+      });
+      expect(result.items).toHaveLength(1);
+    });
+
+    it("rethrows error when listClusterCustomObject fails with non-403 error", async () => {
+      const error500 = { statusCode: 500, message: "Internal Server Error" };
+      const mockCluster = {
+        id: "test-cluster",
+        displayName: "Test Cluster",
+        exceptionNamespace: "kyverno",
+        customObjectsApi: {
+          listClusterCustomObject: jest.fn().mockRejectedValue(error500),
+          listNamespacedCustomObject: jest.fn(),
+        },
+      };
+
+      (mockClusterProvider.get as jest.Mock).mockReturnValue(mockCluster);
+
+      await service.onModuleInit();
+
+      const policyExceptionListFn = getPolicyExceptionListFn();
+      expect(policyExceptionListFn).toBeDefined();
+      await expect(policyExceptionListFn!()).rejects.toEqual(error500);
     });
   });
 });

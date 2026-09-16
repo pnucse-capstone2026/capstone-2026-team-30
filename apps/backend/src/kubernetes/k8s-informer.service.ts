@@ -236,16 +236,42 @@ export class K8sInformerService implements OnModuleInit, OnModuleDestroy {
       "policyexceptions",
       `/apis/${KYVERNO_GROUP}/${EXCEPTION_VERSION}/${EXCEPTION_PLURAL}`,
       async () => {
-        const res = (await connection.customObjectsApi.listClusterCustomObject({
-          group: KYVERNO_GROUP,
-          version: EXCEPTION_VERSION,
-          plural: EXCEPTION_PLURAL,
-        })) as { items?: KubernetesObject[] };
-        return {
-          apiVersion: `${KYVERNO_GROUP}/${EXCEPTION_VERSION}`,
-          kind: "PolicyExceptionList",
-          items: Array.isArray(res?.items) ? res.items : [],
-        };
+        try {
+          const res =
+            (await connection.customObjectsApi.listClusterCustomObject({
+              group: KYVERNO_GROUP,
+              version: EXCEPTION_VERSION,
+              plural: EXCEPTION_PLURAL,
+            })) as { items?: KubernetesObject[] };
+          return {
+            apiVersion: `${KYVERNO_GROUP}/${EXCEPTION_VERSION}`,
+            kind: "PolicyExceptionList",
+            items: Array.isArray(res?.items) ? res.items : [],
+          };
+        } catch (err: unknown) {
+          const statusCode =
+            (err as { statusCode?: number })?.statusCode ||
+            (err as { response?: { statusCode?: number } })?.response
+              ?.statusCode;
+          if (statusCode === 403) {
+            this.logger.warn(
+              `[Informer] Cluster-wide list forbidden (403) for policyexceptions on cluster '${cluster.id}'. Falling back to namespaced list in '${connection.exceptionNamespace}'.`,
+            );
+            const res =
+              (await connection.customObjectsApi.listNamespacedCustomObject({
+                group: KYVERNO_GROUP,
+                version: EXCEPTION_VERSION,
+                namespace: connection.exceptionNamespace,
+                plural: EXCEPTION_PLURAL,
+              })) as { items?: KubernetesObject[] };
+            return {
+              apiVersion: `${KYVERNO_GROUP}/${EXCEPTION_VERSION}`,
+              kind: "PolicyExceptionList",
+              items: Array.isArray(res?.items) ? res.items : [],
+            };
+          }
+          throw err;
+        }
       },
     );
   }
