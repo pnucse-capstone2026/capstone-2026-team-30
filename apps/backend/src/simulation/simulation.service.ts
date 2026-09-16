@@ -20,6 +20,7 @@ import {
   ParsedKyvernoError,
   ResourceDryRunResult,
 } from "./dto/dry-run-validation.dto";
+import { InMemoryFastFailEngine } from "./fast-fail/in-memory-fast-fail.engine";
 
 /**
  * 거버넌스 정책 시뮬레이션 및 테스트베드 관리 서비스
@@ -155,7 +156,10 @@ spec:
     },
   ];
 
-  constructor(private readonly clusterProvider: ClusterProvider) {}
+  constructor(
+    private readonly clusterProvider: ClusterProvider,
+    private readonly fastFailEngine: InMemoryFastFailEngine,
+  ) {}
 
   /**
    * 사전 정의된 시뮬레이션 시나리오 목록을 반환합니다.
@@ -494,6 +498,30 @@ spec:
       const namespace = obj.metadata.namespace || targetNamespace || "default";
       obj.metadata.namespace = namespace;
 
+      // ADR 0008 Tier 1: 인메모리 Fast-Fail 선행 검증 (Zero Network I/O)
+      const tier1Violations = this.fastFailEngine.evaluateResource(obj);
+      if (tier1Violations.length > 0) {
+        this.logger.log(
+          `[Tier 1 Fast-Fail] Resource ${kind}/${name} blocked before webhook: ${tier1Violations.length} violations detected`,
+        );
+        results.push({
+          apiVersion,
+          kind,
+          name,
+          namespace,
+          allowed: false,
+          status: "BLOCKED",
+          message:
+            "Kyverno 어드미션 Tier 1 사전 검증에 의해 리소스 배포가 차단되었습니다.",
+          blockedReason: tier1Violations[0]?.reason,
+          violations: tier1Violations,
+          rawError: `Tier 1 Fast-Fail blocked: ${tier1Violations.map((v) => v.reason).join("; ")}`,
+        });
+        allViolations.push(...tier1Violations);
+        continue;
+      }
+
+      // Tier 2: K8s API Server 및 Kyverno Admission Webhook Dry-Run
       try {
         // dryRun: 'All'을 지정하여 etcd에 영속화하지 않고 어드미션 웹훅만 검증
         await objectApi.create(obj, undefined, "All");

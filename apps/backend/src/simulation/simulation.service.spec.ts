@@ -2,6 +2,7 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { SimulationService } from "./simulation.service";
 import { ClusterProvider } from "../kubernetes/cluster-provider";
 import { BusinessException } from "../common/errors/business.exception";
+import { InMemoryFastFailEngine } from "./fast-fail/in-memory-fast-fail.engine";
 
 describe("SimulationService", () => {
   let service: SimulationService;
@@ -14,6 +15,10 @@ describe("SimulationService", () => {
 
   const mockKubernetesObjectApi = {
     create: jest.fn(),
+  };
+
+  const mockFastFailEngine = {
+    evaluateResource: jest.fn().mockReturnValue([]),
   };
 
   const mockKubeConfig = {
@@ -31,6 +36,7 @@ describe("SimulationService", () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockFastFailEngine.evaluateResource.mockReturnValue([]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -38,6 +44,10 @@ describe("SimulationService", () => {
         {
           provide: ClusterProvider,
           useValue: mockClusterProvider,
+        },
+        {
+          provide: InMemoryFastFailEngine,
+          useValue: mockFastFailEngine,
         },
       ],
     }).compile();
@@ -176,6 +186,48 @@ spec:
       expect(result.allViolations.length).toBeGreaterThan(0);
       expect(result.allViolations[0].policyName).toBe("disallow-latest-tag");
       expect(result.allViolations[0].ruleName).toBe("disallow-latest-tag");
+    });
+
+    it("should bypass K8s webhook create call and return BLOCKED immediately when Tier 1 Fast-Fail detects violations", async () => {
+      mockFastFailEngine.evaluateResource.mockReturnValueOnce([
+        {
+          policyName: "disallow-privileged-containers",
+          ruleName: "disallow-privileged-containers",
+          reason:
+            "privileged: true 옵션이 설정된 특권 컨테이너는 허용되지 않습니다.",
+          path: "/spec/template/spec/containers/0/securityContext/privileged",
+        },
+      ]);
+
+      const yamlContent = `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: priv-deployment
+spec:
+  template:
+    spec:
+      containers:
+        - name: app
+          image: nginx:1.27.0
+          securityContext:
+            privileged: true
+`;
+      const result = await service.validateManifestDryRun(
+        yamlContent,
+        "default",
+      );
+
+      expect(result.valid).toBe(false);
+      expect(result.allowed).toBe(false);
+      expect(result.blockedCount).toBe(1);
+      expect(result.passedCount).toBe(0);
+      expect(result.results[0].status).toBe("BLOCKED");
+      expect(result.allViolations).toHaveLength(1);
+      expect(result.allViolations[0].policyName).toBe(
+        "disallow-privileged-containers",
+      );
+      // 핵심: 실제 K8s API 서버 create 호출이 완전히 건너뛰어졌는지(0회 호출) 검증
+      expect(mockKubernetesObjectApi.create).not.toHaveBeenCalled();
     });
 
     it("should throw BusinessException for empty or invalid manifest YAML", async () => {
