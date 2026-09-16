@@ -331,7 +331,7 @@ export class IncidentsService {
     const incidents = await this.prisma.deploymentIncident.findMany({
       where: {
         ...clusterFilter,
-        updatedAt: { gt: sinceTime },
+        updatedAt: { gte: sinceTime },
         id: { not: lastEventId },
       },
       orderBy: { updatedAt: "asc" },

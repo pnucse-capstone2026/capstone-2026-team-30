@@ -14,11 +14,12 @@ import {
   ApiBearerAuth,
   ApiHeader,
   ApiOperation,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from "@nestjs/swagger";
 import { concat, from, Observable } from "rxjs";
-import { mergeMap } from "rxjs/operators";
+import { filter, mergeMap } from "rxjs/operators";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import { RequirePermissions } from "../auth/decorators/require-permissions.decorator";
@@ -58,7 +59,7 @@ export class IncidentsController {
   @ApiOperation({
     summary: "실시간 배포 차단 인시던트 SSE 스트림 구독",
     description:
-      "사용자가 접근 가능한 클러스터의 인시던트 생성 및 상태 변경 이벤트를 실시간으로 스트리밍합니다. Last-Event-ID 헤더를 통한 일시 단절 차분 동기화를 지원합니다.",
+      "사용자가 접근 가능한 클러스터의 인시던트 생성 및 상태 변경 이벤트를 실시간으로 스트리밍합니다. Last-Event-ID 헤더 및 lastEventId 쿼리 파라미터를 통한 일시 단절 차분 동기화를 지원합니다.",
   })
   @ApiHeader({
     name: "last-event-id",
@@ -66,39 +67,50 @@ export class IncidentsController {
     description:
       "W3C 표준 재연결 시점 이벤트 식별자 (인시던트 ID 또는 타임스탬프)",
   })
+  @ApiQuery({
+    name: "lastEventId",
+    required: false,
+    description:
+      "브라우저 EventSource 재연결을 위한 쿼리 파라미터 이벤트 식별자",
+  })
   subscribeEvents(
     @CurrentUser() user: AuthenticatedUser,
-    @Headers("last-event-id") lastEventId?: string,
+    @Headers("last-event-id") headerLastEventId?: string,
+    @Query("lastEventId") queryLastEventId?: string,
   ): Observable<MessageEvent> {
+    const lastEventId = (headerLastEventId || queryLastEventId)?.trim();
+
     const realTime$ = this.incidentsEventsService.subscribe(
       user.clusterIds || [],
       user.role === "ADMIN",
     );
 
-    if (!lastEventId || !lastEventId.trim()) {
+    if (!lastEventId) {
       return realTime$;
     }
 
+    const deliveredIds = new Set<string>();
+
     // W3C Last-Event-ID 기준 과거 누락 변경분 차분 하이드레이션 스트림
     const hydration$ = from(
-      this.incidentsService.getIncidentsSince(user, lastEventId.trim()),
+      this.incidentsService.getIncidentsSince(user, lastEventId),
     ).pipe(
       mergeMap((deltaResult) => {
-        const events: MessageEvent[] = deltaResult.items.map(
-          (incident) =>
-            ({
-              id: incident.id,
-              type: "incident:updated",
-              data: {
-                eventType: "incident:updated",
-                incident,
-                timestamp:
-                  incident.updatedAt instanceof Date
-                    ? incident.updatedAt.toISOString()
-                    : String(incident.updatedAt),
-              },
-            }) as MessageEvent,
-        );
+        const events: MessageEvent[] = deltaResult.items.map((incident) => {
+          deliveredIds.add(incident.id);
+          return {
+            id: incident.id,
+            type: "incident:updated",
+            data: {
+              eventType: "incident:updated",
+              incident,
+              timestamp:
+                incident.updatedAt instanceof Date
+                  ? incident.updatedAt.toISOString()
+                  : String(incident.updatedAt),
+            },
+          } as MessageEvent;
+        });
 
         // 차분 하이드레이션 상한선(100건) 도달 시 전체 재동기화 제어 이벤트 발행
         if (deltaResult.hasMore) {
@@ -117,7 +129,11 @@ export class IncidentsController {
       }),
     );
 
-    return concat(hydration$, realTime$);
+    const filteredRealTime$ = realTime$.pipe(
+      filter((event: MessageEvent) => !event.id || !deliveredIds.has(event.id)),
+    );
+
+    return concat(hydration$, filteredRealTime$);
   }
 
   /**

@@ -306,7 +306,7 @@ describe("IncidentsService", () => {
       expect(mockPrisma.deploymentIncident.findMany).toHaveBeenCalledWith({
         where: {
           clusterId: { in: ["cluster-alpha", "cluster-beta"] },
-          updatedAt: { gt: targetIncident.updatedAt },
+          updatedAt: { gte: targetIncident.updatedAt },
           id: { not: "inc-target-0" },
         },
         orderBy: { updatedAt: "asc" },
@@ -336,7 +336,7 @@ describe("IncidentsService", () => {
 
       expect(mockPrisma.deploymentIncident.findMany).toHaveBeenCalledWith({
         where: {
-          updatedAt: { gt: new Date(isoTimestamp) },
+          updatedAt: { gte: new Date(isoTimestamp) },
           id: { not: isoTimestamp },
         },
         orderBy: { updatedAt: "asc" },
@@ -345,6 +345,44 @@ describe("IncidentsService", () => {
       expect(result.items.length).toBe(1);
       expect(result.hasMore).toBe(false);
       expect(result.lastEventId).toBe(isoTimestamp);
+    });
+
+    it("retrieves incidents sharing identical millisecond updatedAt without omission", async () => {
+      const sharedTime = new Date("2026-09-14T08:00:00.123Z");
+      const sameTimeIncident1 = {
+        ...sampleIncident,
+        id: "inc-same-1",
+        updatedAt: sharedTime,
+      };
+      const sameTimeIncident2 = {
+        ...sampleIncident,
+        id: "inc-same-2",
+        updatedAt: sharedTime,
+      };
+
+      mockPrisma.deploymentIncident.findUnique.mockResolvedValue({
+        id: "inc-base",
+        updatedAt: sharedTime,
+      });
+      mockPrisma.deploymentIncident.findMany.mockResolvedValue([
+        sameTimeIncident1,
+        sameTimeIncident2,
+      ]);
+
+      const result = await service.getIncidentsSince(mockUser, "inc-base");
+
+      expect(mockPrisma.deploymentIncident.findMany).toHaveBeenCalledWith({
+        where: {
+          clusterId: { in: ["cluster-alpha", "cluster-beta"] },
+          updatedAt: { gte: sharedTime },
+          id: { not: "inc-base" },
+        },
+        orderBy: { updatedAt: "asc" },
+        take: 100,
+      });
+      expect(result.items).toHaveLength(2);
+      expect(result.items[0].id).toBe("inc-same-1");
+      expect(result.items[1].id).toBe("inc-same-2");
     });
 
     it("returns hasMore: true when retrieved incidents reach the 100 limit", async () => {

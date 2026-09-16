@@ -258,4 +258,97 @@ describe("IncidentsController", () => {
       },
     });
   });
+
+  it("hydrates missed events when query parameter lastEventId is provided", (done) => {
+    const pastIncident = {
+      ...sampleIncidentDto,
+      id: "inc-past-query-1",
+      updatedAt: new Date(),
+    };
+    const mockService = {
+      getIncidentsSince: jest.fn().mockResolvedValue({
+        items: [pastIncident],
+        hasMore: false,
+        lastEventId: "inc-query-0",
+      }),
+    };
+    const mockEventsService = {
+      subscribe: jest
+        .fn()
+        .mockReturnValue(of({ id: "inc-live-query-1", data: { test: true } })),
+    };
+
+    const controller = new IncidentsController(
+      mockService as any,
+      mockEventsService as any,
+    );
+
+    const stream$ = controller.subscribeEvents(
+      mockUser,
+      undefined,
+      "inc-query-0",
+    );
+    expect(mockService.getIncidentsSince).toHaveBeenCalledWith(
+      mockUser,
+      "inc-query-0",
+    );
+
+    const emitted: any[] = [];
+    stream$.subscribe({
+      next: (event) => emitted.push(event),
+      complete: () => {
+        expect(emitted.length).toBe(2);
+        expect(emitted[0].id).toBe("inc-past-query-1");
+        expect(emitted[1].id).toBe("inc-live-query-1");
+        done();
+      },
+    });
+  });
+
+  it("filters out duplicate events from real-time stream that were already delivered during hydration", (done) => {
+    const hydratedIncident = {
+      ...sampleIncidentDto,
+      id: "inc-overlap-1",
+      updatedAt: new Date(),
+    };
+    const mockService = {
+      getIncidentsSince: jest.fn().mockResolvedValue({
+        items: [hydratedIncident],
+        hasMore: false,
+        lastEventId: "inc-last-0",
+      }),
+    };
+    // 실시간 스트림에 이미 하이드레이션된 이벤트(inc-overlap-1)와 새로운 이벤트(inc-fresh-2)가 포함된 경우
+    const mockEventsService = {
+      subscribe: jest
+        .fn()
+        .mockReturnValue(
+          of(
+            { id: "inc-overlap-1", data: { duplicated: true } },
+            { id: "inc-fresh-2", data: { fresh: true } },
+          ),
+        ),
+    };
+
+    const controller = new IncidentsController(
+      mockService as any,
+      mockEventsService as any,
+    );
+
+    const stream$ = controller.subscribeEvents(mockUser, "inc-last-0");
+
+    const emitted: any[] = [];
+    stream$.subscribe({
+      next: (event) => emitted.push(event),
+      complete: () => {
+        expect(emitted.length).toBe(2);
+        // 1. 하이드레이션에서 방출된 이벤트
+        expect(emitted[0].id).toBe("inc-overlap-1");
+        expect(emitted[0].type).toBe("incident:updated");
+        // 2. 실시간 스트림에서는 중복된 inc-overlap-1이 필터링되고 inc-fresh-2만 방출됨
+        expect(emitted[1].id).toBe("inc-fresh-2");
+        done();
+      },
+    });
+  });
 });
