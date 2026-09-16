@@ -1,10 +1,13 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { ConfigService } from "@nestjs/config";
-import { Job, Worker } from "bullmq";
+import { Job, Queue, Worker } from "bullmq";
 import {
   DEFAULT_PR_REVIEW_WORKER_OPTIONS,
+  GITOPS_PR_REVIEW_DLQ_NAME,
   GitOpsPrReviewWorker,
+  INJECTED_BULLMQ_DLQ,
   INJECTED_BULLMQ_WORKER,
+  PrReviewDlqJobData,
 } from "./gitops-pr-review.worker";
 import { GitOpsService } from "../gitops.service";
 import {
@@ -24,6 +27,7 @@ describe("GitOpsPrReviewWorker", () => {
   let mockWorker: jest.Mocked<
     Partial<Worker<PrReviewJobData, GitOpsPrReviewResultDto>>
   >;
+  let mockDlqQueue: jest.Mocked<Partial<Queue<PrReviewDlqJobData>>>;
 
   const mockDto: GitOpsPrReviewDto = {
     repository: "org/repo",
@@ -66,6 +70,15 @@ describe("GitOpsPrReviewWorker", () => {
       on: jest.fn(),
     };
 
+    mockDlqQueue = {
+      add: jest
+        .fn()
+        .mockResolvedValue({
+          id: "dlq-1",
+        } as unknown as Job<PrReviewDlqJobData>),
+      close: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         GitOpsPrReviewWorker,
@@ -80,6 +93,10 @@ describe("GitOpsPrReviewWorker", () => {
         {
           provide: INJECTED_BULLMQ_WORKER,
           useValue: mockWorker,
+        },
+        {
+          provide: INJECTED_BULLMQ_DLQ,
+          useValue: mockDlqQueue,
         },
       ],
     }).compile();
@@ -163,7 +180,7 @@ describe("GitOpsPrReviewWorker", () => {
       expect(result).toBe(mockResult);
     });
 
-    it("should rethrow error without marking completed failure if attempts remain", async () => {
+    it("should rethrow error without DLQ routing or marking completed failure if attempts remain", async () => {
       mockGitOpsService.reviewPullRequest.mockRejectedValueOnce(
         new Error("Bedrock ThrottlingException 429"),
       );
@@ -179,9 +196,10 @@ describe("GitOpsPrReviewWorker", () => {
       expect(mockVcsProvider.updateCheckRun).toHaveBeenCalledWith(
         expect.objectContaining({ status: "in_progress" }),
       );
+      expect(mockDlqQueue.add).not.toHaveBeenCalled();
     });
 
-    it("should mark Check Run as completed failure when final retry attempt fails", async () => {
+    it("should route job to DLQ and mark Check Run as completed failure when final retry attempt fails", async () => {
       mockGitOpsService.reviewPullRequest.mockRejectedValueOnce(
         new Error("Final attempt failure"),
       );
@@ -192,12 +210,47 @@ describe("GitOpsPrReviewWorker", () => {
         "Final attempt failure",
       );
 
+      // 1. DLQ Enqueue verification
+      expect(mockDlqQueue.add).toHaveBeenCalledTimes(1);
+      expect(mockDlqQueue.add).toHaveBeenCalledWith("failed-review", {
+        originalJobId: "job-1",
+        dto: mockDto,
+        checkRunId: 12345,
+        failedReason: "Final attempt failure",
+        failedAt: expect.any(String),
+        errorStack: expect.any(String),
+      });
+
+      // 2. Check Run completed failure verification
       expect(mockVcsProvider.updateCheckRun).toHaveBeenCalledTimes(2);
       expect(mockVcsProvider.updateCheckRun).toHaveBeenLastCalledWith(
         expect.objectContaining({
           status: "completed",
           conclusion: "failure",
           title: "Kyverno PR Review Failed after retries",
+          summary: expect.stringContaining("routed to DLQ"),
+        }),
+      );
+    });
+
+    it("should gracefully rethrow even if DLQ add throws an error on final attempt failure", async () => {
+      mockGitOpsService.reviewPullRequest.mockRejectedValueOnce(
+        new Error("Final attempt failure"),
+      );
+      (mockDlqQueue.add as jest.Mock).mockRejectedValueOnce(
+        new Error("DLQ Redis connection failure"),
+      );
+
+      const job = createMockJob(2, 3, 12345);
+
+      await expect(workerService.processJob(job)).rejects.toThrow(
+        "Final attempt failure",
+      );
+
+      expect(mockVcsProvider.updateCheckRun).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          status: "completed",
+          conclusion: "failure",
         }),
       );
     });
@@ -211,13 +264,19 @@ describe("GitOpsPrReviewWorker", () => {
         duration: 60000,
       });
     });
+
+    it("should export correct DLQ queue name constant", () => {
+      expect(GITOPS_PR_REVIEW_DLQ_NAME).toBe("gitops-pr-review-dlq");
+    });
   });
 
   describe("onModuleDestroy", () => {
-    it("should close the worker connection cleanly", async () => {
+    it("should close both worker and DLQ queue connection cleanly", async () => {
       await workerService.onModuleDestroy();
       expect(mockWorker.close).toHaveBeenCalled();
+      expect(mockDlqQueue.close).toHaveBeenCalled();
       expect(workerService.getWorker()).toBeNull();
+      expect(workerService.getDlqQueue()).toBeNull();
     });
   });
 });

@@ -24,6 +24,7 @@ describe("GitOpsPrReviewQueue", () => {
   beforeEach(async () => {
     mockQueue = {
       add: jest.fn(),
+      getJobs: jest.fn().mockResolvedValue([]),
       close: jest.fn().mockResolvedValue(undefined),
     };
 
@@ -77,6 +78,54 @@ describe("GitOpsPrReviewQueue", () => {
         status: "queued",
         checkRunId: 1001,
       });
+    });
+
+    it("should preempt and remove older waiting jobs for the same PR", async () => {
+      const olderJobRemove = jest.fn().mockResolvedValue(undefined);
+      const differentPrJobRemove = jest.fn().mockResolvedValue(undefined);
+
+      const waitingJobs = [
+        {
+          id: "pr-my-org-my-repo-42-old1",
+          data: {
+            dto: { repository: "my-org/my-repo", pullNumber: 42 },
+          },
+          remove: olderJobRemove,
+        },
+        {
+          id: "pr-other-org-other-repo-99-old2",
+          data: {
+            dto: { repository: "other-org/other-repo", pullNumber: 99 },
+          },
+          remove: differentPrJobRemove,
+        },
+      ];
+
+      (mockQueue.getJobs as jest.Mock).mockResolvedValueOnce(waitingJobs);
+      (mockQueue.add as jest.Mock).mockResolvedValueOnce({
+        id: "pr-my-org-my-repo-42-new1",
+      });
+
+      const result = await queueService.addReviewJob(mockDto, 1001);
+
+      expect(mockQueue.getJobs).toHaveBeenCalledWith(["waiting"]);
+      expect(olderJobRemove).toHaveBeenCalledTimes(1);
+      expect(differentPrJobRemove).not.toHaveBeenCalled();
+      expect(result.id).toBe("pr-my-org-my-repo-42-new1");
+    });
+
+    it("should gracefully continue enqueuing when preemption scan throws an error", async () => {
+      (mockQueue.getJobs as jest.Mock).mockRejectedValueOnce(
+        new Error("Redis getJobs scan failed"),
+      );
+      (mockQueue.add as jest.Mock).mockResolvedValueOnce({
+        id: "pr-my-org-my-repo-42-new2",
+      });
+
+      const result = await queueService.addReviewJob(mockDto, 1001);
+
+      expect(mockQueue.add).toHaveBeenCalledTimes(1);
+      expect(result.id).toBe("pr-my-org-my-repo-42-new2");
     });
 
     it("should return fallback jobId if queue.add throws an error", async () => {

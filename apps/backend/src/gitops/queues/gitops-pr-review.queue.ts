@@ -88,6 +88,30 @@ export class GitOpsPrReviewQueue implements OnModuleInit, OnModuleDestroy {
 
     if (this.queue) {
       try {
+        // 동일 PR(repository + pullNumber)의 이전 대기 중(waiting) 작업 선점 취소(Debounce)
+        try {
+          const waitingJobs = await this.queue.getJobs(["waiting"]);
+          for (const oldJob of waitingJobs) {
+            if (
+              oldJob?.data?.dto?.repository === dto.repository &&
+              oldJob?.data?.dto?.pullNumber === dto.pullNumber
+            ) {
+              await oldJob.remove();
+              this.logger.log(
+                `[BullMQ] Preempted older pending job #${oldJob.id} for PR #${dto.pullNumber}`,
+              );
+            }
+          }
+        } catch (preemptErr) {
+          this.logger.warn(
+            `[BullMQ] Preemption scan failed for PR #${dto.pullNumber}: ${
+              preemptErr instanceof Error
+                ? preemptErr.message
+                : String(preemptErr)
+            }`,
+          );
+        }
+
         const job = await this.queue.add("pr-review", jobData, {
           jobId: `pr-${dto.repository.replace(/\//g, "-")}-${dto.pullNumber}-${uuidv4().slice(0, 8)}`,
         });

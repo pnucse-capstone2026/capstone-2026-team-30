@@ -7,9 +7,10 @@ import {
   Optional,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { Job, Worker, WorkerOptions } from "bullmq";
+import { Job, Queue, Worker, WorkerOptions } from "bullmq";
 import { GitOpsService } from "../gitops.service";
 import { GitOpsPrReviewResultDto } from "../dto/gitops-pr-review.dto";
+import { GitOpsPrReviewDto } from "../dto/gitops-pr-review.dto";
 import {
   GITOPS_PR_REVIEW_QUEUE_NAME,
   PrReviewJobData,
@@ -19,7 +20,21 @@ import {
   VcsProvider,
 } from "../providers/vcs-provider.interface";
 
+export const GITOPS_PR_REVIEW_DLQ_NAME = "gitops-pr-review-dlq";
 export const INJECTED_BULLMQ_WORKER = "INJECTED_BULLMQ_WORKER";
+export const INJECTED_BULLMQ_DLQ = "INJECTED_BULLMQ_DLQ";
+
+/**
+ * PR 리뷰 Dead Letter Queue 작업 페이로드
+ */
+export interface PrReviewDlqJobData {
+  originalJobId?: string;
+  dto: GitOpsPrReviewDto;
+  checkRunId?: number | string;
+  failedReason: string;
+  failedAt: string;
+  errorStack?: string;
+}
 
 export const DEFAULT_PR_REVIEW_WORKER_OPTIONS: Partial<WorkerOptions> = {
   concurrency: 5,
@@ -35,13 +50,14 @@ export const DEFAULT_PR_REVIEW_WORKER_OPTIONS: Partial<WorkerOptions> = {
  *
  * AWS Bedrock 및 GitHub API의 분당 Quota를 보호하기 위해
  * Rate Limiter(Max 40 req/60s)와 Full Jitter 지수 백오프 하에서 작업을 처리하고
- * GitHub Check Run 상태를 갱신합니다.
+ * GitHub Check Run 상태를 갱신하며 최종 실패 시 DLQ로 격리합니다.
  */
 @Injectable()
 export class GitOpsPrReviewWorker implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(GitOpsPrReviewWorker.name);
   private worker: Worker<PrReviewJobData, GitOpsPrReviewResultDto> | null =
     null;
+  private dlqQueue: Queue<PrReviewDlqJobData> | null = null;
 
   constructor(
     private readonly gitOpsService: GitOpsService,
@@ -51,23 +67,32 @@ export class GitOpsPrReviewWorker implements OnModuleInit, OnModuleDestroy {
     @Optional()
     @Inject(INJECTED_BULLMQ_WORKER)
     injectedWorker?: Worker<PrReviewJobData, GitOpsPrReviewResultDto>,
+    @Optional()
+    @Inject(INJECTED_BULLMQ_DLQ)
+    injectedDlq?: Queue<PrReviewDlqJobData>,
   ) {
     if (injectedWorker) {
       this.worker = injectedWorker;
     }
+    if (injectedDlq) {
+      this.dlqQueue = injectedDlq;
+    }
   }
 
   /**
-   * 모듈 기동 시 BullMQ 워커를 초기화하고 이벤트 리스너를 바인딩합니다.
+   * 모듈 기동 시 BullMQ 워커 및 DLQ 인스턴스를 초기화하고 이벤트 리스너를 바인딩합니다.
    */
   async onModuleInit(): Promise<void> {
     if (!this.worker) {
       this.initWorker();
     }
+    if (!this.dlqQueue) {
+      this.initDlq();
+    }
   }
 
   /**
-   * 모듈 종료 시 워커를 안전하게 중단합니다.
+   * 모듈 종료 시 워커 및 DLQ 커넥션을 안전하게 중단합니다.
    */
   async onModuleDestroy(): Promise<void> {
     if (this.worker) {
@@ -77,6 +102,14 @@ export class GitOpsPrReviewWorker implements OnModuleInit, OnModuleDestroy {
         // 종료 예외 무시
       }
       this.worker = null;
+    }
+    if (this.dlqQueue) {
+      try {
+        await this.dlqQueue.close();
+      } catch {
+        // 종료 예외 무시
+      }
+      this.dlqQueue = null;
     }
   }
 
@@ -153,8 +186,34 @@ export class GitOpsPrReviewWorker implements OnModuleInit, OnModuleDestroy {
         }`,
       );
 
-      // 마지막 재시도 도달 시 Check Run에 실패 기록
+      // 마지막 재시도 도달 시 Dead Letter Queue(DLQ)로 작업 격리 및 Check Run 실패 마결
       if (job.attemptsMade >= (job.opts?.attempts || 3) - 1) {
+        // 1. DLQ Enqueue
+        if (this.dlqQueue) {
+          try {
+            await this.dlqQueue.add("failed-review", {
+              originalJobId: job.id,
+              dto,
+              checkRunId,
+              failedReason: err instanceof Error ? err.message : String(err),
+              failedAt: new Date().toISOString(),
+              errorStack: err instanceof Error ? err.stack : undefined,
+            });
+            this.logger.warn(
+              `[BullMQ DLQ] Job #${job.id} routed to DLQ ${GITOPS_PR_REVIEW_DLQ_NAME} after ${
+                job.attemptsMade + 1
+              } failed attempts.`,
+            );
+          } catch (dlqErr) {
+            this.logger.error(
+              `[BullMQ DLQ] Failed to route job #${job.id} to DLQ: ${
+                dlqErr instanceof Error ? dlqErr.message : String(dlqErr)
+              }`,
+            );
+          }
+        }
+
+        // 2. Check Run 종결 처리 (failure)
         if (this.vcsProvider.updateCheckRun) {
           try {
             await this.vcsProvider.updateCheckRun({
@@ -164,7 +223,9 @@ export class GitOpsPrReviewWorker implements OnModuleInit, OnModuleDestroy {
               status: "completed",
               conclusion: "failure",
               title: "Kyverno PR Review Failed after retries",
-              summary: `Job processing failed: ${
+              summary: `Job processing permanently failed after ${
+                job.attemptsMade + 1
+              } attempts and routed to DLQ: ${
                 err instanceof Error ? err.message : String(err)
               }`,
               checkRunId,
@@ -173,6 +234,13 @@ export class GitOpsPrReviewWorker implements OnModuleInit, OnModuleDestroy {
             // 무시
           }
         }
+
+        // 3. 치명적 실패 로깅
+        this.logger.error(
+          `[Worker CRITICAL] Job #${job.id} for PR #${dto.pullNumber} (${dto.repository}) permanently failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
       }
 
       throw err;
@@ -184,6 +252,13 @@ export class GitOpsPrReviewWorker implements OnModuleInit, OnModuleDestroy {
    */
   getWorker(): Worker<PrReviewJobData, GitOpsPrReviewResultDto> | null {
     return this.worker;
+  }
+
+  /**
+   * DLQ 큐 인스턴스를 반환합니다. (테스트 및 상태 조회용)
+   */
+  getDlqQueue(): Queue<PrReviewDlqJobData> | null {
+    return this.dlqQueue;
   }
 
   /**
@@ -233,6 +308,43 @@ export class GitOpsPrReviewWorker implements OnModuleInit, OnModuleDestroy {
         }`,
       );
       this.worker = null;
+    }
+  }
+
+  /**
+   * Redis 연결을 기반으로 BullMQ DLQ 인스턴스를 초기화합니다.
+   */
+  private initDlq(): void {
+    const host =
+      this.configService?.get<string>("REDIS_HOST") ||
+      process.env.REDIS_HOST ||
+      "localhost";
+    const port = Number(
+      this.configService?.get<number | string>("REDIS_PORT") ||
+        process.env.REDIS_PORT ||
+        6379,
+    );
+    const password =
+      this.configService?.get<string>("REDIS_PASSWORD") ||
+      process.env.REDIS_PASSWORD ||
+      undefined;
+
+    try {
+      this.dlqQueue = new Queue<PrReviewDlqJobData>(GITOPS_PR_REVIEW_DLQ_NAME, {
+        connection: {
+          host,
+          port,
+          password,
+          maxRetriesPerRequest: null,
+        },
+      });
+    } catch (err) {
+      this.logger.warn(
+        `[BullMQ] Failed to initialize DLQ ${GITOPS_PR_REVIEW_DLQ_NAME}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      this.dlqQueue = null;
     }
   }
 }

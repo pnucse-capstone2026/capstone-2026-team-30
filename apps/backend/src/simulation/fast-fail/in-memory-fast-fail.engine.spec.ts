@@ -1,7 +1,13 @@
 import { KubernetesObject } from "@kubernetes/client-node";
 import { InMemoryFastFailEngine } from "./in-memory-fast-fail.engine";
 
-type K8sResource = KubernetesObject & { spec: Record<string, unknown> };
+type K8sResource = KubernetesObject & {
+  spec: {
+    containers?: Array<Record<string, unknown>>;
+    securityContext?: Record<string, unknown>;
+    [key: string]: unknown;
+  };
+};
 
 describe("InMemoryFastFailEngine", () => {
   let engine: InMemoryFastFailEngine;
@@ -172,7 +178,7 @@ describe("InMemoryFastFailEngine", () => {
         ...latestImagePod.spec,
         containers: [
           {
-            ...latestImagePod.spec.containers[0],
+            ...latestImagePod.spec.containers?.[0],
             image: "nginx",
           },
         ],
@@ -191,7 +197,7 @@ describe("InMemoryFastFailEngine", () => {
         ...compliantPod.spec,
         containers: [
           {
-            ...compliantPod.spec.containers[0],
+            ...compliantPod.spec.containers?.[0],
             image:
               "registry.example.com/app@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           },
