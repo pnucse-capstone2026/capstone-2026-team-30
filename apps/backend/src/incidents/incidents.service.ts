@@ -17,6 +17,15 @@ import {
 import { IncidentsEventsService } from "./incidents-events.service";
 import { INCIDENT_ERROR } from "./incidents.errors";
 
+/**
+ * SSE 차분 동기화(Delta Hydration) 조회 결과 DTO
+ */
+export interface IncidentsDeltaResultDto {
+  items: DeploymentIncidentDto[];
+  hasMore: boolean;
+  lastEventId?: string;
+}
+
 export interface RecordAdmissionBlockParams {
   clusterId: string;
   namespace: string;
@@ -280,18 +289,19 @@ export class IncidentsService {
   /**
    * W3C Last-Event-ID 기준으로 해당 시점 이후에 생성되거나 변경된 인시던트 목록을 조회합니다.
    * 네트워크 일시 단절 후 재연결된 클라이언트의 차분 동기화(Delta Hydration)를 지원합니다.
-   * 대량 레코드 스트리밍으로 인한 OOM 방지를 위해 최대 100건 차분 하이드레이션으로 제한합니다.
+   * 대량 레코드 스트리밍으로 인한 OOM 방지를 위해 최대 100건 차분 하이드레이션으로 제한하며,
+   * 한도 도달 시 `hasMore: true` 플래그를 통해 클라이언트의 전체 재동기화(Resync)를 유도합니다.
    *
    * @param user 요청자 인증 컨텍스트
    * @param lastEventId 클라이언트가 수신한 마지막 이벤트 식별자 (인시던트 UUID 또는 타임스탬프)
-   * @returns 기준 시점 이후의 인시던트 DTO 목록 (최대 100건)
+   * @returns 기준 시점 이후의 차분 동기화 결과 DTO (최대 100건 및 초과 여부 플래그)
    */
   async getIncidentsSince(
     user: AuthenticatedUser,
     lastEventId: string,
-  ): Promise<DeploymentIncidentDto[]> {
+  ): Promise<IncidentsDeltaResultDto> {
     if (!lastEventId || !lastEventId.trim()) {
-      return [];
+      return { items: [], hasMore: false, lastEventId };
     }
 
     let sinceTime: Date | null = null;
@@ -312,7 +322,7 @@ export class IncidentsService {
     }
 
     if (!sinceTime) {
-      return [];
+      return { items: [], hasMore: false, lastEventId };
     }
 
     const clusterFilter: Prisma.DeploymentIncidentWhereInput =
@@ -328,7 +338,14 @@ export class IncidentsService {
       take: 100,
     });
 
-    return incidents.map((item) => this.mapToDto(item));
+    const items = incidents.map((item) => this.mapToDto(item));
+    const hasMore = items.length >= 100;
+
+    return {
+      items,
+      hasMore,
+      lastEventId,
+    };
   }
 
   /**

@@ -153,14 +153,18 @@ describe("IncidentsController", () => {
     });
   });
 
-  it("hydrates missed events when last-event-id header is provided", (done) => {
+  it("hydrates missed events when last-event-id header is provided and hasMore is false", (done) => {
     const pastIncident = {
       ...sampleIncidentDto,
       id: "inc-past-1",
       updatedAt: new Date(),
     };
     const mockService = {
-      getIncidentsSince: jest.fn().mockResolvedValue([pastIncident]),
+      getIncidentsSince: jest.fn().mockResolvedValue({
+        items: [pastIncident],
+        hasMore: false,
+        lastEventId: "inc-last-0",
+      }),
     };
     const mockEventsService = {
       subscribe: jest
@@ -189,6 +193,67 @@ describe("IncidentsController", () => {
         expect(emitted[0].type).toBe("incident:updated");
         // 두 번째 이벤트는 실시간 스트림
         expect(emitted[1].id).toBe("inc-live-1");
+        done();
+      },
+    });
+  });
+
+  it("emits resync-required control event when delta hydration exceeds limit (hasMore: true)", (done) => {
+    const pastIncidents = Array.from({ length: 100 }, (_, i) => ({
+      ...sampleIncidentDto,
+      id: `inc-past-${i}`,
+      updatedAt: new Date(),
+    }));
+
+    const mockService = {
+      getIncidentsSince: jest.fn().mockResolvedValue({
+        items: pastIncidents,
+        hasMore: true,
+        lastEventId: "inc-last-0",
+      }),
+    };
+    const mockEventsService = {
+      subscribe: jest
+        .fn()
+        .mockReturnValue(
+          of({ id: "inc-live-after-overflow", data: { live: true } }),
+        ),
+    };
+
+    const controller = new IncidentsController(
+      mockService as any,
+      mockEventsService as any,
+    );
+
+    const stream$ = controller.subscribeEvents(mockUser, "inc-last-0");
+    expect(mockService.getIncidentsSince).toHaveBeenCalledWith(
+      mockUser,
+      "inc-last-0",
+    );
+
+    const emitted: any[] = [];
+    stream$.subscribe({
+      next: (event) => emitted.push(event),
+      complete: () => {
+        // 100건의 하이드레이션 이벤트 + 1건의 resync-required 제어 이벤트 + 1건의 실시간 이벤트 = 총 102건
+        expect(emitted.length).toBe(102);
+
+        // 100건의 인시던트 이벤트
+        expect(emitted[0].id).toBe("inc-past-0");
+        expect(emitted[99].id).toBe("inc-past-99");
+
+        // 101번째는 resync-required 제어 이벤트
+        const controlEvent = emitted[100];
+        expect(controlEvent.type).toBe("resync-required");
+        expect(controlEvent.data).toEqual({
+          reason: "DELTA_BUFFER_OVERFLOW",
+          message:
+            "Disconnected duration exceeded delta buffer. Full re-synchronization required.",
+          count: 100,
+        });
+
+        // 102번째는 실시간 스트림 이벤트
+        expect(emitted[101].id).toBe("inc-live-after-overflow");
         done();
       },
     });

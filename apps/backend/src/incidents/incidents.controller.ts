@@ -83,25 +83,38 @@ export class IncidentsController {
     const hydration$ = from(
       this.incidentsService.getIncidentsSince(user, lastEventId.trim()),
     ).pipe(
-      mergeMap((incidents) =>
-        from(
-          incidents.map(
-            (incident) =>
-              ({
-                id: incident.id,
-                type: "incident:updated",
-                data: {
-                  eventType: "incident:updated",
-                  incident,
-                  timestamp:
-                    incident.updatedAt instanceof Date
-                      ? incident.updatedAt.toISOString()
-                      : String(incident.updatedAt),
-                },
-              }) as MessageEvent,
-          ),
-        ),
-      ),
+      mergeMap((deltaResult) => {
+        const events: MessageEvent[] = deltaResult.items.map(
+          (incident) =>
+            ({
+              id: incident.id,
+              type: "incident:updated",
+              data: {
+                eventType: "incident:updated",
+                incident,
+                timestamp:
+                  incident.updatedAt instanceof Date
+                    ? incident.updatedAt.toISOString()
+                    : String(incident.updatedAt),
+              },
+            }) as MessageEvent,
+        );
+
+        // 차분 하이드레이션 상한선(100건) 도달 시 전체 재동기화 제어 이벤트 발행
+        if (deltaResult.hasMore) {
+          events.push({
+            type: "resync-required",
+            data: {
+              reason: "DELTA_BUFFER_OVERFLOW",
+              message:
+                "Disconnected duration exceeded delta buffer. Full re-synchronization required.",
+              count: deltaResult.items.length,
+            },
+          } as MessageEvent);
+        }
+
+        return from(events);
+      }),
     );
 
     return concat(hydration$, realTime$);

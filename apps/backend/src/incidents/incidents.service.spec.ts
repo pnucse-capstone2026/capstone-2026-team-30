@@ -275,9 +275,9 @@ describe("IncidentsService", () => {
   });
 
   describe("getIncidentsSince", () => {
-    it("returns empty array when lastEventId is empty or whitespace", async () => {
+    it("returns empty items and hasMore: false when lastEventId is empty or whitespace", async () => {
       const result = await service.getIncidentsSince(mockUser, "");
-      expect(result).toEqual([]);
+      expect(result).toEqual({ items: [], hasMore: false, lastEventId: "" });
       expect(mockPrisma.deploymentIncident.findMany).not.toHaveBeenCalled();
     });
 
@@ -312,8 +312,10 @@ describe("IncidentsService", () => {
         orderBy: { updatedAt: "asc" },
         take: 100,
       });
-      expect(result.length).toBe(1);
-      expect(result[0].id).toBe("inc-newer-1");
+      expect(result.items.length).toBe(1);
+      expect(result.items[0].id).toBe("inc-newer-1");
+      expect(result.hasMore).toBe(false);
+      expect(result.lastEventId).toBe("inc-target-0");
     });
 
     it("queries incidents after timestamp when lastEventId is an ISO date string", async () => {
@@ -340,7 +342,29 @@ describe("IncidentsService", () => {
         orderBy: { updatedAt: "asc" },
         take: 100,
       });
-      expect(result.length).toBe(1);
+      expect(result.items.length).toBe(1);
+      expect(result.hasMore).toBe(false);
+      expect(result.lastEventId).toBe(isoTimestamp);
+    });
+
+    it("returns hasMore: true when retrieved incidents reach the 100 limit", async () => {
+      const isoTimestamp = "2026-09-14T08:00:00.000Z";
+      const hundredIncidents = Array.from({ length: 100 }, (_, i) => ({
+        ...sampleIncident,
+        id: `inc-batch-${i}`,
+        updatedAt: new Date(Date.now() + i * 1000),
+      }));
+
+      mockPrisma.deploymentIncident.findUnique.mockResolvedValue(null);
+      mockPrisma.deploymentIncident.findMany.mockResolvedValue(
+        hundredIncidents,
+      );
+
+      const result = await service.getIncidentsSince(mockUser, isoTimestamp);
+
+      expect(result.items).toHaveLength(100);
+      expect(result.hasMore).toBe(true);
+      expect(result.lastEventId).toBe(isoTimestamp);
     });
   });
 });

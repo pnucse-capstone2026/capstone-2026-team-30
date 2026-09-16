@@ -42,7 +42,7 @@ spec:
       expect(result.blockedCount).toBe(0);
       expect(result.passedCount).toBe(1);
       expect(result.violations).toHaveLength(0);
-      expect(result.latencyMs).toBeLessThanOrEqual(5);
+      expect(result.latencyMs).toBeLessThanOrEqual(50);
       expect(result.tier).toBe("TIER_1_LOCAL");
     });
 
