@@ -13,8 +13,7 @@ iam:
 
 managedNodeGroups:
   - name: freetier-spot-nodes
-    # AWS Free Plan 적격 인스턴스 (c7i-flex.large, m7i-flex.large) 및 Spot 결합으로 크레딧 소모 최소화
-    instanceTypes: ["c7i-flex.large", "m7i-flex.large"]
+    instanceTypes: ["c7i-flex.large", "m7i-flex.large", "c6i.large", "m6i.large", "t3.large"]
     spot: true
     desiredCapacity: 2
     minSize: 2

@@ -13,6 +13,8 @@ spec:
     repoURL: 'https://github.com/YeongrimGo/PaC-KyvernoDashboard.git'
     targetRevision: main
     path: k8s-manifests/testbed
+    directory:
+      include: '{00-namespace.yaml,01-clean-baseline.yaml,compliant-app.yaml}'
   destination:
     server: 'https://kubernetes.default.svc'
     namespace: governance-testbed

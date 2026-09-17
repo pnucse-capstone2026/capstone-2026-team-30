@@ -25,6 +25,9 @@ spec:
               namespaces:
                 - kube-system
                 - kyverno
+                - kyverno-platform
+                - argocd
+                - kubeflow
                 - local-path-storage
       validate:
         message: "privileged: true 옵션이 설정된 특권 컨테이너는 보안 정책상 실행될 수 없습니다."
@@ -51,6 +54,9 @@ spec:
               namespaces:
                 - kube-system
                 - kyverno
+                - kyverno-platform
+                - argocd
+                - kubeflow
                 - local-path-storage
       validate:
         message: "privileged: true 옵션이 설정된 특권 컨테이너는 보안 정책상 배포될 수 없습니다."

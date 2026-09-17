@@ -25,6 +25,9 @@ spec:
               namespaces:
                 - kube-system
                 - kyverno
+                - kyverno-platform
+                - argocd
+                - kubeflow
                 - local-path-storage
       validate:
         message: "Deployment metadata.labels에 'app.kubernetes.io/name' 및 'team' 레이블이 반드시 지정되어야 합니다."
@@ -45,6 +48,9 @@ spec:
               namespaces:
                 - kube-system
                 - kyverno
+                - kyverno-platform
+                - argocd
+                - kubeflow
                 - local-path-storage
       validate:
         message: "Pod metadata.labels에 'app.kubernetes.io/name' 및 'team' 레이블이 반드시 지정되어야 합니다."

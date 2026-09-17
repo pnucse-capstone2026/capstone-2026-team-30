@@ -29,6 +29,9 @@ spec:
               namespaces:
                 - kube-system
                 - kyverno
+                - kyverno-platform
+                - argocd
+                - kubeflow
                 - local-path-storage
                 - kube-public
                 - kube-node-lease
