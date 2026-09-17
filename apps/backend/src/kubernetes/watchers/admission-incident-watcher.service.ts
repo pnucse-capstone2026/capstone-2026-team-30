@@ -1,5 +1,7 @@
 import { KubeConfig } from "@kubernetes/client-node";
 import {
+  forwardRef,
+  Inject,
   Injectable,
   Logger,
   OnModuleDestroy,
@@ -34,6 +36,7 @@ export class AdmissionIncidentWatcherService
   private isRunning = false;
 
   constructor(
+    @Inject(forwardRef(() => IncidentsService))
     private readonly incidentsService: IncidentsService,
     private readonly coreEventDetector: CoreEventIncidentDetector,
     private readonly argoCdDetector: ArgoCdIncidentDetector,

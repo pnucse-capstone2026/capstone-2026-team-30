@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { forwardRef, Inject, Injectable, Logger } from "@nestjs/common";
 import {
   CoreV1Api,
   KubernetesObject,
@@ -157,6 +157,7 @@ spec:
   ];
 
   constructor(
+    @Inject(forwardRef(() => ClusterProvider))
     private readonly clusterProvider: ClusterProvider,
     private readonly fastFailEngine: InMemoryFastFailEngine,
   ) {}

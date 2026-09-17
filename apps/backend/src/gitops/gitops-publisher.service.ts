@@ -1,6 +1,12 @@
 import * as fs from "fs";
 import * as path from "path";
-import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
+import {
+  forwardRef,
+  Inject,
+  Injectable,
+  Logger,
+  Optional,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PolicyExceptionRequest } from "@prisma/client";
 import { dumpYaml, loadYaml } from "@kubernetes/client-node";
@@ -90,7 +96,9 @@ export class GitOpsPublisherService {
 
   constructor(
     config: ConfigService,
-    @Optional() private readonly clusterProvider?: ClusterProvider,
+    @Optional()
+    @Inject(forwardRef(() => ClusterProvider))
+    private readonly clusterProvider?: ClusterProvider,
     @Optional()
     @Inject(VCS_PROVIDER_TOKEN)
     private readonly vcsProvider?: VcsProvider,

@@ -1,4 +1,10 @@
-import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
+import {
+  forwardRef,
+  Inject,
+  Injectable,
+  Logger,
+  Optional,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ClusterProvider } from "../kubernetes/cluster-provider";
 import { SimulationService } from "../simulation/simulation.service";
@@ -32,8 +38,10 @@ export class GitOpsService {
   private readonly platformBaseUrl: string;
 
   constructor(
+    @Inject(forwardRef(() => SimulationService))
     private readonly simulationService: SimulationService,
     private readonly aiAgentService: AiAgentService,
+    @Inject(forwardRef(() => ClusterProvider))
     private readonly clusterProvider: ClusterProvider,
     private readonly configService: ConfigService,
     @Inject(VCS_PROVIDER_TOKEN)

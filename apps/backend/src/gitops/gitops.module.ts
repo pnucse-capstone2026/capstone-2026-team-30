@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { Queue } from "bullmq";
 import { KubernetesModule } from "../kubernetes/kubernetes.module";
@@ -25,7 +25,12 @@ import {
  * Kyverno Platform GitOps 매니페스트 배포 및 Shift-Left PR Gate 거버넌스 모듈
  */
 @Module({
-  imports: [ConfigModule, KubernetesModule, SimulationModule, AiAgentModule],
+  imports: [
+    ConfigModule,
+    forwardRef(() => KubernetesModule),
+    forwardRef(() => SimulationModule),
+    AiAgentModule,
+  ],
   controllers: [GitOpsController],
   providers: [
     GitHubVcsProvider,

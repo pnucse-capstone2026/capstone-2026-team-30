@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PrismaModule } from "../prisma/prisma.module";
 import { ClustersController } from "./clusters.controller";
@@ -47,7 +47,7 @@ function resolveClusterProvider(config: ConfigService): ClusterProvider {
 }
 
 @Module({
-  imports: [PrismaModule, IncidentsModule],
+  imports: [PrismaModule, forwardRef(() => IncidentsModule)],
   controllers: [ClustersController],
   providers: [
     {
