@@ -6,6 +6,7 @@ import {
   MessageEvent,
   Param,
   Patch,
+  Post,
   Query,
   Sse,
   UseGuards,
@@ -25,19 +26,22 @@ import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import { RequirePermissions } from "../auth/decorators/require-permissions.decorator";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { PermissionsGuard } from "../auth/guards/permissions.guard";
+import { EmergencyRemediateDto } from "./dto/emergency-remediate.dto";
 import { IgnoreIncidentDto } from "./dto/ignore-incident.dto";
 import { ListIncidentsQueryDto } from "./dto/incident-query.dto";
 import {
   DeploymentIncidentDto,
   PaginatedIncidentsResponseDto,
 } from "./dto/incident-response.dto";
+import { RemediationDraftDto } from "./dto/remediation-draft.dto";
+import { ResolveHotfixDto } from "./dto/resolve-hotfix.dto";
 import { IncidentsEventsService } from "./incidents-events.service";
 import { IncidentsService } from "./incidents.service";
 
 /**
  * Closed-Loop Admission Block 배포 차단 인시던트 REST API 컨트롤러
  *
- * Kyverno Admission Webhook 차단으로 인한 배포 실패 인시던트 조회, 무시 처리 및 실시간 SSE 스트림을 제공합니다.
+ * Kyverno Admission Webhook 차단으로 인한 배포 실패 인시던트 조회, 3대 보조 복구 경로(정식 신청 프리필, 긴급 발행, 핫픽스 종결) 및 실시간 SSE 스트림을 제공합니다.
  */
 @ApiTags("Incidents")
 @ApiBearerAuth()
@@ -178,6 +182,74 @@ export class IncidentsController {
     @Param("id") id: string,
   ): Promise<DeploymentIncidentDto> {
     return this.incidentsService.getIncidentById(user, id);
+  }
+
+  /**
+   * 특정 인시던트에 대한 해결 보조 초안(YAML 초안, 프리필 URL, 조치 가이드)을 조회합니다.
+   */
+  @Get(":id/remediation-draft")
+  @RequirePermissions("incidents.read")
+  @ApiOperation({
+    summary: "인시던트 해결 보조 초안(Remediation Draft) 조회",
+    description:
+      "인시던트 메타데이터를 기반으로 생성된 Kyverno PolicyException YAML 초안, 프리필 URL, 조치 가이드라인을 제공합니다.",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "보조 초안 조회 성공",
+    type: RemediationDraftDto,
+  })
+  async getRemediationDraft(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+  ): Promise<RemediationDraftDto> {
+    return this.incidentsService.getRemediationDraft(user, id);
+  }
+
+  /**
+   * 경로 B: 관리자 확인(Confirmation) 기반 Dual-Path 긴급 임시 예외를 발행합니다.
+   */
+  @Post(":id/remediate-emergency")
+  @RequirePermissions("incidents.manage")
+  @ApiOperation({
+    summary: "긴급 임시 예외 발행 (관리자 전용)",
+    description:
+      "장애 복구 시 관리자가 사전 검토한 YAML과 사유/TTL을 기반으로 클러스터 런타임 적용 및 GitOps PR을 발행합니다.",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "긴급 임시 예외 발행 및 인시던트 해결 성공",
+    type: DeploymentIncidentDto,
+  })
+  async remediateEmergency(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() dto: EmergencyRemediateDto,
+  ): Promise<DeploymentIncidentDto> {
+    return this.incidentsService.remediateEmergency(user, id, dto);
+  }
+
+  /**
+   * 경로 C: 개발자의 매니페스트 핫픽스(Hotfix) 수정 반영 완료 상태로 종결합니다.
+   */
+  @Post(":id/resolve-hotfix")
+  @RequirePermissions("incidents.manage")
+  @ApiOperation({
+    summary: "개발자 핫픽스(Hotfix) 수정 반영 완료 종결",
+    description:
+      "개발자가 매니페스트 오류를 수정하여 커밋했음을 확인하고 인시던트를 수동 종결 처리합니다.",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "핫픽스 종결 처리 성공",
+    type: DeploymentIncidentDto,
+  })
+  async resolveByHotfix(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() dto: ResolveHotfixDto,
+  ): Promise<DeploymentIncidentDto> {
+    return this.incidentsService.resolveByHotfix(user, id, dto);
   }
 
   /**

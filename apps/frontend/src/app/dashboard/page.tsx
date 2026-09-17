@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar";
+import { IncidentAlertBanner } from "@/components/dashboard/incident-alert-banner";
 import { NotificationDropdown } from "@/components/dashboard/notification-dropdown";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -173,6 +174,8 @@ export default function UserDashboardPage() {
         </header>
 
         <div className="mx-auto max-w-[1440px] space-y-6 p-5 sm:p-8">
+          <IncidentAlertBanner />
+
           <section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div>
               <p className="text-sm text-slate-500">{todayFormatted}</p>

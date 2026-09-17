@@ -17,4 +17,8 @@ export const INCIDENT_ERROR = {
     code: "INCIDENT_INVALID_STATUS_TRANSITION",
     message: "Cannot transition incident to the requested status.",
   },
+  ONLY_ADMIN_ALLOWED: {
+    code: "INCIDENT_ADMIN_ONLY",
+    message: "Only administrators can perform emergency remediation.",
+  },
 } as const satisfies Record<string, BusinessErrorDefinition>;

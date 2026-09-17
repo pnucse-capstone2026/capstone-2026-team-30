@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { DashboardPageShell } from "@/components/dashboard/dashboard-page-shell";
+import { IncidentAlertBanner } from "@/components/dashboard/incident-alert-banner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -204,6 +205,8 @@ export default function AdminDashboardPage() {
         </Button>
       }
     >
+      <IncidentAlertBanner />
+
       <section className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">

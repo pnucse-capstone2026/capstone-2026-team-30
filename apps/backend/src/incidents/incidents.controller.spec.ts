@@ -42,7 +42,10 @@ describe("IncidentsController", () => {
   it.each([
     ["getIncidents", "incidents.read"],
     ["getIncidentById", "incidents.read"],
+    ["getRemediationDraft", "incidents.read"],
     ["subscribeEvents", "incidents.read"],
+    ["remediateEmergency", "incidents.manage"],
+    ["resolveByHotfix", "incidents.manage"],
     ["ignoreIncident", "incidents.manage"],
   ])("declares %s permission as %s", (method, permission) => {
     expect(
@@ -99,6 +102,88 @@ describe("IncidentsController", () => {
     const result = await controller.getIncidentById(mockUser, "inc-1");
     expect(result).toBe(sampleIncidentDto);
     expect(mockService.getIncidentById).toHaveBeenCalledWith(mockUser, "inc-1");
+  });
+
+  it("delegates getRemediationDraft call to service", async () => {
+    const draftDto = {
+      suggestedExceptionYaml: "apiVersion: kyverno.io/v2...",
+      autoFillUrl: "/exceptions/new?policy=test",
+      remediationGuide: "Guide text",
+      defaultTtlHours: 24,
+      incident: sampleIncidentDto,
+    };
+    const mockService = {
+      getRemediationDraft: jest.fn().mockResolvedValue(draftDto),
+    };
+    const mockEventsService = {
+      subscribe: jest.fn(),
+    };
+
+    const controller = new IncidentsController(
+      mockService as any,
+      mockEventsService as any,
+    );
+
+    const result = await controller.getRemediationDraft(mockUser, "inc-1");
+    expect(result).toBe(draftDto);
+    expect(mockService.getRemediationDraft).toHaveBeenCalledWith(
+      mockUser,
+      "inc-1",
+    );
+  });
+
+  it("delegates remediateEmergency call to service", async () => {
+    const resolvedDto = {
+      ...sampleIncidentDto,
+      status: IncidentStatus.RESOLVED_BY_EXCEPTION,
+    };
+    const mockService = {
+      remediateEmergency: jest.fn().mockResolvedValue(resolvedDto),
+    };
+    const mockEventsService = {
+      subscribe: jest.fn(),
+    };
+
+    const controller = new IncidentsController(
+      mockService as any,
+      mockEventsService as any,
+    );
+
+    const dto = { reason: "Urgent fix", ttlHours: 24, publishToGitOps: true };
+    const result = await controller.remediateEmergency(mockUser, "inc-1", dto);
+    expect(result.status).toBe(IncidentStatus.RESOLVED_BY_EXCEPTION);
+    expect(mockService.remediateEmergency).toHaveBeenCalledWith(
+      mockUser,
+      "inc-1",
+      dto,
+    );
+  });
+
+  it("delegates resolveByHotfix call to service", async () => {
+    const resolvedDto = {
+      ...sampleIncidentDto,
+      status: IncidentStatus.RESOLVED_BY_HOTFIX,
+    };
+    const mockService = {
+      resolveByHotfix: jest.fn().mockResolvedValue(resolvedDto),
+    };
+    const mockEventsService = {
+      subscribe: jest.fn(),
+    };
+
+    const controller = new IncidentsController(
+      mockService as any,
+      mockEventsService as any,
+    );
+
+    const dto = { commitSha: "abc1234", note: "Hotfix deployed" };
+    const result = await controller.resolveByHotfix(mockUser, "inc-1", dto);
+    expect(result.status).toBe(IncidentStatus.RESOLVED_BY_HOTFIX);
+    expect(mockService.resolveByHotfix).toHaveBeenCalledWith(
+      mockUser,
+      "inc-1",
+      dto,
+    );
   });
 
   it("delegates ignoreIncident call to service", async () => {

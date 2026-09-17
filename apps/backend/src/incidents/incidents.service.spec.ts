@@ -1,7 +1,9 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { IncidentStatus, Role } from "@prisma/client";
+import { ExceptionStatus, IncidentStatus, Role } from "@prisma/client";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { BusinessException } from "../common/errors/business.exception";
+import { GitOpsPublisherService } from "../gitops/gitops-publisher.service";
+import { ClusterProvider } from "../kubernetes/cluster-provider";
 import { PrismaService } from "../prisma/prisma.service";
 import { IncidentsEventsService } from "./incidents-events.service";
 import { INCIDENT_ERROR } from "./incidents.errors";
@@ -11,6 +13,8 @@ describe("IncidentsService", () => {
   let service: IncidentsService;
   let mockPrisma: any;
   let mockEventsService: any;
+  let mockGitOpsPublisher: any;
+  let mockClusterProvider: any;
 
   const mockUser: AuthenticatedUser = {
     id: "user-1",
@@ -59,6 +63,9 @@ describe("IncidentsService", () => {
         create: jest.fn(),
         update: jest.fn(),
       },
+      policyExceptionRequest: {
+        create: jest.fn(),
+      },
       auditLog: {
         create: jest.fn(),
       },
@@ -70,11 +77,27 @@ describe("IncidentsService", () => {
       emitIncidentUpdated: jest.fn(),
     };
 
+    mockGitOpsPublisher = {
+      publishManifest: jest.fn().mockResolvedValue({
+        publishedToGitOps: true,
+        appliedDirectly: true,
+      }),
+    };
+
+    mockClusterProvider = {
+      getMetadata: jest.fn().mockReturnValue({
+        id: "cluster-alpha",
+        displayName: "Production Cluster Alpha",
+      }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         IncidentsService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: IncidentsEventsService, useValue: mockEventsService },
+        { provide: GitOpsPublisherService, useValue: mockGitOpsPublisher },
+        { provide: ClusterProvider, useValue: mockClusterProvider },
       ],
     }).compile();
 
@@ -227,6 +250,191 @@ describe("IncidentsService", () => {
       await expect(service.getIncidentById(mockUser, "inc-1")).rejects.toThrow(
         BusinessException,
       );
+    });
+  });
+
+  describe("getRemediationDraft", () => {
+    it("generates PolicyException YAML, prefill URL, and guidance correctly", async () => {
+      mockPrisma.deploymentIncident.findUnique.mockResolvedValue(
+        sampleIncident,
+      );
+
+      const result = await service.getRemediationDraft(mockUser, "inc-1");
+
+      expect(result.suggestedExceptionYaml).toContain("kyverno.io/v2");
+      expect(result.suggestedExceptionYaml).toContain("PolicyException");
+      expect(result.suggestedExceptionYaml).toContain(
+        "disallow-privileged-containers",
+      );
+      expect(result.autoFillUrl).toContain("/exceptions/new?");
+      expect(result.autoFillUrl).toContain("cluster=cluster-alpha");
+      expect(result.autoFillUrl).toContain("namespace=mlops-serving");
+      expect(result.autoFillUrl).toContain("resource=deepseek-serving");
+      expect(result.autoFillUrl).toContain("kind=Deployment");
+      expect(result.autoFillUrl).toContain(
+        "policy=disallow-privileged-containers",
+      );
+      expect(result.autoFillUrl).toContain("rule=check-privileged");
+      expect(result.remediationGuide).toContain(
+        "disallow-privileged-containers",
+      );
+      expect(result.defaultTtlHours).toBe(24);
+      expect(result.incident.id).toBe("inc-1");
+    });
+
+    it("throws NOT_FOUND when incident does not exist", async () => {
+      mockPrisma.deploymentIncident.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.getRemediationDraft(mockUser, "inc-missing"),
+      ).rejects.toThrow(BusinessException);
+    });
+  });
+
+  describe("remediateEmergency", () => {
+    it("rejects non-admin users with ONLY_ADMIN_ALLOWED", async () => {
+      await expect(
+        service.remediateEmergency(mockUser, "inc-1", {
+          reason: "Emergency fix attempt by non-admin",
+        }),
+      ).rejects.toThrow(BusinessException);
+
+      try {
+        await service.remediateEmergency(mockUser, "inc-1", {
+          reason: "Emergency fix attempt",
+        });
+      } catch (err) {
+        expect((err as BusinessException).code).toBe(
+          INCIDENT_ERROR.ONLY_ADMIN_ALLOWED.code,
+        );
+      }
+    });
+
+    it("throws ALREADY_RESOLVED if incident is not ACTIVE", async () => {
+      mockPrisma.deploymentIncident.findUnique.mockResolvedValue({
+        ...sampleIncident,
+        status: IncidentStatus.RESOLVED_BY_HOTFIX,
+      });
+
+      await expect(
+        service.remediateEmergency(mockAdminUser, "inc-1", {
+          reason: "Emergency fix",
+        }),
+      ).rejects.toThrow(BusinessException);
+    });
+
+    it("creates approved PolicyExceptionRequest, resolves incident, and calls gitops publisher", async () => {
+      mockPrisma.deploymentIncident.findUnique.mockResolvedValue(
+        sampleIncident,
+      );
+      const createdException = {
+        id: "exp-uuid-1",
+        status: ExceptionStatus.APPROVED,
+        targetClusterId: "cluster-alpha",
+        policyName: "disallow-privileged-containers",
+      };
+      const resolvedIncident = {
+        ...sampleIncident,
+        status: IncidentStatus.RESOLVED_BY_EXCEPTION,
+        resolvedAt: new Date(),
+        exceptionId: "exp-uuid-1",
+      };
+
+      mockPrisma.policyExceptionRequest.create.mockResolvedValue(
+        createdException,
+      );
+      mockPrisma.deploymentIncident.update.mockResolvedValue(resolvedIncident);
+
+      const result = await service.remediateEmergency(mockAdminUser, "inc-1", {
+        reason: "Urgent fix for production outage",
+        ttlHours: 48,
+        publishToGitOps: true,
+      });
+
+      expect(result.status).toBe(IncidentStatus.RESOLVED_BY_EXCEPTION);
+      expect(result.exceptionId).toBe("exp-uuid-1");
+      expect(mockPrisma.policyExceptionRequest.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: ExceptionStatus.APPROVED,
+            targetClusterId: "cluster-alpha",
+            policyName: "disallow-privileged-containers",
+          }),
+        }),
+      );
+      expect(mockGitOpsPublisher.publishManifest).toHaveBeenCalledWith(
+        createdException,
+      );
+      expect(mockPrisma.auditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            action: "DEPLOYMENT_INCIDENT_EMERGENCY_REMEDIATED",
+            entityId: "inc-1",
+          }),
+        }),
+      );
+      expect(mockEventsService.emitIncidentUpdated).toHaveBeenCalledWith(
+        result,
+      );
+    });
+  });
+
+  describe("resolveByHotfix", () => {
+    it("successfully sets status to RESOLVED_BY_HOTFIX with commit and note metadata", async () => {
+      mockPrisma.deploymentIncident.findUnique.mockResolvedValue(
+        sampleIncident,
+      );
+      const resolvedIncident = {
+        ...sampleIncident,
+        status: IncidentStatus.RESOLVED_BY_HOTFIX,
+        resolvedAt: new Date(),
+        metadata: {
+          hotfixResolution: {
+            commitSha: "sha-fixed-999",
+            note: "Updated securityContext in git repo",
+          },
+        },
+      };
+      mockPrisma.deploymentIncident.update.mockResolvedValue(resolvedIncident);
+
+      const result = await service.resolveByHotfix(mockUser, "inc-1", {
+        commitSha: "sha-fixed-999",
+        note: "Updated securityContext in git repo",
+      });
+
+      expect(result.status).toBe(IncidentStatus.RESOLVED_BY_HOTFIX);
+      expect(mockPrisma.deploymentIncident.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "inc-1" },
+          data: expect.objectContaining({
+            status: IncidentStatus.RESOLVED_BY_HOTFIX,
+          }),
+        }),
+      );
+      expect(mockPrisma.auditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            action: "DEPLOYMENT_INCIDENT_RESOLVED_BY_HOTFIX",
+            entityId: "inc-1",
+          }),
+        }),
+      );
+      expect(mockEventsService.emitIncidentUpdated).toHaveBeenCalledWith(
+        result,
+      );
+    });
+
+    it("throws ALREADY_RESOLVED if incident is already resolved or ignored", async () => {
+      mockPrisma.deploymentIncident.findUnique.mockResolvedValue({
+        ...sampleIncident,
+        status: IncidentStatus.RESOLVED_BY_EXCEPTION,
+      });
+
+      await expect(
+        service.resolveByHotfix(mockUser, "inc-1", {
+          commitSha: "sha-123",
+        }),
+      ).rejects.toThrow(BusinessException);
     });
   });
 
