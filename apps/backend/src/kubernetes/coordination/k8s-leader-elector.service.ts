@@ -306,13 +306,23 @@ export class K8sLeaderElectorService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Kubernetes MicroTime 스펙(6자리 마이크로초 .000000Z)과 호환되는 Date 객체를 생성합니다.
+   * Kubernetes MicroTime 스펙(RFC 3339 6자리 마이크로초 .ssssssZ)과 호환되는 Date 객체를 생성합니다.
+   * 밀리초 정밀도를 보존하면서 유효한 RFC 3339 마이크로초 문자열로 직렬화되도록 toISOString 및 toJSON을 정의합니다.
    */
   private toMicroTime(d: Date = new Date()): Date {
-    const iso = d.toISOString().replace(/\.\d+Z$/, ".000000Z");
-    const date = new Date(d);
-    date.toISOString = () => iso;
-    date.toJSON = () => iso;
+    const ms = d.getMilliseconds().toString().padStart(3, "0");
+    const iso = d.toISOString().replace(/\.\d+Z$/, `.${ms}000Z`);
+    const date = new Date(d.getTime());
+    Object.defineProperty(date, "toISOString", {
+      value: () => iso,
+      writable: false,
+      configurable: true,
+    });
+    Object.defineProperty(date, "toJSON", {
+      value: () => iso,
+      writable: false,
+      configurable: true,
+    });
     return date;
   }
 
@@ -436,93 +446,96 @@ export class K8sLeaderElectorService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * K8s API 호출 어댑터: Lease 조회
+   * @kubernetes/client-node v1.4+ (단일 객체 인자)와 구버전/Mock (위치 인자) 시그니처를 안전하게 호출합니다.
+   * 첫 호출 시 적합한 호출 방식을 자동 감지 및 캐싱하여 반복 갱신 루프에서의 불필요한 예외 발생 오버헤드를 방지합니다.
    */
-  private async readLease(): Promise<V1Lease> {
+  private useLegacyApiSignature: boolean | null = null;
+
+  private async invokeApiMethod<T>(
+    methodName:
+      | "readNamespacedLease"
+      | "createNamespacedLease"
+      | "replaceNamespacedLease",
+    objectArgs: Record<string, unknown>,
+    positionalArgs: unknown[],
+  ): Promise<T> {
     if (!this.api) throw new Error("CoordinationV1Api is null");
-    // @kubernetes/client-node 1.4+ 객체 파라미터 우선 시도 후 구버전 mock 시그니처 호환
-    const legacyApi = this.api as unknown as {
-      readNamespacedLease: (...args: unknown[]) => Promise<unknown>;
-    };
+
+    const apiAny = this.api as unknown as Record<
+      string,
+      (...args: unknown[]) => Promise<unknown>
+    >;
+    const method = apiAny[methodName];
+    if (typeof method !== "function") {
+      throw new Error(`CoordinationV1Api does not implement ${methodName}`);
+    }
+
+    if (this.useLegacyApiSignature === true) {
+      const res = await method.apply(this.api, positionalArgs);
+      return this.unwrapResponse<T>(res);
+    }
+
+    if (this.useLegacyApiSignature === false) {
+      const res = await method.call(this.api, objectArgs);
+      return this.unwrapResponse<T>(res);
+    }
+
+    // 최초 1회 호출 시 호환 시그니처 자동 판별 및 캐싱
     try {
-      const res = await this.api.readNamespacedLease({
-        name: this.leaseName,
-        namespace: this.leaseNamespace,
-      });
-      return this.unwrapResponse<V1Lease>(res);
+      const res = await method.call(this.api, objectArgs);
+      this.useLegacyApiSignature = false;
+      return this.unwrapResponse<T>(res);
     } catch (err) {
-      if (
+      const isSignatureMismatch =
         err instanceof TypeError ||
-        (err instanceof Error && err.message.includes("is not a function"))
-      ) {
-        const res = await legacyApi.readNamespacedLease(
-          this.leaseName,
-          this.leaseNamespace,
+        (err instanceof Error &&
+          (err.message.includes("is not a function") ||
+            err.message.includes("Cannot read property") ||
+            err.message.includes("Cannot read properties")));
+
+      if (isSignatureMismatch) {
+        this.logger.debug(
+          `[LeaderElector] Fallback to legacy API signature for ${methodName}`,
         );
-        return this.unwrapResponse<V1Lease>(res);
+        const res = await method.apply(this.api, positionalArgs);
+        this.useLegacyApiSignature = true;
+        return this.unwrapResponse<T>(res);
       }
       throw err;
     }
+  }
+
+  /**
+   * K8s API 호출 어댑터: Lease 조회
+   */
+  private async readLease(): Promise<V1Lease> {
+    return this.invokeApiMethod<V1Lease>(
+      "readNamespacedLease",
+      { name: this.leaseName, namespace: this.leaseNamespace },
+      [this.leaseName, this.leaseNamespace],
+    );
   }
 
   /**
    * K8s API 호출 어댑터: Lease 생성
    */
   private async createLease(body: V1Lease): Promise<V1Lease> {
-    if (!this.api) throw new Error("CoordinationV1Api is null");
-    const legacyApi = this.api as unknown as {
-      createNamespacedLease: (...args: unknown[]) => Promise<unknown>;
-    };
-    try {
-      const res = await this.api.createNamespacedLease({
-        namespace: this.leaseNamespace,
-        body,
-      });
-      return this.unwrapResponse<V1Lease>(res);
-    } catch (err) {
-      if (
-        err instanceof TypeError ||
-        (err instanceof Error && err.message.includes("is not a function"))
-      ) {
-        const res = await legacyApi.createNamespacedLease(
-          this.leaseNamespace,
-          body,
-        );
-        return this.unwrapResponse<V1Lease>(res);
-      }
-      throw err;
-    }
+    return this.invokeApiMethod<V1Lease>(
+      "createNamespacedLease",
+      { namespace: this.leaseNamespace, body },
+      [this.leaseNamespace, body],
+    );
   }
 
   /**
    * K8s API 호출 어댑터: Lease 교체/갱신
    */
   private async replaceLease(body: V1Lease): Promise<V1Lease> {
-    if (!this.api) throw new Error("CoordinationV1Api is null");
-    const legacyApi = this.api as unknown as {
-      replaceNamespacedLease: (...args: unknown[]) => Promise<unknown>;
-    };
-    try {
-      const res = await this.api.replaceNamespacedLease({
-        name: this.leaseName,
-        namespace: this.leaseNamespace,
-        body,
-      });
-      return this.unwrapResponse<V1Lease>(res);
-    } catch (err) {
-      if (
-        err instanceof TypeError ||
-        (err instanceof Error && err.message.includes("is not a function"))
-      ) {
-        const res = await legacyApi.replaceNamespacedLease(
-          this.leaseName,
-          this.leaseNamespace,
-          body,
-        );
-        return this.unwrapResponse<V1Lease>(res);
-      }
-      throw err;
-    }
+    return this.invokeApiMethod<V1Lease>(
+      "replaceNamespacedLease",
+      { name: this.leaseName, namespace: this.leaseNamespace, body },
+      [this.leaseName, this.leaseNamespace, body],
+    );
   }
 
   /**

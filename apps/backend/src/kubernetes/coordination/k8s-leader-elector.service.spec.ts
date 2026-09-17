@@ -310,4 +310,45 @@ describe("K8sLeaderElectorService", () => {
       expect(lostCb).not.toHaveBeenCalled();
     });
   });
+
+  describe("Compatibility & MicroTime formatting", () => {
+    it("preserves millisecond precision with 6-digit microsecond RFC 3339 format", () => {
+      const testDate = new Date("2026-09-17T12:34:56.789Z");
+      const microDate = (service as any).toMicroTime(testDate);
+
+      expect(microDate.toISOString()).toBe("2026-09-17T12:34:56.789000Z");
+      expect(microDate.toJSON()).toBe("2026-09-17T12:34:56.789000Z");
+      expect(microDate.getTime()).toBe(testDate.getTime());
+    });
+
+    it("falls back to positional arguments when object call fails with signature error and caches the mode", async () => {
+      let callCount = 0;
+      mockCoordinationApi.readNamespacedLease.mockImplementation(
+        (...args: any[]) => {
+          callCount++;
+          // 첫 번째 시도 (단일 객체 전달 시 TypeError 시뮬레이션)
+          if (args.length === 1 && typeof args[0] === "object") {
+            throw new TypeError(
+              "readNamespacedLease is not a function with object arg",
+            );
+          }
+          // 두 번째 시도 (레거시 위치 인자: name, namespace)
+          return Promise.resolve({
+            metadata: { name: "test-lease", namespace: "default" },
+            spec: { holderIdentity: "other-pod" },
+          });
+        },
+      );
+
+      // 첫 호출: object 실패 -> positional 재시도
+      const lease1 = await (service as any).readLease();
+      expect(lease1.metadata.name).toBe("test-lease");
+      expect(callCount).toBe(2);
+
+      // 두 번째 호출: 캐시된 legacy 모드로 즉시 positional 호출
+      const lease2 = await (service as any).readLease();
+      expect(lease2.metadata.name).toBe("test-lease");
+      expect(callCount).toBe(3); // 2번이 아니라 바로 1번만 호출됨
+    });
+  });
 });
