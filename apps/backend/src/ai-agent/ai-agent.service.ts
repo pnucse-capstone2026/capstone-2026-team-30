@@ -1,10 +1,4 @@
-import {
-  forwardRef,
-  Inject,
-  Injectable,
-  Logger,
-  Optional,
-} from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
   LLM_PROVIDER_TOKEN,
@@ -20,12 +14,34 @@ import { ClusterProvider } from "../kubernetes/cluster-provider";
 import { KyvernoAdapter } from "../kubernetes/kyverno.adapter";
 
 /**
+ * K8s API 조회가 불가하거나 비어 있는 경우 적용할 표준 사내 거버넌스 가이드라인
+ */
+export const DEFAULT_GOVERNANCE_POLICIES: readonly string[] = Object.freeze([
+  "- Cluster: Enterprise Kubernetes Environment (Kyverno v1.12+ Active)",
+  "- Active Enterprise Governance Policies in Effect:",
+  "  * disallow-latest-tag [Enforce]: Disallow ':latest' tag, require explicit immutable versions",
+  "  * require-labels [Enforce]: Require 'app.kubernetes.io/name' and 'team' labels",
+  "  * restrict-image-registries [Enforce]: Only allow approved registries (public.ecr.aws, registry.k8s.io, private ECR)",
+  "  * disallow-privileged-containers [Enforce]: Disallow securityContext.privileged: true",
+  "  * require-resource-limits [Enforce]: Require CPU & Memory limits/requests",
+]);
+
+/**
  * 플랫폼 비전문 사용자를 위한 Kyverno 오류 해설 및 수정 가이드 생성 AI 에이전트 서비스
  */
 @Injectable()
 export class AiAgentService {
   private readonly logger = new Logger(AiAgentService.name);
   private readonly timeoutMs: number;
+
+  /**
+   * 클러스터별 활성 Kyverno 정책 인메모리 캐시 (기본 TTL: 2분)
+   */
+  private readonly policyCache = new Map<
+    string,
+    { policies: Array<Record<string, unknown>>; expiresAt: number }
+  >();
+  private readonly policyCacheTtlMs = 120_000;
 
   constructor(
     @Inject(LLM_PROVIDER_TOKEN)
@@ -34,10 +50,8 @@ export class AiAgentService {
     private readonly workloadEvaluator: WorkloadEvaluatorService,
     config: ConfigService,
     @Optional()
-    @Inject(forwardRef(() => ClusterProvider))
     private readonly clusterProvider?: ClusterProvider,
     @Optional()
-    @Inject(forwardRef(() => KyvernoAdapter))
     private readonly kyvernoAdapter?: KyvernoAdapter,
   ) {
     // LLM API 응답 대기 상한 타임아웃 (기본값: 15000ms)
@@ -48,6 +62,41 @@ export class AiAgentService {
       Number.isFinite(configuredTimeout) && configuredTimeout > 0
         ? configuredTimeout
         : 15000;
+  }
+
+  /**
+   * 클러스터의 활성 Kyverno 정책을 캐시에서 조회하고, 만료되었거나 없을 때만 K8s API 서버에서 로드합니다.
+   *
+   * @param clusterId 대상 클러스터 식별자
+   * @returns 클러스터 정책 목록
+   */
+  async getCachedClusterPolicies(
+    clusterId: string,
+  ): Promise<Array<Record<string, unknown>>> {
+    const cached = this.policyCache.get(clusterId);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.policies;
+    }
+
+    if (!this.kyvernoAdapter) {
+      return [];
+    }
+
+    const policies =
+      (await this.kyvernoAdapter.listClusterPolicies(clusterId)) || [];
+    const typedPolicies = policies as unknown as Array<Record<string, unknown>>;
+    this.policyCache.set(clusterId, {
+      policies: typedPolicies,
+      expiresAt: Date.now() + this.policyCacheTtlMs,
+    });
+    return typedPolicies;
+  }
+
+  /**
+   * 정책 캐시를 수동 초기화합니다 (테스트용)
+   */
+  clearPolicyCache(): void {
+    this.policyCache.clear();
   }
 
   /**
@@ -95,18 +144,18 @@ export class AiAgentService {
     if (this.kyvernoAdapter && targetClusterId) {
       try {
         const clusterPolicies =
-          await this.kyvernoAdapter.listClusterPolicies(targetClusterId);
+          await this.getCachedClusterPolicies(targetClusterId);
         if (clusterPolicies && clusterPolicies.length > 0) {
           lines.push(
             `- Active Kyverno ClusterPolicies in Cluster (${clusterPolicies.length} policies enforced/audited):`,
           );
           for (const p of clusterPolicies) {
-            const name = p.metadata?.name || "unnamed";
+            const metadata = p.metadata as { name?: string } | undefined;
+            const name = metadata?.name || "unnamed";
+            const spec = p.spec as Record<string, unknown> | undefined;
             const action =
-              (p.spec as Record<string, unknown> | undefined)
-                ?.validationFailureAction || "Enforce";
-            const rules = ((p.spec as Record<string, unknown> | undefined)
-              ?.rules || []) as Array<{
+              (spec?.validationFailureAction as string) || "Enforce";
+            const rules = (spec?.rules || []) as Array<{
               name?: string;
               validate?: { message?: string };
             }>;
@@ -129,25 +178,7 @@ export class AiAgentService {
 
     // 클러스터 API 연결이 없거나 정책 조회가 비어있는 경우 표준 사내 거버넌스 가이드라인으로 보완
     if (lines.length === 0) {
-      lines.push(
-        "- Cluster: Enterprise Kubernetes Environment (Kyverno v1.12+ Active)",
-      );
-      lines.push("- Active Enterprise Governance Policies in Effect:");
-      lines.push(
-        "  * disallow-latest-tag [Enforce]: Disallow ':latest' tag, require explicit immutable versions",
-      );
-      lines.push(
-        "  * require-labels [Enforce]: Require 'app.kubernetes.io/name' and 'team' labels",
-      );
-      lines.push(
-        "  * restrict-image-registries [Enforce]: Only allow approved registries (public.ecr.aws, registry.k8s.io, private ECR)",
-      );
-      lines.push(
-        "  * disallow-privileged-containers [Enforce]: Disallow securityContext.privileged: true",
-      );
-      lines.push(
-        "  * require-resource-limits [Enforce]: Require CPU & Memory limits/requests",
-      );
+      lines.push(...DEFAULT_GOVERNANCE_POLICIES);
     }
 
     return lines.join("\n");

@@ -188,9 +188,9 @@ export default function EnforceDiagnosticsPage() {
         errorMessage: payloadErrorMessage,
         resourceManifest: manifestYaml,
         clusterId: selectedClusterId || undefined,
-        clusterContext: activeCluster
-          ? `Selected Cluster: ${activeCluster.displayName} (${activeCluster.id}), Exception Namespace: ${activeCluster.exceptionNamespace}`
-          : "Cluster: Auto-detected (Enforce mode active)",
+        clusterContext: activeCluster?.exceptionNamespace
+          ? `Exception Namespace: ${activeCluster.exceptionNamespace}`
+          : undefined,
       });
 
       setResult(res);

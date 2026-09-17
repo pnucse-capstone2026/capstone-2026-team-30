@@ -185,4 +185,60 @@ describe("AiAgentService", () => {
       expect.stringContaining("disallow-latest-tag [Mode: Enforce]"),
     );
   });
+
+  it("should cache cluster policies in-memory and avoid duplicate K8s API calls within TTL", async () => {
+    const mockClusterProvider = {
+      list: jest
+        .fn()
+        .mockReturnValue([
+          { id: "cached-cluster", displayName: "Cached Cluster" },
+        ]),
+    };
+    const mockKyvernoAdapter = {
+      listClusterPolicies: jest.fn().mockResolvedValue([
+        {
+          metadata: { name: "test-policy" },
+          spec: { validationFailureAction: "Enforce", rules: [] },
+        },
+      ]),
+    };
+
+    const moduleWithCache: TestingModule = await Test.createTestingModule({
+      providers: [
+        AiAgentService,
+        KyvernoRuleTemplateEngine,
+        WorkloadEvaluatorService,
+        {
+          provide: LLM_PROVIDER_TOKEN,
+          useValue: mockLlmProvider,
+        },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn().mockReturnValue("15000") },
+        },
+        {
+          provide: ClusterProvider,
+          useValue: mockClusterProvider,
+        },
+        {
+          provide: KyvernoAdapter,
+          useValue: mockKyvernoAdapter,
+        },
+      ],
+    }).compile();
+
+    const cachedService = moduleWithCache.get<AiAgentService>(AiAgentService);
+
+    // 첫 번째 호출: KyvernoAdapter.listClusterPolicies 호출됨
+    const policies1 =
+      await cachedService.getCachedClusterPolicies("cached-cluster");
+    expect(policies1).toHaveLength(1);
+    expect(mockKyvernoAdapter.listClusterPolicies).toHaveBeenCalledTimes(1);
+
+    // 두 번째 호출: 캐시 히트로 인해 KyvernoAdapter.listClusterPolicies 재호출되지 않음
+    const policies2 =
+      await cachedService.getCachedClusterPolicies("cached-cluster");
+    expect(policies2).toHaveLength(1);
+    expect(mockKyvernoAdapter.listClusterPolicies).toHaveBeenCalledTimes(1);
+  });
 });
