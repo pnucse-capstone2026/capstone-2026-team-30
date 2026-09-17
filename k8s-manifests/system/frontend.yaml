@@ -25,7 +25,8 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: 945125812546.dkr.ecr.us-east-1.amazonaws.com/kyverno-frontend:v8-assisted-recovery
+          # Kyverno disallow-latest-tag 준수 및 최신 프론트엔드 진단 릴리즈 이미지 지정
+          image: 945125812546.dkr.ecr.us-east-1.amazonaws.com/kyverno-frontend:ba91e34
           imagePullPolicy: Always
           env:
             - name: NODE_ENV

@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { ModuleRef } from "@nestjs/core";
 import {
   LLM_PROVIDER_TOKEN,
   LlmProvider,
@@ -56,6 +57,8 @@ export class AiAgentService {
     private readonly clusterProvider?: ClusterProvider,
     @Optional()
     private readonly kyvernoAdapter?: KyvernoAdapter,
+    @Optional()
+    private readonly moduleRef?: ModuleRef,
   ) {
     // LLM API 응답 대기 상한 타임아웃 (기본값: 15000ms)
     const configuredTimeout = Number(
@@ -65,6 +68,36 @@ export class AiAgentService {
       Number.isFinite(configuredTimeout) && configuredTimeout > 0
         ? configuredTimeout
         : 15000;
+  }
+
+  /**
+   * 순환 모듈 의존성을 회피하기 위해 ModuleRef를 통해 런타임에 ClusterProvider를 안전하게 지연 조회합니다.
+   */
+  private resolveClusterProvider(): ClusterProvider | undefined {
+    if (this.clusterProvider) return this.clusterProvider;
+    if (this.moduleRef) {
+      try {
+        return this.moduleRef.get(ClusterProvider, { strict: false });
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * 순환 모듈 의존성을 회피하기 위해 ModuleRef를 통해 런타임에 KyvernoAdapter를 안전하게 지연 조회합니다.
+   */
+  private resolveKyvernoAdapter(): KyvernoAdapter | undefined {
+    if (this.kyvernoAdapter) return this.kyvernoAdapter;
+    if (this.moduleRef) {
+      try {
+        return this.moduleRef.get(KyvernoAdapter, { strict: false });
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
   }
 
   /**
@@ -81,12 +114,12 @@ export class AiAgentService {
       return cached.policies;
     }
 
-    if (!this.kyvernoAdapter) {
+    const adapter = this.resolveKyvernoAdapter();
+    if (!adapter) {
       return [];
     }
 
-    const policies =
-      (await this.kyvernoAdapter.listClusterPolicies(clusterId)) || [];
+    const policies = (await adapter.listClusterPolicies(clusterId)) || [];
     const typedPolicies = policies as unknown as Array<Record<string, unknown>>;
     this.policyCache.set(clusterId, {
       policies: typedPolicies,
@@ -117,9 +150,10 @@ export class AiAgentService {
     const lines: string[] = [];
 
     let targetClusterId = clusterId;
-    if (this.clusterProvider) {
+    const clusterProvider = this.resolveClusterProvider();
+    if (clusterProvider) {
       try {
-        const allClusters = this.clusterProvider.list();
+        const allClusters = clusterProvider.list();
         const cluster = targetClusterId
           ? allClusters.find(
               (c) =>
@@ -144,7 +178,8 @@ export class AiAgentService {
       lines.push(`- Target Namespace: ${namespace}`);
     }
 
-    if (this.kyvernoAdapter && targetClusterId) {
+    const kyvernoAdapter = this.resolveKyvernoAdapter();
+    if (kyvernoAdapter && targetClusterId) {
       try {
         const clusterPolicies =
           await this.getCachedClusterPolicies(targetClusterId);
