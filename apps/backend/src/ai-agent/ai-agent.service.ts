@@ -12,6 +12,9 @@ import { KyvernoRuleTemplateEngine } from "./rule-template.engine";
 import { WorkloadEvaluatorService } from "./services/workload-evaluator.service";
 import { ClusterProvider } from "../kubernetes/cluster-provider";
 import { KyvernoAdapter } from "../kubernetes/kyverno.adapter";
+import { BusinessException } from "../common/errors/business.exception";
+import { POLICY_ERROR } from "../policies/policy.errors";
+import { AuthenticatedUser } from "../auth/auth.types";
 
 /**
  * K8s API 조회가 불가하거나 비어 있는 경우 적용할 표준 사내 거버넌스 가이드라인
@@ -189,11 +192,21 @@ export class AiAgentService {
    * 설정된 LLM 프로바이더 통신에 타임아웃이 발생하거나 실패할 경우 룰 기반 Graceful Fallback 엔진으로 즉각 전환합니다.
    *
    * @param dto Kyverno 오류 메시지, 정책 YAML, 쿠버네티스 매니페스트, 클러스터 상태 정보
+   * @param user 요청자의 인증 컨텍스트 (선택, 클러스터 접근 권한 검증용)
    * @returns 쉬운 해설, 단계별 조치 방법, 수정 매니페스트 및 보안 거버넌스 배경
+   * @throws {BusinessException} 지정된 클러스터에 대한 접근 권한이 없을 경우 (POLICY_CLUSTER_ACCESS_DENIED)
    */
   async explainKyvernoError(
     dto: ExplainKyvernoErrorDto,
+    user?: AuthenticatedUser,
   ): Promise<KyvernoErrorExplanationResultDto> {
+    // Cluster Scoping 검증: 비관리자 사용자가 타겟 클러스터에 배정되어 있는지 인가 확인
+    if (dto.clusterId && user) {
+      if (user.role !== "ADMIN" && !user.clusterIds.includes(dto.clusterId)) {
+        throw new BusinessException(POLICY_ERROR.CLUSTER_ACCESS_DENIED);
+      }
+    }
+
     const startTime = Date.now();
     const evalResult = this.workloadEvaluator.evaluate(dto);
 

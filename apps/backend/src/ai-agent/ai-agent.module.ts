@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { KubernetesModule } from "../kubernetes/kubernetes.module";
+import { PrismaModule } from "../prisma/prisma.module";
 import { AiAgentController } from "./ai-agent.controller";
 import { AiAgentService } from "./ai-agent.service";
 import { BedrockService } from "./bedrock.service";
@@ -16,7 +17,7 @@ import { WorkloadEvaluatorService } from "./services/workload-evaluator.service"
  * 벤더 독립적 LLM SPI 및 Kyverno 거버넌스 에이전트 모듈
  */
 @Module({
-  imports: [ConfigModule, KubernetesModule],
+  imports: [ConfigModule, KubernetesModule, PrismaModule],
   controllers: [AiAgentController],
   providers: [
     BedrockService,

@@ -241,4 +241,53 @@ describe("AiAgentService", () => {
     expect(policies2).toHaveLength(1);
     expect(mockKyvernoAdapter.listClusterPolicies).toHaveBeenCalledTimes(1);
   });
+
+  describe("Cluster Scoping Authorization", () => {
+    it("should throw BusinessException(CLUSTER_ACCESS_DENIED) when user does not have access to cluster", async () => {
+      const unauthorizedUser = {
+        userId: "user-1",
+        email: "dev@example.com",
+        role: "VIEWER" as const,
+        clusterIds: ["cluster-a"],
+      };
+
+      await expect(
+        service.explainKyvernoError(
+          {
+            errorMessage: "blocked",
+            clusterId: "cluster-unauthorized",
+          },
+          unauthorizedUser as any,
+        ),
+      ).rejects.toThrow("User does not have access to the specified cluster");
+    });
+
+    it("should allow ADMIN role user to analyze any cluster", async () => {
+      const adminUser = {
+        userId: "admin-1",
+        email: "admin@example.com",
+        role: "ADMIN" as const,
+        clusterIds: [],
+      };
+
+      mockLlmProvider.chatCompletion.mockResolvedValue(
+        JSON.stringify({
+          summary: "정상 진단",
+          resolutionSteps: ["해결"],
+          suggestedFixYaml: null,
+          governanceRationale: "보안",
+        }),
+      );
+
+      const result = await service.explainKyvernoError(
+        {
+          errorMessage: "blocked",
+          clusterId: "any-cluster",
+        },
+        adminUser as any,
+      );
+
+      expect(result.summary).toBe("정상 진단");
+    });
+  });
 });
