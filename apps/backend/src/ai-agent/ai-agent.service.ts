@@ -174,12 +174,16 @@ export class AiAgentService {
       }
     }
 
+    if (!targetClusterId) {
+      targetClusterId = "default";
+    }
+
     if (namespace) {
       lines.push(`- Target Namespace: ${namespace}`);
     }
 
     const kyvernoAdapter = this.resolveKyvernoAdapter();
-    if (kyvernoAdapter && targetClusterId) {
+    if (kyvernoAdapter) {
       try {
         const clusterPolicies =
           await this.getCachedClusterPolicies(targetClusterId);
@@ -223,26 +227,36 @@ export class AiAgentService {
   }
 
   /**
+   * 사용자의 클러스터 접근 권한(Role 또는 clusterIds 배정)을 검증합니다.
+   */
+  private validateClusterAccess(
+    user: AuthenticatedUser,
+    clusterId: string,
+  ): void {
+    if (user.role !== "ADMIN" && !user.clusterIds.includes(clusterId)) {
+      throw new BusinessException(POLICY_ERROR.CLUSTER_ACCESS_DENIED);
+    }
+  }
+
+  /**
    * Kyverno 정책 위반 오류 메시지 및 K8s 매니페스트 context를 분석하여 쉬운 해설 리포트를 생성합니다.
    * 설정된 LLM 프로바이더 통신에 타임아웃이 발생하거나 실패할 경우 룰 기반 Graceful Fallback 엔진으로 즉각 전환합니다.
    *
    * @param dto Kyverno 오류 메시지, 정책 YAML, 쿠버네티스 매니페스트, 클러스터 상태 정보
-   * @param user 요청자의 인증 컨텍스트 (선택, 클러스터 접근 권한 검증용)
+   * @param user 요청자 정보 (선택, 클러스터 접근 스코프 검증용)
    * @returns 쉬운 해설, 단계별 조치 방법, 수정 매니페스트 및 보안 거버넌스 배경
-   * @throws {BusinessException} 지정된 클러스터에 대한 접근 권한이 없을 경우 (POLICY_CLUSTER_ACCESS_DENIED)
    */
   async explainKyvernoError(
     dto: ExplainKyvernoErrorDto,
     user?: AuthenticatedUser,
   ): Promise<KyvernoErrorExplanationResultDto> {
-    // Cluster Scoping 검증: 비관리자 사용자가 타겟 클러스터에 배정되어 있는지 인가 확인
-    if (dto.clusterId && user) {
-      if (user.role !== "ADMIN" && !user.clusterIds.includes(dto.clusterId)) {
-        throw new BusinessException(POLICY_ERROR.CLUSTER_ACCESS_DENIED);
-      }
+    const startTime = Date.now();
+
+    // 사용자가 특정 클러스터를 지정한 경우 권한 스코프 유효성 검증
+    if (user && dto.clusterId) {
+      this.validateClusterAccess(user, dto.clusterId);
     }
 
-    const startTime = Date.now();
     const evalResult = this.workloadEvaluator.evaluate(dto);
 
     const liveContext = await this.buildClusterGovernanceContext(
@@ -254,6 +268,10 @@ export class AiAgentService {
       ? `${liveContext}\n- Additional Client Context: ${dto.clusterContext}`
       : liveContext;
 
+    this.logger.log(
+      `[AiAgent] Diagnosing with live cluster context (${dto.clusterId || "default"}): ${liveContext.split("\n")[0]}`,
+    );
+
     const systemPrompt = `You are a world-class, empathetic Kubernetes Platform Engineering AI Assistant.
 Your mission is to explain Kyverno policy rejection errors and guide developers to successful deployments.
 
@@ -263,11 +281,13 @@ Target Audience & Tone:
 
 CRITICAL INSTRUCTION - HOLISTIC CLUSTER POLICY COMPLIANCE:
 The cluster enforces multiple simultaneous Kyverno policies (see [Cluster Environment & Active Governance Policies Context]).
-When generating "suggestedFixYaml", the corrected manifest MUST satisfy NOT ONLY the specific policy that triggered the rejection, BUT ALSO ALL OTHER ACTIVE CLUSTER POLICIES SIMULTANEOUSLY:
-- Image Tags & Registries: When fixing image tags, always use approved registries (e.g. 'public.ecr.aws/<repo>:<version>' or 'registry.k8s.io/<image>:<version>'). Never use ':latest' and avoid unverified Docker Hub root images.
-- Mandatory Governance Labels: Ensure 'metadata.labels["app.kubernetes.io/name"]' and 'metadata.labels["team"]' (e.g. team: devops) are present.
-- Resource Limits: Ensure container resource limits/requests (e.g. cpu: 100m, memory: 128Mi) are specified if missing.
-- Privileged Containers: For critical violations involving 'securityContext.privileged: true', hostNetwork, or hostPID, do NOT provide suggestedFixYaml (set suggestedFixYaml to null). Explain that arbitrary privilege removal breaks workloads requiring raw kernel/device access, and instruct the developer to submit a PolicyException or re-architect the workload safely.
+When generating "suggestedFixYaml", YOU MUST OUTPUT A COMPLETE, READY-TO-DEPLOY YAML MANIFEST that satisfies ALL ACTIVE RULES SIMULTANEOUSLY:
+1. Fix the primary policy error described in [Kyverno Error Message].
+2. Comply with ALL OTHER ACTIVE POLICIES in the cluster:
+   - If 'restrict-image-registries' is active or images need changing: ALWAYS use approved enterprise registries (e.g. 'public.ecr.aws/docker/library/nginx:1.25.4' or 'registry.k8s.io/pause:3.10'). NEVER use bare 'nginx:1.21.1' or unverified Docker Hub root images.
+   - If 'require-labels' is active: ALWAYS ensure 'metadata.labels["app.kubernetes.io/name"]' and 'metadata.labels["team"]' (e.g. team: devops) are explicitly present in the YAML.
+   - If 'require-resource-limits' is active: ALWAYS ensure container resources (limits: cpu: 100m, memory: 128Mi / requests: cpu: 50m, memory: 64Mi) are defined.
+   - For critical security violations involving 'securityContext.privileged: true', hostNetwork, or hostPID, do NOT remove them arbitrarily. Set suggestedFixYaml to null and instruct the developer to submit a PolicyException or use least-privilege alternatives.
 
 Output format MUST be a valid JSON object matching the following structure without codeblock wrapper or markdown syntax:
 {

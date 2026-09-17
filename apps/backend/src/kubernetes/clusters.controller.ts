@@ -42,6 +42,9 @@ export class ClustersController {
   @ApiOperation({ summary: "배정된 클러스터 목록 조회" })
   @ApiResponse({ status: 200, description: "클러스터 목록 반환" })
   list(@CurrentUser() user: AuthenticatedUser): ClusterMetadata[] {
+    if (user.role === "ADMIN") {
+      return this.clusters.list();
+    }
     return this.clusters
       .list()
       .filter((cluster) => user.clusterIds.includes(cluster.id));
