@@ -1,4 +1,10 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import {
+  forwardRef,
+  Inject,
+  Injectable,
+  Logger,
+  Optional,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
   LLM_PROVIDER_TOKEN,
@@ -10,6 +16,8 @@ import {
 } from "./dto/explain-error.dto";
 import { KyvernoRuleTemplateEngine } from "./rule-template.engine";
 import { WorkloadEvaluatorService } from "./services/workload-evaluator.service";
+import { ClusterProvider } from "../kubernetes/cluster-provider";
+import { KyvernoAdapter } from "../kubernetes/kyverno.adapter";
 
 /**
  * 플랫폼 비전문 사용자를 위한 Kyverno 오류 해설 및 수정 가이드 생성 AI 에이전트 서비스
@@ -25,6 +33,12 @@ export class AiAgentService {
     private readonly ruleTemplateEngine: KyvernoRuleTemplateEngine,
     private readonly workloadEvaluator: WorkloadEvaluatorService,
     config: ConfigService,
+    @Optional()
+    @Inject(forwardRef(() => ClusterProvider))
+    private readonly clusterProvider?: ClusterProvider,
+    @Optional()
+    @Inject(forwardRef(() => KyvernoAdapter))
+    private readonly kyvernoAdapter?: KyvernoAdapter,
   ) {
     // LLM API 응답 대기 상한 타임아웃 (기본값: 15000ms)
     const configuredTimeout = Number(
@@ -34,6 +48,109 @@ export class AiAgentService {
       Number.isFinite(configuredTimeout) && configuredTimeout > 0
         ? configuredTimeout
         : 15000;
+  }
+
+  /**
+   * 대상 클러스터의 활성 Kyverno 정책 목록과 클러스터 환경 구조를 요약하여 컨텍스트 문자열을 구성합니다.
+   * K8s API 조회가 불가하거나 비어 있는 경우 표준 사내 거버넌스 가이드라인으로 안전하게 fallback합니다.
+   *
+   * @param clusterId 대상 클러스터 ID (선택)
+   * @param namespace 대상 네임스페이스 (선택)
+   * @returns 클러스터 거버넌스 및 활성 정책 요약 문자열
+   */
+  async buildClusterGovernanceContext(
+    clusterId?: string,
+    namespace?: string,
+  ): Promise<string> {
+    const lines: string[] = [];
+
+    let targetClusterId = clusterId;
+    if (this.clusterProvider) {
+      try {
+        const allClusters = this.clusterProvider.list();
+        const cluster = targetClusterId
+          ? allClusters.find(
+              (c) =>
+                c.id === targetClusterId || c.displayName === targetClusterId,
+            )
+          : allClusters[0];
+
+        if (cluster) {
+          targetClusterId = cluster.id;
+          lines.push(
+            `- Target Cluster: ${cluster.displayName || cluster.id} (ID: ${cluster.id})`,
+          );
+        }
+      } catch (err) {
+        this.logger.debug(
+          `Failed to inspect cluster metadata: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    if (namespace) {
+      lines.push(`- Target Namespace: ${namespace}`);
+    }
+
+    if (this.kyvernoAdapter && targetClusterId) {
+      try {
+        const clusterPolicies =
+          await this.kyvernoAdapter.listClusterPolicies(targetClusterId);
+        if (clusterPolicies && clusterPolicies.length > 0) {
+          lines.push(
+            `- Active Kyverno ClusterPolicies in Cluster (${clusterPolicies.length} policies enforced/audited):`,
+          );
+          for (const p of clusterPolicies) {
+            const name = p.metadata?.name || "unnamed";
+            const action =
+              (p.spec as Record<string, unknown> | undefined)
+                ?.validationFailureAction || "Enforce";
+            const rules = ((p.spec as Record<string, unknown> | undefined)
+              ?.rules || []) as Array<{
+              name?: string;
+              validate?: { message?: string };
+            }>;
+            const ruleSummaries = rules
+              .map((r) => r.validate?.message || r.name)
+              .filter(Boolean)
+              .slice(0, 2)
+              .join("; ");
+            lines.push(
+              `  * ${name} [Mode: ${action}]${ruleSummaries ? `: ${ruleSummaries}` : ""}`,
+            );
+          }
+        }
+      } catch (err) {
+        this.logger.warn(
+          `Failed to retrieve live cluster policies for context: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    // 클러스터 API 연결이 없거나 정책 조회가 비어있는 경우 표준 사내 거버넌스 가이드라인으로 보완
+    if (lines.length === 0) {
+      lines.push(
+        "- Cluster: Enterprise Kubernetes Environment (Kyverno v1.12+ Active)",
+      );
+      lines.push("- Active Enterprise Governance Policies in Effect:");
+      lines.push(
+        "  * disallow-latest-tag [Enforce]: Disallow ':latest' tag, require explicit immutable versions",
+      );
+      lines.push(
+        "  * require-labels [Enforce]: Require 'app.kubernetes.io/name' and 'team' labels",
+      );
+      lines.push(
+        "  * restrict-image-registries [Enforce]: Only allow approved registries (public.ecr.aws, registry.k8s.io, private ECR)",
+      );
+      lines.push(
+        "  * disallow-privileged-containers [Enforce]: Disallow securityContext.privileged: true",
+      );
+      lines.push(
+        "  * require-resource-limits [Enforce]: Require CPU & Memory limits/requests",
+      );
+    }
+
+    return lines.join("\n");
   }
 
   /**
@@ -49,22 +166,37 @@ export class AiAgentService {
     const startTime = Date.now();
     const evalResult = this.workloadEvaluator.evaluate(dto);
 
-    const systemPrompt = `You are a helpful, empathetic Platform Engineering AI Assistant.
-Your mission is to explain Kyverno policy rejection errors to application developers who do NOT have deep Kubernetes or Platform Engineering knowledge.
+    const liveContext = await this.buildClusterGovernanceContext(
+      dto.clusterId,
+      dto.namespace,
+    );
+
+    const mergedClusterContext = dto.clusterContext
+      ? `${liveContext}\n- Additional Client Context: ${dto.clusterContext}`
+      : liveContext;
+
+    const systemPrompt = `You are a world-class, empathetic Kubernetes Platform Engineering AI Assistant.
+Your mission is to explain Kyverno policy rejection errors and guide developers to successful deployments.
+
+Target Audience & Tone:
+1. For junior developers or users without deep Kubernetes expertise: Explain root causes and terminology using intuitive, plain Korean analogies. Avoid intimidating jargon and provide gentle, step-by-step guidance.
+2. For senior engineers and platform administrators: Provide accurate technical rationale, architectural context, and precise Kubernetes specification details.
+
+CRITICAL INSTRUCTION - HOLISTIC CLUSTER POLICY COMPLIANCE:
+The cluster enforces multiple simultaneous Kyverno policies (see [Cluster Environment & Active Governance Policies Context]).
+When generating "suggestedFixYaml", the corrected manifest MUST satisfy NOT ONLY the specific policy that triggered the rejection, BUT ALSO ALL OTHER ACTIVE CLUSTER POLICIES SIMULTANEOUSLY:
+- Image Tags & Registries: When fixing image tags, always use approved registries (e.g. 'public.ecr.aws/<repo>:<version>' or 'registry.k8s.io/<image>:<version>'). Never use ':latest' and avoid unverified Docker Hub root images.
+- Mandatory Governance Labels: Ensure 'metadata.labels["app.kubernetes.io/name"]' and 'metadata.labels["team"]' (e.g. team: devops) are present.
+- Resource Limits: Ensure container resource limits/requests (e.g. cpu: 100m, memory: 128Mi) are specified if missing.
+- Privileged Containers: For critical violations involving 'securityContext.privileged: true', hostNetwork, or hostPID, do NOT provide suggestedFixYaml (set suggestedFixYaml to null). Explain that arbitrary privilege removal breaks workloads requiring raw kernel/device access, and instruct the developer to submit a PolicyException or re-architect the workload safely.
 
 Output format MUST be a valid JSON object matching the following structure without codeblock wrapper or markdown syntax:
 {
   "summary": "Easy-to-understand explanation of why the deployment was rejected in Korean",
   "resolutionSteps": ["Step 1 explanation in Korean", "Step 2 explanation in Korean", "..."],
-  "suggestedFixYaml": "Valid corrected YAML manifest snippet if applicable",
-  "governanceRationale": "Why this Kyverno policy is enforced in our organization (security/reliability benefits) in Korean"
-}
-
-Guidelines:
-1. Translate technical jargon into plain, intuitive Korean.
-2. Provide concrete, copy-pasteable YAML fixes whenever manifest is provided (e.g. adding missing labels, setting resource requests/limits, fixing image tags).
-3. Be supportive and instructional, avoiding punitive tone.
-4. For critical security violations involving privileged containers (securityContext.privileged: true, hostNetwork, hostPID), do NOT provide suggestedFixYaml (set suggestedFixYaml to null). Explain that arbitrary privilege removal breaks workloads requiring raw kernel/device access, and instruct the developer to submit a PolicyException or re-architect the workload safely.`;
+  "suggestedFixYaml": "Valid corrected YAML manifest snippet if applicable (or null if PolicyException required)",
+  "governanceRationale": "Why this policy and associated cluster governance rules exist (security, cost, cluster stability) in Korean"
+}`;
 
     let feedbackSection = "";
     if (dto.previousAttemptYaml || dto.validationFeedback) {
@@ -91,10 +223,10 @@ ${dto.policyYaml || "N/A"}
 [User Submitted Resource Manifest]
 ${dto.resourceManifest || "N/A"}
 
-[Cluster Environment Context]
-${dto.clusterContext || "N/A"}
+[Cluster Environment & Active Governance Policies Context]
+${mergedClusterContext}
 ${feedbackSection}
-Please analyze the failure above and generate the JSON response.
+Please analyze the rejection with full consideration of the cluster context above and generate the JSON response.
 `;
 
     try {

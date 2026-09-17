@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -15,6 +15,7 @@ import {
   HelpCircle,
   Info,
   Loader2,
+  Server,
   ShieldAlert,
   Sparkles,
   Zap,
@@ -36,6 +37,7 @@ import {
   explainKyvernoError,
   ExplainKyvernoErrorResponse,
 } from "@/lib/ai-agent-api";
+import { type ClusterMetadata, listClusters } from "@/lib/clusters";
 
 // 빠른 테스트를 위한 Enforce 차단 대표 샘플 매니페스트
 const PRESET_SAMPLES = [
@@ -54,10 +56,13 @@ kind: Pod
 metadata:
   name: sample-latest-pod
   namespace: default
+  labels:
+    app.kubernetes.io/name: web-server
+    team: devops
 spec:
   containers:
     - name: web-server
-      image: nginx:latest
+      image: public.ecr.aws/docker/library/nginx:latest
       resources:
         limits:
           cpu: 100m
@@ -79,6 +84,9 @@ kind: Pod
 metadata:
   name: sample-priv-pod
   namespace: default
+  labels:
+    app.kubernetes.io/name: system-tool
+    team: devops
 spec:
   containers:
     - name: system-tool
@@ -133,6 +141,25 @@ export default function EnforceDiagnosticsPage() {
   const [result, setResult] = useState<ExplainKyvernoErrorResponse | null>(
     null,
   );
+  const [clusters, setClusters] = useState<ClusterMetadata[]>([]);
+  const [selectedClusterId, setSelectedClusterId] = useState<string>("");
+
+  useEffect(() => {
+    let mounted = true;
+    listClusters()
+      .then((data) => {
+        if (mounted && Array.isArray(data) && data.length > 0) {
+          setClusters(data);
+          setSelectedClusterId(data[0].id);
+        }
+      })
+      .catch(() => {
+        // 클러스터 목록 로드 실패 시 자동 감지 fallback
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // 샘플 프리셋 적용
   const handleSelectPreset = (preset: (typeof PRESET_SAMPLES)[number]) => {
@@ -156,11 +183,14 @@ export default function EnforceDiagnosticsPage() {
         errorMessage.trim() ||
         "Kyverno admission webhook denied the deployment request (HTTP 403 Forbidden). No PolicyReport was generated because the resource was blocked at admission time.";
 
+      const activeCluster = clusters.find((c) => c.id === selectedClusterId);
       const res = await explainKyvernoError({
         errorMessage: payloadErrorMessage,
         resourceManifest: manifestYaml,
-        clusterContext:
-          "Mode: Enforce, Namespace: user-workspace, AdmissionWebhooks: Enabled",
+        clusterId: selectedClusterId || undefined,
+        clusterContext: activeCluster
+          ? `Selected Cluster: ${activeCluster.displayName} (${activeCluster.id}), Exception Namespace: ${activeCluster.exceptionNamespace}`
+          : "Cluster: Auto-detected (Enforce mode active)",
       });
 
       setResult(res);
@@ -230,6 +260,50 @@ export default function EnforceDiagnosticsPage() {
                   </p>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* 타겟 클러스터 및 거버넌스 컨텍스트 연동 바 */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                <Server className="size-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-800">
+                    진단 대상 클러스터
+                  </span>
+                  <Badge
+                    variant="outline"
+                    className="border-indigo-200 bg-indigo-50/70 text-indigo-700 text-[10px] font-semibold"
+                  >
+                    활성 거버넌스 정책 실시간 연동
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  선택한 클러스터의 활성 Kyverno 정책 목록과 규칙을 Bedrock AI에
+                  함께 주입하여 모든 정책을 동시 통과하는 수정안을 도출합니다.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <select
+                value={selectedClusterId}
+                onChange={(e) => setSelectedClusterId(e.target.value)}
+                className="h-8 rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 text-xs font-medium text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              >
+                {clusters.length === 0 ? (
+                  <option value="">기본 활성 클러스터 (Auto-detect)</option>
+                ) : (
+                  clusters.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.displayName || c.id}
+                    </option>
+                  ))
+                )}
+              </select>
             </div>
           </div>
 

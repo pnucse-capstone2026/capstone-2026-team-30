@@ -76,6 +76,44 @@ describe("SimulationService", () => {
     expect(result.resourceName).toBe("test-compliant-pod");
   });
 
+  it("should prioritize customYaml over default scenario.yaml when customYaml is provided", async () => {
+    mockCoreV1Api.createNamespacedPod.mockResolvedValueOnce({
+      body: { metadata: { name: "custom-fixed-pod" } },
+    });
+
+    const customYaml = `apiVersion: v1
+kind: Pod
+metadata:
+  name: custom-fixed-pod
+  namespace: governance-testbed
+  labels:
+    app.kubernetes.io/name: simulation-test
+    team: devops
+spec:
+  restartPolicy: Never
+  containers:
+    - name: test
+      image: registry.k8s.io/pause:3.10
+`;
+
+    const result = await service.deploySimulation({
+      scenarioId: "disallow-latest-tag",
+      customYaml,
+    });
+
+    expect(result.allowed).toBe(true);
+    expect(result.status).toBe("ALLOWED");
+    expect(result.resourceName).toBe("custom-fixed-pod");
+    expect(mockCoreV1Api.createNamespacedPod).toHaveBeenCalledWith(
+      expect.objectContaining({
+        namespace: "governance-testbed",
+        body: expect.objectContaining({
+          metadata: expect.objectContaining({ name: "custom-fixed-pod" }),
+        }),
+      }),
+    );
+  });
+
   it("should catch admission webhook error and return BLOCKED with details", async () => {
     const webhookError = {
       response: {

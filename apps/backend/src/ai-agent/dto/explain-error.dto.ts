@@ -64,6 +64,29 @@ export class ExplainKyvernoErrorDto {
   resourceManifest?: string;
 
   /**
+   * 진단 대상 클러스터 식별자 (선택, 미지정 시 기본 활성 클러스터 자동 선택)
+   */
+  @ApiPropertyOptional({
+    description:
+      "Target Kubernetes cluster ID to inspect active governance policies",
+    example: "eks-prod-us-east-1",
+  })
+  @IsString()
+  @IsOptional()
+  clusterId?: string;
+
+  /**
+   * 대상 네임스페이스 (선택, 미지정 시 매니페스트 네임스페이스 또는 default)
+   */
+  @ApiPropertyOptional({
+    description: "Target Kubernetes namespace",
+    example: "governance-testbed",
+  })
+  @IsString()
+  @IsOptional()
+  namespace?: string;
+
+  /**
    * 현재 클러스터 상태 및 추가 컨텍스트 (K8s 버전, 네임스페이스 정보 등)
    */
   @ApiPropertyOptional({

@@ -306,6 +306,17 @@ export class K8sLeaderElectorService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Kubernetes MicroTime 스펙(6자리 마이크로초 .000000Z)과 호환되는 Date 객체를 생성합니다.
+   */
+  private toMicroTime(d: Date = new Date()): Date {
+    const iso = d.toISOString().replace(/\.\d+Z$/, ".000000Z");
+    const date = new Date(d);
+    date.toISOString = () => iso;
+    date.toJSON = () => iso;
+    return date;
+  }
+
+  /**
    * 신규 Lease 객체를 생성하여 리더십을 획득합니다.
    */
   private async createNewLease(): Promise<boolean> {
@@ -319,8 +330,8 @@ export class K8sLeaderElectorService implements OnModuleInit, OnModuleDestroy {
       spec: {
         holderIdentity: this.holderIdentity,
         leaseDurationSeconds: this.leaseDurationSeconds,
-        acquireTime: new Date(),
-        renewTime: new Date(),
+        acquireTime: this.toMicroTime(),
+        renewTime: this.toMicroTime(),
         leaseTransitions: 0,
       },
     };
@@ -356,7 +367,7 @@ export class K8sLeaderElectorService implements OnModuleInit, OnModuleDestroy {
       ...existingLease,
       spec: {
         ...existingLease.spec,
-        renewTime: new Date(),
+        renewTime: this.toMicroTime(),
       },
     };
 
@@ -396,8 +407,8 @@ export class K8sLeaderElectorService implements OnModuleInit, OnModuleDestroy {
         ...existingLease.spec,
         holderIdentity: this.holderIdentity,
         leaseDurationSeconds: this.leaseDurationSeconds,
-        acquireTime: new Date(),
-        renewTime: new Date(),
+        acquireTime: this.toMicroTime(),
+        renewTime: this.toMicroTime(),
         leaseTransitions: prevTransitions + 1,
       },
     };
@@ -429,22 +440,29 @@ export class K8sLeaderElectorService implements OnModuleInit, OnModuleDestroy {
    */
   private async readLease(): Promise<V1Lease> {
     if (!this.api) throw new Error("CoordinationV1Api is null");
-    // @kubernetes/client-node 1.4+ 객체 파라미터 및 구버전 mock 시그니처 호환
+    // @kubernetes/client-node 1.4+ 객체 파라미터 우선 시도 후 구버전 mock 시그니처 호환
     const legacyApi = this.api as unknown as {
       readNamespacedLease: (...args: unknown[]) => Promise<unknown>;
     };
-    const res =
-      this.api.readNamespacedLease.length >= 2
-        ? await legacyApi.readNamespacedLease(
-            this.leaseName,
-            this.leaseNamespace,
-          )
-        : await this.api.readNamespacedLease({
-            name: this.leaseName,
-            namespace: this.leaseNamespace,
-          });
-
-    return this.unwrapResponse<V1Lease>(res);
+    try {
+      const res = await this.api.readNamespacedLease({
+        name: this.leaseName,
+        namespace: this.leaseNamespace,
+      });
+      return this.unwrapResponse<V1Lease>(res);
+    } catch (err) {
+      if (
+        err instanceof TypeError ||
+        (err instanceof Error && err.message.includes("is not a function"))
+      ) {
+        const res = await legacyApi.readNamespacedLease(
+          this.leaseName,
+          this.leaseNamespace,
+        );
+        return this.unwrapResponse<V1Lease>(res);
+      }
+      throw err;
+    }
   }
 
   /**
@@ -455,15 +473,25 @@ export class K8sLeaderElectorService implements OnModuleInit, OnModuleDestroy {
     const legacyApi = this.api as unknown as {
       createNamespacedLease: (...args: unknown[]) => Promise<unknown>;
     };
-    const res =
-      this.api.createNamespacedLease.length >= 2
-        ? await legacyApi.createNamespacedLease(this.leaseNamespace, body)
-        : await this.api.createNamespacedLease({
-            namespace: this.leaseNamespace,
-            body,
-          });
-
-    return this.unwrapResponse<V1Lease>(res);
+    try {
+      const res = await this.api.createNamespacedLease({
+        namespace: this.leaseNamespace,
+        body,
+      });
+      return this.unwrapResponse<V1Lease>(res);
+    } catch (err) {
+      if (
+        err instanceof TypeError ||
+        (err instanceof Error && err.message.includes("is not a function"))
+      ) {
+        const res = await legacyApi.createNamespacedLease(
+          this.leaseNamespace,
+          body,
+        );
+        return this.unwrapResponse<V1Lease>(res);
+      }
+      throw err;
+    }
   }
 
   /**
@@ -474,20 +502,27 @@ export class K8sLeaderElectorService implements OnModuleInit, OnModuleDestroy {
     const legacyApi = this.api as unknown as {
       replaceNamespacedLease: (...args: unknown[]) => Promise<unknown>;
     };
-    const res =
-      this.api.replaceNamespacedLease.length >= 3
-        ? await legacyApi.replaceNamespacedLease(
-            this.leaseName,
-            this.leaseNamespace,
-            body,
-          )
-        : await this.api.replaceNamespacedLease({
-            name: this.leaseName,
-            namespace: this.leaseNamespace,
-            body,
-          });
-
-    return this.unwrapResponse<V1Lease>(res);
+    try {
+      const res = await this.api.replaceNamespacedLease({
+        name: this.leaseName,
+        namespace: this.leaseNamespace,
+        body,
+      });
+      return this.unwrapResponse<V1Lease>(res);
+    } catch (err) {
+      if (
+        err instanceof TypeError ||
+        (err instanceof Error && err.message.includes("is not a function"))
+      ) {
+        const res = await legacyApi.replaceNamespacedLease(
+          this.leaseName,
+          this.leaseNamespace,
+          body,
+        );
+        return this.unwrapResponse<V1Lease>(res);
+      }
+      throw err;
+    }
   }
 
   /**

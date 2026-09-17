@@ -54,7 +54,8 @@ metadata:
   name: test-tag-violation-latest
   namespace: governance-testbed
   labels:
-    app: simulation-test
+    app.kubernetes.io/name: simulation-test
+    team: devops
 spec:
   restartPolicy: Never
   containers:
@@ -82,7 +83,8 @@ metadata:
   name: test-priv-violation-pod
   namespace: governance-testbed
   labels:
-    app: simulation-test
+    app.kubernetes.io/name: simulation-test
+    team: devops
 spec:
   restartPolicy: Never
   containers:
@@ -112,7 +114,8 @@ metadata:
   name: test-missing-limits-pod
   namespace: governance-testbed
   labels:
-    app: simulation-test
+    app.kubernetes.io/name: simulation-test
+    team: devops
 spec:
   restartPolicy: Never
   containers:
@@ -136,7 +139,8 @@ metadata:
   name: test-compliant-pod
   namespace: governance-testbed
   labels:
-    app: simulation-test
+    app.kubernetes.io/name: simulation-test
+    team: devops
 spec:
   restartPolicy: Never
   containers:
@@ -205,7 +209,8 @@ spec:
       if (!scenario) {
         throw new BusinessException(SIMULATION_ERROR.SCENARIO_NOT_FOUND);
       }
-      yamlString = scenario.yaml;
+      // 사용자가 에디터에서 수정한 customYaml이 전달된 경우 이를 최우선 사용하고, 없을 때만 시나리오 기본 YAML 적용
+      yamlString = dto.customYaml || scenario.yaml;
     }
 
     if (!yamlString) {

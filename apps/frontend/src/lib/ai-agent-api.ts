@@ -5,6 +5,8 @@ export type ExplainKyvernoErrorRequest = {
   policyYaml?: string;
   resourceManifest?: string;
   clusterContext?: string;
+  clusterId?: string;
+  namespace?: string;
 };
 
 export type ExplainKyvernoErrorResponse = {

@@ -7,6 +7,8 @@ import {
 } from "./providers/llm-provider.interface";
 import { KyvernoRuleTemplateEngine } from "./rule-template.engine";
 import { WorkloadEvaluatorService } from "./services/workload-evaluator.service";
+import { ClusterProvider } from "../kubernetes/cluster-provider";
+import { KyvernoAdapter } from "../kubernetes/kyverno.adapter";
 
 describe("AiAgentService", () => {
   let service: AiAgentService;
@@ -96,4 +98,91 @@ describe("AiAgentService", () => {
     expect(result.summary).toContain("latest");
     expect(result.provider).toBe("RULE_ENGINE_FALLBACK");
   }, 10000);
+
+  it("should inject active cluster policies into the LLM prompt when kyvernoAdapter is available", async () => {
+    const mockClusterProvider = {
+      list: jest
+        .fn()
+        .mockReturnValue([
+          { id: "test-cluster", displayName: "Test Cluster", provider: "EKS" },
+        ]),
+    };
+    const mockKyvernoAdapter = {
+      listClusterPolicies: jest.fn().mockResolvedValue([
+        {
+          metadata: { name: "disallow-latest-tag" },
+          spec: {
+            validationFailureAction: "Enforce",
+            rules: [
+              {
+                name: "require-image-tag",
+                validate: { message: "Disallow latest" },
+              },
+            ],
+          },
+        },
+        {
+          metadata: { name: "require-labels" },
+          spec: {
+            validationFailureAction: "Enforce",
+            rules: [
+              {
+                name: "check-team-label",
+                validate: { message: "Team label required" },
+              },
+            ],
+          },
+        },
+      ]),
+    };
+
+    const moduleWithK8s: TestingModule = await Test.createTestingModule({
+      providers: [
+        AiAgentService,
+        KyvernoRuleTemplateEngine,
+        WorkloadEvaluatorService,
+        {
+          provide: LLM_PROVIDER_TOKEN,
+          useValue: mockLlmProvider,
+        },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn().mockReturnValue("15000") },
+        },
+        {
+          provide: ClusterProvider,
+          useValue: mockClusterProvider,
+        },
+        {
+          provide: KyvernoAdapter,
+          useValue: mockKyvernoAdapter,
+        },
+      ],
+    }).compile();
+
+    const customService = moduleWithK8s.get<AiAgentService>(AiAgentService);
+
+    mockLlmProvider.chatCompletion.mockResolvedValue(
+      JSON.stringify({
+        summary: "검사 완료",
+        resolutionSteps: ["조치"],
+        suggestedFixYaml: "test",
+        governanceRationale: "보안",
+      }),
+    );
+
+    await customService.explainKyvernoError({
+      errorMessage: "disallow-latest-tag rule failed",
+      clusterId: "test-cluster",
+    });
+
+    expect(mockLlmProvider.chatCompletion).toHaveBeenCalledWith(
+      expect.stringContaining("HOLISTIC CLUSTER POLICY COMPLIANCE"),
+      expect.stringContaining("Active Kyverno ClusterPolicies in Cluster"),
+    );
+    expect(mockLlmProvider.chatCompletion).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining("disallow-latest-tag [Mode: Enforce]"),
+    );
+  });
 });
