@@ -1,0 +1,27 @@
+# Wave 2: Kyverno Platform 풀스택 코어 (Postgres + Backend + Frontend)
+# 도입 배경: 거버넌스 API, AI Bedrock 자가 수정 에이전트, MLOps 프록시, 웹 대시보드를 일괄 프로비저닝
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: 02-platform-core
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/YeongrimGo/PaC-KyvernoDashboard.git'
+    targetRevision: main
+    path: k8s-manifests/system
+    directory:
+      include: '{namespace.yaml,rbac.yaml,postgres.yaml,backend.yaml,frontend.yaml}'
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: kyverno-platform
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

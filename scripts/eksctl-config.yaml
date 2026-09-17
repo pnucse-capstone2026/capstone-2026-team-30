@@ -12,12 +12,20 @@ iam:
   withOIDC: true
 
 managedNodeGroups:
-  - name: freetier-multi-nodes
-    # max-pods 제약 방지를 위해 충분한 ENI/Pod 수를 지원하는 인스턴스 규격 적용
-    instanceTypes: ["c7i-flex.large", "m7i-flex.large", "t3.medium"]
-    spot: false
+  - name: freetier-spot-nodes
+    # AWS Free Plan 적격 인스턴스 (c7i-flex.large, m7i-flex.large) 및 Spot 결합으로 크레딧 소모 최소화
+    instanceTypes: ["c7i-flex.large", "m7i-flex.large"]
+    spot: true
     desiredCapacity: 2
     minSize: 2
     maxSize: 3
-    # 계정별 사용 가능한 AZ를 eksctl이 자동 선택하도록 하드코딩 제거
     volumeSize: 20
+    volumeType: gp3
+    maxPodsPerNode: 110
+    labels:
+      environment: "test"
+      role: "worker"
+    tags:
+      Environment: "EKS-Test"
+      ManagedBy: "eksctl"
+

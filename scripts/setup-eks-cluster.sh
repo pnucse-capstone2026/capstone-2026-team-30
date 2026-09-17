@@ -62,18 +62,20 @@ else
   if [ "${CLUSTER_NAME}" = "kyverno-eks-lab" ] && [ "${REGION}" = "us-east-1" ] && [ -f "${CONFIG_PATH}" ]; then
     eksctl create cluster -f "${CONFIG_PATH}"
   else
-    # 동적 매개변수 기반 클러스터 생성 (Free Tier 최적화 인스턴스 타입 지정)
+    # 동적 매개변수 기반 클러스터 생성 (Spot 최적화 인스턴스 풀 지정)
     eksctl create cluster \
       --name "${CLUSTER_NAME}" \
       --region "${REGION}" \
       --version "1.32" \
       --with-oidc \
-      --nodegroup-name "nodes" \
-      --instance-types "m7i-flex.large,c7i-flex.large,t3.medium" \
+      --nodegroup-name "freetier-spot-nodes" \
+      --instance-types "c7i-flex.large,m7i-flex.large" \
+      --spot \
       --nodes 2 \
       --nodes-min 2 \
       --nodes-max 3 \
-      --node-volume-size 20
+      --node-volume-size 20 \
+      --node-volume-type gp3
   fi
 fi
 

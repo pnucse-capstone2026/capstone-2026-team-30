@@ -25,7 +25,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: 945125812546.dkr.ecr.us-east-1.amazonaws.com/kyverno-frontend:latest
+          image: 945125812546.dkr.ecr.us-east-1.amazonaws.com/kyverno-frontend:v8-assisted-recovery
           imagePullPolicy: Always
           env:
             - name: NODE_ENV

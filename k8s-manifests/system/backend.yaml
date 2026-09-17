@@ -27,7 +27,7 @@ spec:
       containers:
         - name: backend
           # Kyverno disallow-latest-tag 준수 및 GitOps 버그 픽스 릴리즈 이미지 지정
-          image: 945125812546.dkr.ecr.us-east-1.amazonaws.com/kyverno-backend:v8-gitops-fix
+          image: 945125812546.dkr.ecr.us-east-1.amazonaws.com/kyverno-backend:v9-assisted-recovery
           imagePullPolicy: Always
           # 호스트의 .env 환경변수를 Secret으로 주입받아 GitHub 토큰 및 설정을 동기화
           envFrom:
@@ -66,6 +66,10 @@ spec:
               value: "true"
             - name: GITOPS_MIN_DURATION_HOURS
               value: "24"
+            - name: KUBERNETES_EXCEPTION_NAMESPACE
+              value: "kyverno"
+            - name: KUBERNETES_CLUSTER_ID
+              value: "kyverno-eks-lab"
           ports:
             - containerPort: 3001
           # 인스턴스 자원 고갈 및 OOMKilled 방지를 위한 리소스 상한선 설정

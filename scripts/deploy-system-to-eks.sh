@@ -33,6 +33,14 @@ if [ -f "${ENV_FILE}" ]; then
     --dry-run=client -o yaml | "${KUBECTL}" apply -f -
 fi
 
+echo ">>> 2.8. Synchronizing PostgreSQL schema initialization script..."
+if [ -f "${MANIFESTS_DIR}/postgres-init.sql" ]; then
+  "${KUBECTL}" create configmap postgres-init-sql \
+    --from-file=init.sql="${MANIFESTS_DIR}/postgres-init.sql" \
+    -n kyverno-platform \
+    --dry-run=client -o yaml | "${KUBECTL}" apply -f -
+fi
+
 echo ">>> 3. Deploying PostgreSQL Database..."
 "${KUBECTL}" apply -f "${MANIFESTS_DIR}/postgres.yaml"
 

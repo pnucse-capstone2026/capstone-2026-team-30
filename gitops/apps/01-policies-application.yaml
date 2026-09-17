@@ -1,0 +1,28 @@
+# Wave 1: Kyverno 보안 거버넌스 정책 번들 (ClusterPolicy)
+# 도입 배경: Pod Security Standards 및 MLOps 전용 정책을 선언적으로 클러스터 전체에 적용
+# 기대 효과: 위반 파드 원천 차단(Enforce) 및 시연 시나리오 1/2의 정책 평가 기반 확립
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: 01-governance-policies
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/YeongrimGo/PaC-KyvernoDashboard.git'
+    targetRevision: main
+    path: k8s-manifests/policies
+    directory:
+      recurse: true
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: kyverno
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - SkipDryRunOnMissingResource=true
+      - ServerSideApply=true

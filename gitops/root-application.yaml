@@ -1,0 +1,25 @@
+# Argo CD Root Application (App of Apps Pattern)
+# 대상 클러스터: AWS EKS (us-east-1)
+# 도입 배경: 플랫폼 파운데이션, 정책, 코어 서비스, 테스트베드를 선언적으로 계층 관리하기 위한 최상위 진입점
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kyverno-platform-root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/YeongrimGo/PaC-KyvernoDashboard.git'
+    targetRevision: main
+    path: gitops/apps
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

@@ -63,6 +63,13 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
+          volumeMounts:
+            - name: init-sql-vol
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: init-sql-vol
+          configMap:
+            name: postgres-init-sql
 ---
 # 클러스터 내부 서비스 지정을 위한 ClusterIP Service
 apiVersion: v1
