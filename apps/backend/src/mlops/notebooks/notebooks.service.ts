@@ -264,23 +264,31 @@ export class NotebooksService {
       throw new BusinessException(MLOPS_ERROR.NOTEBOOK_CREATION_FAILED);
     }
 
+    // Kyverno require-labels 정책 준수를 위해 app.kubernetes.io/name 및 team 레이블 주입
+    const governanceLabels = {
+      app: "notebook",
+      "app.kubernetes.io/name": dto.name,
+      team: "devops",
+      "mlops.kyverno.io/hardware-tier": dto.hardwareTier,
+      "mlops.kyverno.io/framework-image": dto.frameworkImage,
+    };
+
     const manifest: KubeflowNotebookManifest = {
       apiVersion: `${KUBEFLOW_GROUP}/${KUBEFLOW_VERSION}`,
       kind: "Notebook",
       metadata: {
         name: dto.name,
         namespace,
-        labels: {
-          app: "notebook",
-          "mlops.kyverno.io/hardware-tier": dto.hardwareTier,
-          "mlops.kyverno.io/framework-image": dto.frameworkImage,
-        },
+        labels: governanceLabels,
         annotations: {
           "notebooks.kubeflow.org/http-rewrite-uri": "/",
         },
       },
       spec: {
         template: {
+          metadata: {
+            labels: governanceLabels,
+          },
           spec: {
             containers: [
               {

@@ -66,10 +66,10 @@ describe("ClustersController", () => {
     return { id: "u", email: "u@example.com", role, clusterIds };
   }
 
-  it("returns nothing to an admin with no assignment", () => {
+  it("returns all clusters to an admin regardless of explicit assignment", () => {
     const { controller, clusters } = controllerWith();
 
-    expect(controller.list(user(Role.ADMIN, []))).toEqual([]);
+    expect(controller.list(user(Role.ADMIN, []))).toEqual(metadata);
     expect(clusters.list).toHaveBeenCalledTimes(1);
   });
 

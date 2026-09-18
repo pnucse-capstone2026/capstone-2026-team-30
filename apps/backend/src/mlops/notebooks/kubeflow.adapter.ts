@@ -31,6 +31,10 @@ export type KubeflowNotebookManifest = {
   };
   spec: {
     template: {
+      metadata?: {
+        labels?: Record<string, string>;
+        annotations?: Record<string, string>;
+      };
       spec: {
         containers: Array<{
           name: string;

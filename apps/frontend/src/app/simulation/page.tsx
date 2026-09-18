@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/lib/auth-store";
+import { useDataStore } from "@/lib/data-store";
 import {
   cleanupSimulationResources,
   deploySimulation,
@@ -51,6 +52,26 @@ import {
 export default function PolicySimulationPage() {
   const user = useAuthStore((state) => state.user);
   const router = useRouter();
+  const liveClusters = useDataStore((state) => state.clusters);
+  const fetchClusters = useDataStore((state) => state.fetchClusters);
+  const globalClusterId = useDataStore((state) => state.selectedClusterId);
+  const setGlobalClusterId = useDataStore(
+    (state) => state.setSelectedClusterId,
+  );
+
+  const clusters = liveClusters ?? [];
+  const isUnassignedUser =
+    user?.role !== "ADMIN" &&
+    (!user?.clusterIds ||
+      user.clusterIds.length === 0 ||
+      clusters.length === 0);
+
+  const selectedClusterId = isUnassignedUser
+    ? ""
+    : globalClusterId ||
+      user?.clusterIds?.[0] ||
+      clusters?.[0]?.id ||
+      (user?.role === "ADMIN" ? "default" : "");
 
   const [scenarios, setScenarios] = useState<SimulationScenario[]>([]);
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>(
@@ -67,6 +88,10 @@ export default function PolicySimulationPage() {
   const [lastResult, setLastResult] = useState<SimulationDeployResult | null>(
     null,
   );
+
+  useEffect(() => {
+    void fetchClusters();
+  }, [fetchClusters]);
 
   // 시나리오 목록 조회
   useEffect(() => {
@@ -97,9 +122,13 @@ export default function PolicySimulationPage() {
 
   // 활성 테스트 파드 목록 조회
   const loadActivePods = async () => {
+    if (!selectedClusterId) {
+      setActivePods([]);
+      return;
+    }
     setIsLoadingPods(true);
     try {
-      const pods = await fetchSimulationResources();
+      const pods = await fetchSimulationResources(selectedClusterId);
       setActivePods(pods);
     } catch {
       // 오류 시 빈 목록 유지
@@ -109,8 +138,10 @@ export default function PolicySimulationPage() {
   };
 
   useEffect(() => {
-    void loadActivePods();
-  }, []);
+    if (selectedClusterId) {
+      void loadActivePods();
+    }
+  }, [selectedClusterId]);
 
   // 시나리오 선택 변경 시
   const handleSelectScenario = (scenario: SimulationScenario) => {
@@ -121,6 +152,10 @@ export default function PolicySimulationPage() {
 
   // 시뮬레이션 배포 실행
   const handleDeploy = async () => {
+    if (!selectedClusterId) {
+      toast.error("테스트를 실행할 배정된 클러스터가 없습니다.");
+      return;
+    }
     setIsDeploying(true);
     setLastResult(null);
     try {
@@ -128,6 +163,7 @@ export default function PolicySimulationPage() {
         scenarioId: selectedScenarioId,
         customYaml: manifestYaml,
         namespace: "governance-testbed",
+        clusterId: selectedClusterId,
       });
 
       setLastResult(result);
@@ -147,13 +183,14 @@ export default function PolicySimulationPage() {
 
   // 시뮬레이션 리소스 일괄 정리
   const handleCleanup = async () => {
+    if (!selectedClusterId) return;
     if (
       !confirm("모든 테스트용 시뮬레이션 파드를 클러스터에서 정리하시겠습니까?")
     )
       return;
     setIsCleaning(true);
     try {
-      const res = await cleanupSimulationResources();
+      const res = await cleanupSimulationResources(selectedClusterId);
       toast.success(res.message);
       void loadActivePods();
     } catch (err: any) {
@@ -194,11 +231,39 @@ export default function PolicySimulationPage() {
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-3">
+                {/* 대상 클러스터 선택기 */}
+                <div className="flex items-center gap-2 bg-slate-800/80 border border-slate-700 px-3 py-1.5 rounded-xl text-xs">
+                  <Server className="size-3.5 text-cyan-300" />
+                  <select
+                    value={selectedClusterId}
+                    onChange={(e) => setGlobalClusterId(e.target.value)}
+                    disabled={isUnassignedUser || clusters.length === 0}
+                    className="bg-transparent text-slate-100 text-xs border-none outline-none focus:ring-0 cursor-pointer"
+                  >
+                    {clusters.map((c) => (
+                      <option
+                        key={c.id}
+                        value={c.id}
+                        className="bg-slate-900 text-white"
+                      >
+                        {c.displayName || c.id}
+                      </option>
+                    ))}
+                    {clusters.length === 0 && (
+                      <option value="" className="bg-slate-900 text-white">
+                        {isUnassignedUser ? "클러스터 배정 필요" : "default"}
+                      </option>
+                    )}
+                  </select>
+                </div>
+
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleCleanup}
-                  disabled={isCleaning || activePods.length === 0}
+                  disabled={
+                    isCleaning || activePods.length === 0 || isUnassignedUser
+                  }
                   className="gap-2 border-slate-600 bg-slate-800 text-slate-200 hover:bg-rose-950/50 hover:border-rose-500/60 hover:text-rose-200 shadow-sm"
                 >
                   {isCleaning ? (
@@ -211,6 +276,23 @@ export default function PolicySimulationPage() {
               </div>
             </div>
           </div>
+
+          {/* 배정된 클러스터가 없는 일반 사용자 안내 배너 */}
+          {isUnassignedUser && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/90 p-4 text-amber-900 shadow-sm flex items-start gap-3">
+              <ShieldAlert className="size-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-sm">
+                  배정된 Kubernetes 클러스터가 없습니다
+                </p>
+                <p className="text-xs text-amber-700 mt-0.5">
+                  정책 시뮬레이션 파드를 배포하거나 상태를 확인하려면 클러스터
+                  접근 권한이 필요합니다. 플랫폼 관리자(admin)에게 계정에 대한
+                  클러스터 배정을 요청하세요.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* 메인 영역: 좌측 시나리오 선택 + 우측 실행/결과 */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
@@ -327,7 +409,9 @@ export default function PolicySimulationPage() {
 
                     <Button
                       onClick={handleDeploy}
-                      disabled={isDeploying || !manifestYaml.trim()}
+                      disabled={
+                        isDeploying || !manifestYaml.trim() || isUnassignedUser
+                      }
                       className="gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-medium shadow-sm hover:from-cyan-500 hover:to-blue-500"
                     >
                       {isDeploying ? (

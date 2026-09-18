@@ -26,8 +26,8 @@ spec:
       serviceAccountName: kyverno-backend-sa
       containers:
         - name: backend
-          # Kyverno disallow-latest-tag 준수 및 최신 AI 진단/시뮬레이션 릴리즈 이미지 지정
-          image: 945125812546.dkr.ecr.us-east-1.amazonaws.com/kyverno-backend:ba91e34
+          # Kyverno disallow-latest-tag 준수 및 ECR에 검증된 안정 릴리즈 이미지 지정
+          image: 945125812546.dkr.ecr.us-east-1.amazonaws.com/kyverno-backend:v9-assisted-recovery
           imagePullPolicy: Always
           # 호스트의 .env 환경변수를 Secret으로 주입받아 GitHub 토큰 및 설정을 동기화
           envFrom:

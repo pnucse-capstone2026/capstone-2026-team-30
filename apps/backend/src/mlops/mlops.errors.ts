@@ -22,7 +22,7 @@ export const MLOPS_ERROR = {
   CLUSTER_ACCESS_DENIED: {
     code: "MLOPS_CLUSTER_ACCESS_DENIED",
     message:
-      "User does not have access to the specified cluster for MLOps resources.",
+      "User does not have access to the specified cluster. Please contact the administrator to request cluster assignment.",
   },
   INVALID_PRESET: {
     code: "MLOPS_INVALID_PRESET",

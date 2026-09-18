@@ -76,7 +76,7 @@ function getEffectiveClusterId(clusterId?: string): string {
   if (storeCluster && storeCluster !== "default") return storeCluster;
   const list = useDataStore.getState().clusters;
   if (list && list.length > 0) return list[0].id;
-  return "k8s-lab";
+  return clusterId && clusterId !== "default" ? clusterId : "";
 }
 
 export function useNotebooks(

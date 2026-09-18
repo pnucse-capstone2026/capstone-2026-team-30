@@ -142,7 +142,28 @@ describe("NotebooksService", () => {
         "new-nb-workspace-pvc",
         10,
       );
-      expect(mockAdapter.createNotebook).toHaveBeenCalled();
+      expect(mockAdapter.createNotebook).toHaveBeenCalledWith(
+        "cluster-1",
+        "default",
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            labels: expect.objectContaining({
+              "app.kubernetes.io/name": "new-nb",
+              team: "devops",
+            }),
+          }),
+          spec: expect.objectContaining({
+            template: expect.objectContaining({
+              metadata: expect.objectContaining({
+                labels: expect.objectContaining({
+                  "app.kubernetes.io/name": "new-nb",
+                  team: "devops",
+                }),
+              }),
+            }),
+          }),
+        }),
+      );
     });
 
     it("should create notebook successfully with CUSTOM hardware tier", async () => {
