@@ -70,10 +70,26 @@ else
   IMAGE_TARGET="${REPO_NAME}:latest"
 fi
 
-# 네임스페이스 및 선행 시스템 리소스(RBAC, PostgreSQL) 존재 보장
+# 네임스페이스 및 선행 시스템 리소스(RBAC, ConfigMap, Secret, PostgreSQL) 존재 보장
 echo ">>> Ensuring 'kyverno-platform' namespace and foundational resources exist..."
 "${KUBECTL}" apply -f "${ROOT_DIR}/k8s-manifests/system/namespace.yaml"
 "${KUBECTL}" apply -f "${ROOT_DIR}/k8s-manifests/system/rbac.yaml"
+
+# 백엔드 환경변수 시크릿 및 PostgreSQL 초기화 SQL 컨피그맵 자동 동기화
+if [ -f "${ROOT_DIR}/apps/backend/.env" ]; then
+  "${KUBECTL}" create secret generic backend-env-secret \
+    --from-env-file="${ROOT_DIR}/apps/backend/.env" \
+    -n kyverno-platform \
+    --dry-run=client -o yaml | "${KUBECTL}" apply -f -
+fi
+
+if [ -f "${ROOT_DIR}/k8s-manifests/system/postgres-init.sql" ]; then
+  "${KUBECTL}" create configmap postgres-init-sql \
+    --from-file=init.sql="${ROOT_DIR}/k8s-manifests/system/postgres-init.sql" \
+    -n kyverno-platform \
+    --dry-run=client -o yaml | "${KUBECTL}" apply -f -
+fi
+
 "${KUBECTL}" apply -f "${ROOT_DIR}/k8s-manifests/system/postgres.yaml"
 
 # PostgreSQL 롤아웃 상태 대기
