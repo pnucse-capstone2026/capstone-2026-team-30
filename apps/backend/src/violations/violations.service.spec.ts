@@ -3,7 +3,11 @@ import { Role } from "@prisma/client";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { BusinessException } from "../common/errors/business.exception";
 import { ClusterProvider } from "../kubernetes/cluster-provider";
-import { KyvernoAdapter } from "../kubernetes/kyverno.adapter";
+import {
+  KyvernoAdapter,
+  generateDeterministicViolationId,
+} from "../kubernetes/kyverno.adapter";
+import { K8sLeaderElectorService } from "../kubernetes/coordination/k8s-leader-elector.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { ViolationSeverityFilter } from "./dto/list-violations-query.dto";
 import { VIOLATION_ERROR } from "./violation.errors";
@@ -13,6 +17,7 @@ describe("ViolationsService", () => {
   let service: ViolationsService;
   let mockClusterProvider: Partial<ClusterProvider>;
   let mockKyvernoAdapter: Partial<KyvernoAdapter>;
+  let mockLeaderElector: Partial<K8sLeaderElectorService>;
   let mockPrismaService: {
     violationHistory: {
       findMany: jest.Mock;
@@ -145,12 +150,17 @@ describe("ViolationsService", () => {
       },
     };
 
+    mockLeaderElector = {
+      isCurrentLeader: jest.fn().mockReturnValue(true),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ViolationsService,
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: ClusterProvider, useValue: mockClusterProvider },
         { provide: KyvernoAdapter, useValue: mockKyvernoAdapter },
+        { provide: K8sLeaderElectorService, useValue: mockLeaderElector },
       ],
     }).compile();
 
@@ -235,12 +245,11 @@ describe("ViolationsService", () => {
 
       expect(result).toHaveLength(2);
       const ids = result.map((v) => v.id);
-      // 두 위반의 ID는 네임스페이스가 포함되어 서로 달라야 한다.
+      // 두 위반의 ID는 네임스페이스가 포함된 불변 필드 기반 결정론적 해시로 생성되어 서로 달라야 한다.
       expect(new Set(ids).size).toBe(2);
-      expect(ids).toContain("cluster-1:pac-final-bench-0905/controlled-load:0");
-      expect(ids).toContain(
-        "cluster-1:pac-report-bench-0905/controlled-load:0",
-      );
+      expect(ids[0]).toMatch(/^viol-[a-f0-9]{16}$/);
+      expect(ids[1]).toMatch(/^viol-[a-f0-9]{16}$/);
+      expect(ids[0]).not.toBe(ids[1]);
     });
   });
 
@@ -342,14 +351,61 @@ describe("ViolationsService", () => {
       expect(detail.policyName).toBe("policy-report");
     });
 
-    it("존재하지 않는 결과 인덱스 조회 시 BusinessException(NOT_FOUND)을 던진다", async () => {
-      await expect(
-        service.getDetail(
-          "cluster-1",
-          "cluster-1:polr-ns-payments:99",
-          mockUser,
-        ),
-      ).rejects.toThrow(new BusinessException(VIOLATION_ERROR.NOT_FOUND));
+    it("결정론적 ID(viol-*)로 라이브 PolicyReport에서 위반 항목을 성공적으로 매칭하여 상세를 반환한다", async () => {
+      const deterministicId = generateDeterministicViolationId(
+        "cluster-1",
+        "disallow-latest-tag",
+        "require-image-tag",
+        "Pod",
+        "payments",
+        "payment-api-pod",
+      );
+
+      const detail = await service.getDetail(
+        "cluster-1",
+        deterministicId,
+        mockUser,
+      );
+
+      expect(detail).toBeDefined();
+      expect(detail.id).toBe(deterministicId);
+      expect(detail.policyName).toBe("disallow-latest-tag");
+      expect(detail.resourceName).toBe("payment-api-pod");
+      expect(detail.namespace).toBe("payments");
+    });
+
+    it("결정론적 ID(viol-*)가 라이브에 없을 때 DB Fallback으로 상세를 반환한다", async () => {
+      const deterministicId = "viol-abcdef1234567890";
+      (
+        mockKyvernoAdapter.listClusterPolicyReports as jest.Mock
+      ).mockResolvedValueOnce([]);
+      (
+        mockKyvernoAdapter.listNamespacedPolicyReports as jest.Mock
+      ).mockResolvedValueOnce([]);
+
+      mockPrismaService.violationHistory.findUnique.mockResolvedValueOnce({
+        id: deterministicId,
+        policyName: "disallow-latest-tag",
+        ruleName: "require-image-tag",
+        targetClusterId: "cluster-1",
+        targetClusterDisplayName: "Cluster One",
+        resourceName: "payment-api-pod",
+        resourceKind: "Pod",
+        namespace: "payments",
+        severity: "high",
+        status: "open",
+        occurredAt: new Date("2026-08-19T05:30:00Z"),
+      });
+
+      const detail = await service.getDetail(
+        "cluster-1",
+        deterministicId,
+        mockUser,
+      );
+
+      expect(detail).toBeDefined();
+      expect(detail.id).toBe(deterministicId);
+      expect(detail.reportName).toBe("db-fallback");
     });
   });
 
@@ -505,6 +561,7 @@ describe("ViolationsService", () => {
 
       expect(mockPrismaService.violationHistory.create).toHaveBeenCalledWith({
         data: {
+          id: "cluster-1:cpolr-cluster:0",
           targetClusterId: "cluster-1",
           targetClusterDisplayName: "Cluster One",
           policyName: "require-ro-rootfs",
@@ -561,6 +618,16 @@ describe("ViolationsService", () => {
           occurredAt: new Date("2026-08-19T06:00:00.000Z"),
         },
       });
+    });
+
+    it("리더십이 없는 경우(isCurrentLeader=false) 동기화를 수행하지 않고 즉시 종료한다", async () => {
+      (mockLeaderElector.isCurrentLeader as jest.Mock).mockReturnValue(false);
+
+      await service.syncLiveViolations();
+
+      expect(mockKyvernoAdapter.getClusterPolicyReports).not.toHaveBeenCalled();
+      expect(mockKyvernoAdapter.getPolicyReports).not.toHaveBeenCalled();
+      expect(mockPrismaService.violationHistory.create).not.toHaveBeenCalled();
     });
 
     it("autogen- 접두사가 붙은 K8s 리포트 규칙에 대해서도 DB의 정규화된 상태를 올바르게 매핑한다", async () => {

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Injectable, Optional } from "@nestjs/common";
 import { ClusterMetadata, ClusterProvider } from "./cluster-provider";
 import {
@@ -22,10 +23,28 @@ const POLICY_REPORT_PLURAL = "policyreports";
 const CLUSTER_POLICY_REPORT_PLURAL = "clusterpolicyreports";
 
 /**
- * 클러스터 범위(네임스페이스 없음) PolicyReport의 위반 ID에 사용하는 센티널.
- * 위반 ID 포맷은 `<clusterId>:<namespace>/<reportName>:<index>` 이다.
+ * 불변 필드 조합을 SHA-256 해시하여 배열 순서 변경에도 Flapping되지 않는 결정론적(Deterministic) Violation ID를 생성합니다.
+ *
+ * @param clusterId 대상 클러스터 식별자
+ * @param policyName 위반 정책 이름
+ * @param ruleName 위반 규칙 이름
+ * @param resourceKind 대상 리소스 종류
+ * @param resourceNamespace 대상 리소스 네임스페이스
+ * @param resourceName 대상 리소스 이름
+ * @returns 'viol-' 접두사를 갖는 불변 해시 식별자
  */
-const CLUSTER_SCOPE_SENTINEL = "cluster";
+export function generateDeterministicViolationId(
+  clusterId: string,
+  policyName: string,
+  ruleName: string,
+  resourceKind: string,
+  resourceNamespace: string,
+  resourceName: string,
+): string {
+  const rawKey = `${clusterId}:${policyName}:${ruleName}:${resourceKind}/${resourceNamespace}/${resourceName}`;
+  const hash = createHash("sha256").update(rawKey).digest("hex").slice(0, 16);
+  return `viol-${hash}`;
+}
 
 export type KubeObject = {
   metadata?: {
@@ -835,7 +854,7 @@ export class KyvernoAdapter {
     const results = (report.results as Array<Record<string, unknown>>) ?? [];
     const violations: ViolationSummaryDto[] = [];
 
-    results.forEach((result, index) => {
+    results.forEach((result) => {
       const outcome = (
         (result.result as string) ||
         (result.status as string) ||
@@ -845,11 +864,6 @@ export class KyvernoAdapter {
       // fail, warn, error 상태의 검사 결과만 정규화 DTO로 변환
       if (outcome === "fail" || outcome === "warn" || outcome === "error") {
         const reportName = (metadata.name as string) ?? "unknown-report";
-        // 서로 다른 네임스페이스에 동일 이름의 PolicyReport가 존재해도 ID가 충돌하지
-        // 않도록 네임스페이스를 포함한다. (클러스터 범위 보고서는 센티널로 대체)
-        const reportNamespace =
-          (metadata.namespace as string) ?? CLUSTER_SCOPE_SENTINEL;
-        const id = `${cluster.id}:${reportNamespace}/${reportName}:${index}`;
         const policyName = (result.policy as string) ?? "unknown-policy";
         const ruleName = (result.rule as string) ?? "unknown-rule";
 
@@ -888,6 +902,16 @@ export class KyvernoAdapter {
           properties["resource.namespace"] ??
           (metadata.namespace as string) ??
           "cluster-wide";
+
+        // 불변 리소스 필드 기반 결정론적(Deterministic) Violation ID 생성
+        const id = generateDeterministicViolationId(
+          cluster.id,
+          policyName,
+          ruleName,
+          resourceKind,
+          namespace,
+          resourceName,
+        );
 
         let severity: "critical" | "high" | "medium" | "low" | "info" =
           "medium";

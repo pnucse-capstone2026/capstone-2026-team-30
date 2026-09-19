@@ -298,9 +298,10 @@ describe("KyvernoAdapter", () => {
 
     expect(violations).toHaveLength(2);
     const ids = violations.map((v) => v.id);
-    // 네임스페이스가 포함되어 동일 이름 보고서 간 ID 충돌이 발생하지 않는다.
+    // 불변 리소스 필드 기반 결정론적 해시로 인해 네임스페이스별 고유 식별자가 생성된다.
     expect(new Set(ids).size).toBe(2);
-    expect(ids).toContain("cluster-1:pac-final-bench-0905/controlled-load:0");
-    expect(ids).toContain("cluster-1:pac-report-bench-0905/controlled-load:0");
+    expect(ids[0]).toMatch(/^viol-[a-f0-9]{16}$/);
+    expect(ids[1]).toMatch(/^viol-[a-f0-9]{16}$/);
+    expect(ids[0]).not.toBe(ids[1]);
   });
 });

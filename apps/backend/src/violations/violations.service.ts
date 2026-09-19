@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, Optional } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { BusinessException } from "../common/errors/business.exception";
@@ -6,7 +6,11 @@ import {
   ClusterMetadata,
   ClusterProvider,
 } from "../kubernetes/cluster-provider";
-import { KyvernoAdapter } from "../kubernetes/kyverno.adapter";
+import {
+  KyvernoAdapter,
+  generateDeterministicViolationId,
+} from "../kubernetes/kyverno.adapter";
+import { K8sLeaderElectorService } from "../kubernetes/coordination/k8s-leader-elector.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { ListViolationsQueryDto } from "./dto/list-violations-query.dto";
 import { UpdateViolationStatusDto } from "./dto/update-violation-status.dto";
@@ -85,6 +89,7 @@ export class ViolationsService {
     private readonly prisma: PrismaService,
     private readonly clusters: ClusterProvider,
     private readonly kyvernoAdapter: KyvernoAdapter,
+    @Optional() private readonly leaderElector?: K8sLeaderElectorService,
   ) {}
 
   /**
@@ -229,6 +234,15 @@ export class ViolationsService {
    * @returns 정책 위반 상세 DTO
    * @throws {BusinessException} 클러스터 미배정(VIOLATION_CLUSTER_ACCESS_DENIED) 또는 위반 미존재(VIOLATION_NOT_FOUND_IN_CLUSTER) 시
    */
+  /**
+   * 특정 정책 위반의 상세 정보 및 Bedrock AI 분석용 메타데이터, 감사 이력을 조회합니다.
+   *
+   * @param clusterId 클러스터 식별자
+   * @param id 위반 고유 식별자 (결정론적 ID: viol-xxxx 또는 레거시 ID)
+   * @param user 인증된 요청자 정보
+   * @returns 정책 위반 상세 DTO
+   * @throws {BusinessException} 클러스터 미배정(VIOLATION_CLUSTER_ACCESS_DENIED) 또는 위반 미존재(VIOLATION_NOT_FOUND_IN_CLUSTER) 시
+   */
   async getDetail(
     clusterId: string,
     id: string,
@@ -236,164 +250,100 @@ export class ViolationsService {
   ): Promise<ViolationDetailDto> {
     const normalizedId = decodeURIComponent(id);
 
-    // 1. ID가 UUID 형식(또는 ':' 미포함)일 경우 DB Fallback (violationHistory) 조회 시도
+    // 1. 불변 해시 기반 결정론적 식별자 (viol-로 시작하는 경우)
+    if (normalizedId.startsWith("viol-")) {
+      const cluster = this.validateClusterAccess(user, clusterId);
+
+      try {
+        const [
+          clusterReports,
+          namespacedReports,
+          exceptionsMap,
+          savedStatusesMap,
+        ] = await Promise.all([
+          this.kyvernoAdapter.listClusterPolicyReports(clusterId),
+          this.kyvernoAdapter.listNamespacedPolicyReports(clusterId),
+          this.getExceptionRequestsMap(),
+          this.getSavedStatusMap(),
+        ]);
+
+        const allReports = [...clusterReports, ...namespacedReports];
+        for (const raw of allReports) {
+          const rep = raw as PolicyReportRaw;
+          const results = rep.results ?? [];
+          for (let index = 0; index < results.length; index++) {
+            const rawResult = results[index];
+            const outcome = rawResult.result?.toLowerCase();
+            if (
+              outcome === "fail" ||
+              outcome === "warn" ||
+              outcome === "error"
+            ) {
+              const summary = this.mapToViolationSummary(
+                rawResult,
+                rep,
+                cluster,
+                index,
+                exceptionsMap,
+                savedStatusesMap,
+              );
+              if (summary.id === normalizedId) {
+                const recommendation =
+                  this.generateDefaultRecommendation(summary);
+                const events = await this.getViolationAuditEvents(
+                  normalizedId,
+                  summary.detectedAt,
+                  summary.message,
+                );
+                return {
+                  ...summary,
+                  recommendation,
+                  resourceSpec:
+                    (rawResult.resources?.[0] as Record<string, unknown>) ?? {},
+                  rawResult,
+                  events,
+                };
+              }
+            }
+          }
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Failed to inspect live policy reports for violation ${normalizedId}`,
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+
+      // 라이브에서 발견되지 않거나 K8s 장애 시 DB Fallback 조회
+      const dbRecord = await this.prisma.violationHistory.findUnique({
+        where: { id: normalizedId },
+      });
+      if (dbRecord) {
+        return this.buildDbFallbackDetail(dbRecord, user, normalizedId);
+      }
+      throw new BusinessException(VIOLATION_ERROR.NOT_FOUND);
+    }
+
+    // 2. 레거시 UUID 형식(또는 ':' 미포함)일 경우 DB Fallback (violationHistory) 조회 시도
     if (!normalizedId.includes(":")) {
       const dbRecord = await this.prisma.violationHistory.findUnique({
         where: { id: normalizedId },
       });
       if (dbRecord) {
-        const cluster = this.validateClusterAccess(
-          user,
-          dbRecord.targetClusterId,
-        );
-        const clusterDisplayName =
-          cluster?.displayName ??
-          dbRecord.targetClusterDisplayName ??
-          dbRecord.targetClusterId;
-
-        let resourceKind = dbRecord.resourceKind ?? "Unknown";
-        let resourceName = dbRecord.resourceName ?? "Unknown";
-        let message = dbRecord.message;
-        let resourceSpec: Record<string, unknown> = {};
-        let rawResult: Record<string, unknown> = {};
-
-        // DB에 리소스명이 Unknown인 경우 K8s 라이브 리포트에서 일치하는 실제 리소스 정보 조회 보정
-        if (resourceName === "Unknown" || resourceKind === "Unknown") {
-          try {
-            const liveReports = [
-              ...(await this.kyvernoAdapter.listNamespacedPolicyReports(
-                dbRecord.targetClusterId,
-                dbRecord.namespace !== "cluster-wide"
-                  ? dbRecord.namespace
-                  : undefined,
-              )),
-              ...(await this.kyvernoAdapter.listClusterPolicyReports(
-                dbRecord.targetClusterId,
-              )),
-            ];
-
-            for (const rep of liveReports) {
-              const repRaw = rep as PolicyReportRaw;
-              const matchedResult = repRaw.results?.find(
-                (r) =>
-                  r.policy === dbRecord.policyName &&
-                  (r.rule === dbRecord.ruleName ||
-                    r.rule?.includes(dbRecord.ruleName) ||
-                    dbRecord.ruleName.includes(r.rule ?? "")),
-              );
-              if (matchedResult) {
-                const targetRes = matchedResult.resources?.[0];
-                if (targetRes?.name) resourceName = targetRes.name;
-                if (targetRes?.kind) resourceKind = targetRes.kind;
-                if (matchedResult.message) message = matchedResult.message;
-                rawResult = matchedResult as Record<string, unknown>;
-                resourceSpec = (targetRes as Record<string, unknown>) ?? {};
-                break;
-              }
-            }
-          } catch {
-            // 라이브 보정 실패 시 DB 기본값 유지
-          }
-        }
-
-        if (resourceKind === "Unknown") resourceKind = "Pod";
-        if (resourceName === "Unknown") {
-          const matchKindName = message?.match(
-            /(?:on|in|target|resource)\s+([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)/i,
-          );
-          if (matchKindName) {
-            resourceKind = matchKindName[1];
-            resourceName = matchKindName[2];
-          }
-        }
-
-        const summary: ViolationSummaryDto = {
-          id: dbRecord.id,
-          clusterId: dbRecord.targetClusterId,
-          clusterDisplayName,
-          namespace: dbRecord.namespace ?? "cluster-wide",
-          policyName: dbRecord.policyName,
-          ruleName: dbRecord.ruleName,
-          resourceKind,
-          resourceName,
-          severity:
-            (dbRecord.severity as
-              | "critical"
-              | "high"
-              | "medium"
-              | "low"
-              | "info") ?? "medium",
-          status:
-            (dbRecord.status as "open" | "inReview" | "resolved") ?? "open",
-          message:
-            message ??
-            `[DB Fallback] Policy '${dbRecord.policyName}' rule '${dbRecord.ruleName}' violation recorded in cluster '${clusterDisplayName}'.`,
-          detectedAt: dbRecord.occurredAt.toISOString(),
-          reportName: "db-fallback",
-        };
-        const events = await this.getViolationAuditEvents(
-          normalizedId,
-          summary.detectedAt,
-          summary.message,
-        );
-        return {
-          ...summary,
-          recommendation: this.generateDefaultRecommendation(summary),
-          resourceSpec,
-          rawResult,
-          events,
-        };
+        return this.buildDbFallbackDetail(dbRecord, user, normalizedId);
       }
     }
 
     const cluster = this.validateClusterAccess(user, clusterId);
 
-    // ID 포맷: clusterId:namespace/reportName:index
+    // ID 포맷: clusterId:namespace/reportName:index (레거시 지원)
     const parts = normalizedId.split(":");
     if (parts.length < 3) {
       const dbRecord = await this.prisma.violationHistory.findUnique({
         where: { id: normalizedId },
       });
       if (dbRecord) {
-        this.validateClusterAccess(user, dbRecord.targetClusterId);
-        const clusterDisplayName =
-          dbRecord.targetClusterDisplayName ?? dbRecord.targetClusterId;
-        const summary: ViolationSummaryDto = {
-          id: dbRecord.id,
-          clusterId: dbRecord.targetClusterId,
-          clusterDisplayName,
-          namespace: dbRecord.namespace ?? "cluster-wide",
-          policyName: dbRecord.policyName,
-          ruleName: dbRecord.ruleName,
-          resourceKind: dbRecord.resourceKind ?? "Unknown",
-          resourceName: dbRecord.resourceName ?? "Unknown",
-          severity:
-            (dbRecord.severity as
-              | "critical"
-              | "high"
-              | "medium"
-              | "low"
-              | "info") ?? "medium",
-          status:
-            (dbRecord.status as "open" | "inReview" | "resolved") ?? "open",
-          message:
-            dbRecord.message ??
-            `[DB Fallback] Policy '${dbRecord.policyName}' rule '${dbRecord.ruleName}' violation recorded in cluster '${clusterDisplayName}'.`,
-          detectedAt: dbRecord.occurredAt.toISOString(),
-          reportName: "db-fallback",
-        };
-        const events = await this.getViolationAuditEvents(
-          normalizedId,
-          summary.detectedAt,
-          summary.message,
-        );
-        return {
-          ...summary,
-          recommendation: this.generateDefaultRecommendation(summary),
-          resourceSpec: {},
-          rawResult: {},
-          events,
-        };
+        return this.buildDbFallbackDetail(dbRecord, user, normalizedId);
       }
       throw new BusinessException(VIOLATION_ERROR.NOT_FOUND);
     }
@@ -589,6 +539,134 @@ export class ViolationsService {
       ...currentDetail,
       status: dto.status,
       events: updatedEvents,
+    };
+  }
+
+  /**
+   * K8s 장애 또는 과거 이력 조회 시 PostgreSQL ViolationHistory 레코드를 기반으로 상세 DTO를 구성합니다.
+   * 리소스 정보가 누락(Unknown)된 경우 K8s 라이브 리포트와의 대조를 통해 보정을 시도합니다.
+   *
+   * @param dbRecord DB에 저장된 위반 이력 레코드
+   * @param user 인증된 요청자 정보
+   * @param normalizedId 정규화된 위반 식별자
+   * @returns 보정된 정책 위반 상세 DTO
+   */
+  private async buildDbFallbackDetail(
+    dbRecord: {
+      id: string;
+      targetClusterId: string;
+      targetClusterDisplayName?: string | null;
+      policyName: string;
+      ruleName: string;
+      namespace?: string | null;
+      resourceKind?: string | null;
+      resourceName?: string | null;
+      severity?: string | null;
+      status?: string | null;
+      message?: string | null;
+      occurredAt: Date;
+    },
+    user: AuthenticatedUser,
+    normalizedId: string,
+  ): Promise<ViolationDetailDto> {
+    const cluster = this.validateClusterAccess(user, dbRecord.targetClusterId);
+    const clusterDisplayName =
+      cluster?.displayName ??
+      dbRecord.targetClusterDisplayName ??
+      dbRecord.targetClusterId;
+
+    let resourceKind = dbRecord.resourceKind ?? "Unknown";
+    let resourceName = dbRecord.resourceName ?? "Unknown";
+    let message = dbRecord.message;
+    let resourceSpec: Record<string, unknown> = {};
+    let rawResult: Record<string, unknown> = {};
+
+    // DB에 리소스명이 Unknown인 경우 K8s 라이브 리포트에서 일치하는 실제 리소스 정보 조회 보정
+    if (resourceName === "Unknown" || resourceKind === "Unknown") {
+      try {
+        const liveReports = [
+          ...(await this.kyvernoAdapter.listNamespacedPolicyReports(
+            dbRecord.targetClusterId,
+            dbRecord.namespace && dbRecord.namespace !== "cluster-wide"
+              ? dbRecord.namespace
+              : undefined,
+          )),
+          ...(await this.kyvernoAdapter.listClusterPolicyReports(
+            dbRecord.targetClusterId,
+          )),
+        ];
+
+        for (const rep of liveReports) {
+          const repRaw = rep as PolicyReportRaw;
+          const matchedResult = repRaw.results?.find(
+            (r) =>
+              r.policy === dbRecord.policyName &&
+              (r.rule === dbRecord.ruleName ||
+                r.rule?.includes(dbRecord.ruleName) ||
+                dbRecord.ruleName.includes(r.rule ?? "")),
+          );
+          if (matchedResult) {
+            const targetRes = matchedResult.resources?.[0];
+            if (targetRes?.name) resourceName = targetRes.name;
+            if (targetRes?.kind) resourceKind = targetRes.kind;
+            if (matchedResult.message) message = matchedResult.message;
+            rawResult = matchedResult as Record<string, unknown>;
+            resourceSpec = (targetRes as Record<string, unknown>) ?? {};
+            break;
+          }
+        }
+      } catch {
+        // 라이브 보정 실패 시 DB 기본값 유지
+      }
+    }
+
+    if (resourceKind === "Unknown") resourceKind = "Pod";
+    if (resourceName === "Unknown") {
+      const matchKindName = message?.match(
+        /(?:on|in|target|resource)\s+([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)/i,
+      );
+      if (matchKindName) {
+        resourceKind = matchKindName[1];
+        resourceName = matchKindName[2];
+      }
+    }
+
+    const summary: ViolationSummaryDto = {
+      id: dbRecord.id,
+      clusterId: dbRecord.targetClusterId,
+      clusterDisplayName,
+      namespace: dbRecord.namespace ?? "cluster-wide",
+      policyName: dbRecord.policyName,
+      ruleName: dbRecord.ruleName,
+      resourceKind,
+      resourceName,
+      severity:
+        (dbRecord.severity as
+          | "critical"
+          | "high"
+          | "medium"
+          | "low"
+          | "info") ?? "medium",
+      status: (dbRecord.status as "open" | "inReview" | "resolved") ?? "open",
+      message:
+        message ??
+        `[DB Fallback] Policy '${dbRecord.policyName}' rule '${dbRecord.ruleName}' violation recorded in cluster '${clusterDisplayName}'.`,
+      detectedAt: dbRecord.occurredAt.toISOString(),
+      reportName: "db-fallback",
+    };
+
+    const events = await this.getViolationAuditEvents(
+      normalizedId,
+      summary.detectedAt,
+      summary.message,
+    );
+
+    return {
+      ...summary,
+      recommendation: this.generateDefaultRecommendation(summary),
+      resourceSpec,
+      rawResult,
+      events,
     };
   }
 
@@ -801,16 +879,11 @@ export class ViolationsService {
     result: PolicyReportResultRaw,
     report: PolicyReportRaw,
     cluster: ClusterMetadata,
-    index: number,
+    _index?: number,
     exceptionsMap?: Map<string, { id: string; status: string }>,
     savedStatusesMap?: Map<string, "open" | "inReview" | "resolved">,
   ): ViolationSummaryDto {
     const reportName = report.metadata?.name ?? "unknown-report";
-    // 서로 다른 네임스페이스에 동일 이름의 PolicyReport가 존재해도 ID가 충돌하지
-    // 않도록 네임스페이스를 포함한다. (클러스터 범위 보고서는 센티널로 대체)
-    const reportNamespace =
-      report.metadata?.namespace ?? CLUSTER_SCOPE_SENTINEL;
-    const id = `${cluster.id}:${reportNamespace}/${reportName}:${index}`;
     const policyName = result.policy ?? "unknown-policy";
     const ruleName = result.rule ?? "unknown-rule";
 
@@ -853,6 +926,16 @@ export class ViolationsService {
       properties["resource.namespace"] ??
       report.metadata?.namespace ??
       "cluster-wide";
+
+    // 불변 리소스 필드 기반 결정론적(Deterministic) Violation ID 생성
+    const id = generateDeterministicViolationId(
+      cluster.id,
+      policyName,
+      ruleName,
+      resourceKind,
+      namespace,
+      resourceName,
+    );
 
     let severity: "critical" | "high" | "medium" | "low" | "info" = "medium";
     const rawSev = result.severity?.toLowerCase();
@@ -1032,6 +1115,11 @@ export class ViolationsService {
    */
   @Interval(30_000)
   async syncLiveViolations(): Promise<void> {
+    // 다중 인스턴스(HA) 환경에서 리더십을 보유한 Pod만 주기적 동기화 수행
+    if (this.leaderElector && !this.leaderElector.isCurrentLeader()) {
+      return;
+    }
+
     try {
       const clusterReports =
         await this.kyvernoAdapter.getClusterPolicyReports();
@@ -1043,20 +1131,25 @@ export class ViolationsService {
         const isNamedResource =
           violation.resourceName && violation.resourceName !== "Unknown";
 
-        // 동일 위반 항목의 중복 DB 저장을 방지하기 위한 유니크 조건 확인
+        // 결정론적 ID 또는 유니크 리소스 조건을 통해 동일 위반 중복 저장 방지
         const existing = await this.prisma.violationHistory.findFirst({
           where: {
-            targetClusterId: violation.clusterId,
-            policyName: violation.policyName,
-            ruleName: violation.ruleName,
-            ...(isNamedResource
-              ? {
-                  resourceName: violation.resourceName,
-                  namespace: violation.namespace,
-                }
-              : {
-                  occurredAt,
-                }),
+            OR: [
+              { id: violation.id },
+              {
+                targetClusterId: violation.clusterId,
+                policyName: violation.policyName,
+                ruleName: violation.ruleName,
+                ...(isNamedResource
+                  ? {
+                      resourceName: violation.resourceName,
+                      namespace: violation.namespace,
+                    }
+                  : {
+                      occurredAt,
+                    }),
+              },
+            ],
           },
         });
 
@@ -1075,6 +1168,7 @@ export class ViolationsService {
         } else {
           await this.prisma.violationHistory.create({
             data: {
+              id: violation.id,
               targetClusterId: violation.clusterId,
               targetClusterDisplayName: violation.clusterDisplayName,
               policyName: violation.policyName,
