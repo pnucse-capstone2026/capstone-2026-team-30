@@ -1,12 +1,14 @@
-import { Injectable } from "@nestjs/common";
+import { forwardRef, Inject, Injectable, Optional } from "@nestjs/common";
 import * as yaml from "js-yaml";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { BusinessException } from "../common/errors/business.exception";
+import { GitOpsPublisherService } from "../gitops/gitops-publisher.service";
 import {
   ClusterMetadata,
   ClusterProvider,
 } from "../kubernetes/cluster-provider";
 import { KyvernoAdapter } from "../kubernetes/kyverno.adapter";
+import { PrismaService } from "../prisma/prisma.service";
 import { CreatePolicyDto } from "./dto/create-policy.dto";
 import {
   ListPoliciesQueryDto,
@@ -14,6 +16,7 @@ import {
 } from "./dto/list-policies-query.dto";
 import { PolicyDetailDto } from "./dto/policy-detail.dto";
 import { PolicySummaryDto } from "./dto/policy-summary.dto";
+import { UpdatePolicyDto } from "./dto/update-policy.dto";
 import { POLICY_ERROR } from "./policy.errors";
 
 type KubePolicyRaw = {
@@ -54,6 +57,10 @@ export class PoliciesService {
   constructor(
     private readonly clusters: ClusterProvider,
     private readonly kyvernoAdapter: KyvernoAdapter,
+    @Optional() private readonly prisma?: PrismaService,
+    @Optional()
+    @Inject(forwardRef(() => GitOpsPublisherService))
+    private readonly gitOpsPublisher?: GitOpsPublisherService,
   ) {}
 
   /**
@@ -321,6 +328,34 @@ export class PoliciesService {
       });
     }
 
+    // GitOps 퍼블리싱 연동 (백그라운드 비동기 처리)
+    if (this.gitOpsPublisher) {
+      void this.gitOpsPublisher
+        .publishPolicyManifest(manifest, dto.clusterId)
+        .catch(() => {});
+    }
+
+    // 감사 로그 기록
+    if (this.prisma) {
+      void this.prisma.auditLog
+        .create({
+          data: {
+            action: "POLICY_CREATED",
+            entityType: "POLICY",
+            entityId: `${dto.clusterId}:${dto.scope}:${dto.name}`,
+            actorType: "USER",
+            userId: user.id,
+            metadata: {
+              clusterId: dto.clusterId,
+              policyName: dto.name,
+              scope: dto.scope,
+              mode: dto.mode,
+            },
+          },
+        })
+        .catch(() => {});
+    }
+
     const summary = this.mapToSummary(rawPolicy, cluster, dto.scope);
     return {
       ...summary,
@@ -330,6 +365,204 @@ export class PoliciesService {
       autogenRules: [],
       rawJson: rawPolicy,
     };
+  }
+
+  /**
+   * 클러스터의 기존 Kyverno 정책을 수정(교체)합니다.
+   *
+   * @param clusterId 대상 클러스터 식별자
+   * @param name 정책 이름
+   * @param dto 정책 수정 요청 DTO
+   * @param user 인증된 요청자 정보
+   * @param namespace 네임스페이스 (Namespaced Policy인 경우)
+   * @returns 수정된 정책 상세 정보 DTO
+   */
+  async update(
+    clusterId: string,
+    name: string,
+    dto: UpdatePolicyDto,
+    user: AuthenticatedUser,
+    namespace?: string,
+  ): Promise<PolicyDetailDto> {
+    const cluster = this.validateClusterAccess(user, clusterId);
+
+    // 기존 정책 조회
+    const existing = await this.getDetail(clusterId, name, user, namespace);
+    const scope = existing.scope;
+    const targetNamespace = namespace || existing.namespace || undefined;
+
+    let manifest: Record<string, unknown>;
+
+    if (dto.manifest) {
+      manifest = dto.manifest;
+    } else if (dto.rawYaml?.trim()) {
+      try {
+        const parsed = yaml.load(dto.rawYaml.trim()) as Record<string, unknown>;
+        if (!parsed || typeof parsed !== "object") {
+          throw new Error("YAML content is not a valid object");
+        }
+        manifest = parsed;
+      } catch (err) {
+        throw new BusinessException(POLICY_ERROR.INVALID_SPEC, {
+          context: { reason: `Invalid YAML format: ${(err as Error).message}` },
+        });
+      }
+    } else {
+      const existingRaw = (existing.rawJson as Record<string, unknown>) || {};
+      const existingMeta =
+        (existingRaw.metadata as Record<string, unknown>) || {};
+      const existingSpec = (existingRaw.spec as Record<string, unknown>) || {};
+      const existingAnnotations =
+        (existingMeta.annotations as Record<string, string>) || {};
+
+      manifest = {
+        ...existingRaw,
+        metadata: {
+          ...existingMeta,
+          name,
+          ...(targetNamespace ? { namespace: targetNamespace } : {}),
+          annotations: {
+            ...existingAnnotations,
+            ...(dto.description
+              ? { "policies.kyverno.io/description": dto.description }
+              : {}),
+          },
+        },
+        spec: {
+          ...existingSpec,
+          ...(dto.mode
+            ? {
+                validationFailureAction:
+                  dto.mode === "enforce" ? "Enforce" : "Audit",
+              }
+            : {}),
+        },
+      };
+    }
+
+    let rawPolicy: KubePolicyRaw;
+    try {
+      if (scope === "Policy" && targetNamespace) {
+        rawPolicy = (await this.kyvernoAdapter.updateNamespacedPolicy(
+          clusterId,
+          targetNamespace,
+          name,
+          manifest,
+        )) as KubePolicyRaw;
+      } else {
+        rawPolicy = (await this.kyvernoAdapter.updateClusterPolicy(
+          clusterId,
+          name,
+          manifest,
+        )) as KubePolicyRaw;
+      }
+    } catch (error) {
+      throw new BusinessException(POLICY_ERROR.UPDATE_FAILED, {
+        cause: error,
+        context: { clusterId, name },
+      });
+    }
+
+    // GitOps 퍼블리싱 연동
+    if (this.gitOpsPublisher) {
+      void this.gitOpsPublisher
+        .publishPolicyManifest(manifest, clusterId)
+        .catch(() => {});
+    }
+
+    // 감사 로그 기록
+    if (this.prisma) {
+      void this.prisma.auditLog
+        .create({
+          data: {
+            action: "POLICY_UPDATED",
+            entityType: "POLICY",
+            entityId: `${clusterId}:${scope}:${name}`,
+            actorType: "USER",
+            userId: user.id,
+            metadata: {
+              clusterId,
+              policyName: name,
+              scope,
+              mode: dto.mode || existing.mode,
+            },
+          },
+        })
+        .catch(() => {});
+    }
+
+    const summary = this.mapToSummary(rawPolicy, cluster, scope);
+    return {
+      ...summary,
+      spec: (rawPolicy.spec as Record<string, unknown>) ?? {},
+      autogenRules: [],
+      rawJson: rawPolicy,
+    };
+  }
+
+  /**
+   * 클러스터에서 특정 Kyverno 정책을 삭제합니다.
+   *
+   * @param clusterId 대상 클러스터 식별자
+   * @param name 정책 이름
+   * @param user 인증된 요청자 정보
+   * @param namespace 네임스페이스 (Namespaced Policy인 경우)
+   */
+  async delete(
+    clusterId: string,
+    name: string,
+    user: AuthenticatedUser,
+    namespace?: string,
+  ): Promise<{ success: boolean; name: string }> {
+    this.validateClusterAccess(user, clusterId);
+
+    const existing = await this.getDetail(clusterId, name, user, namespace);
+    const scope = existing.scope;
+    const targetNamespace = namespace || existing.namespace || undefined;
+
+    try {
+      if (scope === "Policy" && targetNamespace) {
+        await this.kyvernoAdapter.deleteNamespacedPolicy(
+          clusterId,
+          targetNamespace,
+          name,
+        );
+      } else {
+        await this.kyvernoAdapter.deleteClusterPolicy(clusterId, name);
+      }
+    } catch (error) {
+      throw new BusinessException(POLICY_ERROR.DELETE_FAILED, {
+        cause: error,
+        context: { clusterId, name },
+      });
+    }
+
+    // GitOps 파일 제거 연동
+    if (this.gitOpsPublisher) {
+      void this.gitOpsPublisher.unpublishPolicyManifest(name).catch(() => {});
+    }
+
+    // 감사 로그 기록
+    if (this.prisma) {
+      void this.prisma.auditLog
+        .create({
+          data: {
+            action: "POLICY_DELETED",
+            entityType: "POLICY",
+            entityId: `${clusterId}:${scope}:${name}`,
+            actorType: "USER",
+            userId: user.id,
+            metadata: {
+              clusterId,
+              policyName: name,
+              scope,
+            },
+          },
+        })
+        .catch(() => {});
+    }
+
+    return { success: true, name };
   }
 
   private validateClusterAccess(

@@ -25,4 +25,12 @@ export const POLICY_ERROR = {
     code: "POLICY_CREATE_FAILED",
     message: "Failed to create Kyverno policy in Kubernetes cluster.",
   },
+  UPDATE_FAILED: {
+    code: "POLICY_UPDATE_FAILED",
+    message: "Failed to update Kyverno policy in Kubernetes cluster.",
+  },
+  DELETE_FAILED: {
+    code: "POLICY_DELETE_FAILED",
+    message: "Failed to delete Kyverno policy in Kubernetes cluster.",
+  },
 } as const satisfies Record<string, BusinessErrorDefinition>;

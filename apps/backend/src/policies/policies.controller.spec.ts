@@ -18,6 +18,8 @@ describe("PoliciesController", () => {
     ["list", "policies.read"],
     ["getDetail", "policies.read"],
     ["create", "policies.write"],
+    ["update", "policies.write"],
+    ["delete", "policies.write"],
   ])("declares %s permission as %s", (method, permission) => {
     expect(
       Reflect.getMetadata(
@@ -96,5 +98,62 @@ describe("PoliciesController", () => {
 
     await controller.create(user, dto);
     expect(service.create).toHaveBeenCalledWith(dto, user);
+  });
+
+  it("delegates update call to service", async () => {
+    const service = {
+      update: jest.fn().mockResolvedValue({ name: "require-resource-limits" }),
+    };
+    const controller = new PoliciesController(service as never);
+    const user: AuthenticatedUser = {
+      id: "user-1",
+      email: "user@example.com",
+      role: Role.ADMIN,
+      clusterIds: ["cluster-1"],
+    };
+    const dto = { mode: "enforce" as const };
+
+    await controller.update(
+      "cluster-1",
+      "require-resource-limits",
+      "default",
+      user,
+      dto,
+    );
+    expect(service.update).toHaveBeenCalledWith(
+      "cluster-1",
+      "require-resource-limits",
+      dto,
+      user,
+      "default",
+    );
+  });
+
+  it("delegates delete call to service", async () => {
+    const service = {
+      delete: jest
+        .fn()
+        .mockResolvedValue({ success: true, name: "require-resource-limits" }),
+    };
+    const controller = new PoliciesController(service as never);
+    const user: AuthenticatedUser = {
+      id: "user-1",
+      email: "user@example.com",
+      role: Role.ADMIN,
+      clusterIds: ["cluster-1"],
+    };
+
+    await controller.delete(
+      "cluster-1",
+      "require-resource-limits",
+      "default",
+      user,
+    );
+    expect(service.delete).toHaveBeenCalledWith(
+      "cluster-1",
+      "require-resource-limits",
+      user,
+      "default",
+    );
   });
 });

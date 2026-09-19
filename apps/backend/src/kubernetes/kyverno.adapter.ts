@@ -384,6 +384,106 @@ export class KyvernoAdapter {
   }
 
   /**
+   * 대상 클러스터의 특정 ClusterPolicy를 수정(교체)합니다.
+   *
+   * @param clusterId 대상 클러스터 식별자
+   * @param name ClusterPolicy 정책 이름
+   * @param manifest 수정할 ClusterPolicy K8s 매니페스트 객체
+   * @returns 수정된 ClusterPolicy K8s 리소스 객체
+   */
+  async updateClusterPolicy(
+    clusterId: string,
+    name: string,
+    manifest: Record<string, unknown>,
+  ): Promise<KubeObject> {
+    const connection = this.clusters.get(clusterId);
+    const result = await connection.customObjectsApi.replaceClusterCustomObject(
+      {
+        group: KYVERNO_GROUP,
+        version: POLICY_VERSION,
+        plural: POLICY_PLURAL,
+        name,
+        body: manifest,
+      },
+    );
+    return result as KubeObject;
+  }
+
+  /**
+   * 대상 클러스터에서 특정 ClusterPolicy를 삭제합니다.
+   *
+   * @param clusterId 대상 클러스터 식별자
+   * @param name 삭제할 ClusterPolicy 정책 이름
+   */
+  async deleteClusterPolicy(clusterId: string, name: string): Promise<void> {
+    const connection = this.clusters.get(clusterId);
+    try {
+      await connection.customObjectsApi.deleteClusterCustomObject({
+        group: KYVERNO_GROUP,
+        version: POLICY_VERSION,
+        plural: POLICY_PLURAL,
+        name,
+      });
+    } catch (error) {
+      if (statusCode(error) !== 404) throw error;
+    }
+  }
+
+  /**
+   * 대상 클러스터의 특정 네임스페이스 Policy를 수정(교체)합니다.
+   *
+   * @param clusterId 대상 클러스터 식별자
+   * @param namespace 네임스페이스
+   * @param name Policy 정책 이름
+   * @param manifest 수정할 Policy K8s 매니페스트 객체
+   * @returns 수정된 Policy K8s 리소스 객체
+   */
+  async updateNamespacedPolicy(
+    clusterId: string,
+    namespace: string,
+    name: string,
+    manifest: Record<string, unknown>,
+  ): Promise<KubeObject> {
+    const connection = this.clusters.get(clusterId);
+    const result =
+      await connection.customObjectsApi.replaceNamespacedCustomObject({
+        group: KYVERNO_GROUP,
+        version: POLICY_VERSION,
+        namespace,
+        plural: "policies",
+        name,
+        body: manifest,
+      });
+    return result as KubeObject;
+  }
+
+  /**
+   * 대상 클러스터의 특정 네임스페이스 Policy를 삭제합니다.
+   *
+   * @param clusterId 대상 클러스터 식별자
+   * @param namespace 네임스페이스
+   * @param name 삭제할 Policy 정책 이름
+   */
+  async deleteNamespacedPolicy(
+    clusterId: string,
+    namespace: string,
+    name: string,
+  ): Promise<void> {
+    const connection = this.clusters.get(clusterId);
+    try {
+      await connection.customObjectsApi.deleteNamespacedCustomObject({
+        group: KYVERNO_GROUP,
+        version: POLICY_VERSION,
+        namespace,
+        plural: "policies",
+        name,
+      });
+    } catch (error) {
+      if (statusCode(error) !== 404) throw error;
+    }
+  }
+
+  /**
    * 대상 클러스터의 모든 ClusterPolicy(클러스터 전체 범위 정책) 목록을 조회합니다.
    *
    * @param clusterId 조회 대상 클러스터 식별자
