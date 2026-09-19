@@ -9,6 +9,9 @@ import { ConfigService } from "@nestjs/config";
 import { ExceptionStatus, PolicyExceptionRequest } from "@prisma/client";
 import { KubernetesObject } from "@kubernetes/client-node";
 import { createHash } from "node:crypto";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as yaml from "js-yaml";
 import { PrismaService } from "../../prisma/prisma.service";
 import { IncidentsService } from "../../incidents/incidents.service";
 import {
@@ -156,10 +159,23 @@ export class PolicyDriftDetectorService
     eventType: "add" | "update" | "delete",
     obj: KubernetesObject,
   ): Promise<DriftDetectionResult | null> {
-    // 1. PolicyExceptions 리소스의 update/delete 이벤트만 감시
-    if (resourceType !== "policyexceptions") {
-      return null;
+    if (resourceType === "clusterpolicies") {
+      return this.handleClusterPolicyDrift(clusterId, eventType, obj);
     }
+    if (resourceType === "policyexceptions") {
+      return this.handlePolicyExceptionDrift(clusterId, eventType, obj);
+    }
+    return null;
+  }
+
+  /**
+   * Spoke 클러스터에서 수신된 PolicyException 리소스의 변조/삭제 이벤트를 처리합니다.
+   */
+  async handlePolicyExceptionDrift(
+    clusterId: string,
+    eventType: "add" | "update" | "delete",
+    obj: KubernetesObject,
+  ): Promise<DriftDetectionResult | null> {
     if (eventType !== "update" && eventType !== "delete") {
       return null;
     }
@@ -368,5 +384,209 @@ export class PolicyDriftDetectorService
       actualHash,
       autoHealed,
     };
+  }
+
+  /**
+   * Spoke 또는 Hub 클러스터에서 발생한 ClusterPolicy 리소스 변경/삭제 이벤트를 감지하고 GitOps baseline과 대조합니다.
+   *
+   * @param clusterId 클러스터 식별자
+   * @param eventType 이벤트 종류 (add | update | delete)
+   * @param obj Kubernetes 리소스 객체
+   */
+  async handleClusterPolicyDrift(
+    clusterId: string,
+    eventType: "add" | "update" | "delete",
+    obj: KubernetesObject,
+  ): Promise<DriftDetectionResult | null> {
+    if (eventType !== "update" && eventType !== "delete") {
+      return null;
+    }
+
+    const name = obj.metadata?.name;
+    if (!name) return null;
+
+    // GitOps baseline 매니페스트 조회 (k8s-manifests/policies/<name>.yaml 또는 policies-hub-only)
+    const baselineManifest = this.loadGitOpsPolicyManifest(name);
+    if (!baselineManifest) {
+      // GitOps 관리 대상이 아닌 임의의 런타임 정책인 경우 드리프트 감지 생략
+      return null;
+    }
+
+    const expectedSpec = baselineManifest.spec;
+    const expectedHash = computeSpecHash(expectedSpec);
+
+    let isDrift = false;
+    let actualHash: string | null = null;
+
+    if (eventType === "delete") {
+      isDrift = true;
+      actualHash = null;
+    } else if (eventType === "update") {
+      const currentSpec = (obj as { spec?: unknown }).spec;
+      actualHash = computeSpecHash(currentSpec);
+      if (actualHash !== expectedHash) {
+        isDrift = true;
+      }
+    }
+
+    const cooldownKey = `clusterpolicy:${clusterId}:${name}`;
+    const lastHealedAt = this.healingCooldownCache.get(cooldownKey);
+    const now = Date.now();
+
+    if (!isDrift) {
+      if (lastHealedAt) {
+        this.healingCooldownCache.delete(cooldownKey);
+      }
+      return {
+        drifted: false,
+        clusterId,
+        resourceName: name,
+        eventType,
+        expectedHash,
+        actualHash,
+      };
+    }
+
+    // 쿨다운 검사
+    if (lastHealedAt && now - lastHealedAt < this.HEALING_COOLDOWN_MS) {
+      this.logger.warn(
+        `[DriftDetector] Suppression: Self-healing cooldown active for ClusterPolicy ${clusterId}/${name}. Skipping cascade auto-heal.`,
+      );
+      return {
+        drifted: true,
+        clusterId,
+        resourceName: name,
+        eventType,
+        expectedHash,
+        actualHash,
+        autoHealed: false,
+      };
+    }
+
+    // 경고 로그
+    this.logger.warn(
+      `[DriftDetector] Out-of-band mutation detected on ClusterPolicy ${clusterId}/${name} (event: ${eventType}, expected: ${expectedHash.slice(
+        0,
+        8,
+      )}, actual: ${actualHash ? actualHash.slice(0, 8) : "DELETED"})`,
+    );
+
+    // 거버넌스 인시던트 등록 (UNAUTHORIZED_POLICY_MUTATION)
+    const blockReason =
+      eventType === "delete"
+        ? `ClusterPolicy '${name}' was deleted out-of-band on cluster '${clusterId}'. Expected active governance policy.`
+        : `ClusterPolicy '${name}' was mutated out-of-band on cluster '${clusterId}'. Spec SHA-256 hash mismatch (expected: ${expectedHash.slice(
+            0,
+            8,
+          )}, actual: ${actualHash ? actualHash.slice(0, 8) : "UNKNOWN"}).`;
+
+    try {
+      await this.incidentsService.recordAdmissionBlock({
+        clusterId,
+        namespace: "default",
+        resourceKind: "ClusterPolicy",
+        resourceName: name,
+        policyName: name,
+        ruleName: "UNAUTHORIZED_POLICY_MUTATION",
+        blockReason,
+        metadata: {
+          eventType,
+          incidentType: "UNAUTHORIZED_POLICY_MUTATION",
+          expectedHash,
+          actualHash,
+          driftDetectedAt: new Date().toISOString(),
+        },
+      });
+    } catch (incidentErr) {
+      this.logger.error(
+        `[DriftDetector] Failed to record incident for ClusterPolicy ${clusterId}/${name}: ${
+          incidentErr instanceof Error
+            ? incidentErr.message
+            : String(incidentErr)
+        }`,
+      );
+    }
+
+    // Auto-Heal
+    let autoHealed = false;
+    if (this.autoHealEnabled) {
+      this.healingCooldownCache.set(cooldownKey, now);
+      try {
+        this.logger.log(
+          `[DriftDetector] Auto-healing drift for ClusterPolicy '${name}' on cluster '${clusterId}'...`,
+        );
+        if (eventType === "delete") {
+          await this.kyvernoAdapter.createClusterPolicy(
+            clusterId,
+            baselineManifest,
+          );
+        } else {
+          await this.kyvernoAdapter.updateClusterPolicy(
+            clusterId,
+            name,
+            baselineManifest,
+          );
+        }
+        autoHealed = true;
+        this.logger.log(
+          `[DriftDetector] Successfully auto-healed ClusterPolicy '${name}' on cluster '${clusterId}'.`,
+        );
+      } catch (healErr) {
+        this.logger.error(
+          `[DriftDetector] Failed to auto-heal ClusterPolicy '${name}' on cluster '${clusterId}': ${
+            healErr instanceof Error ? healErr.message : String(healErr)
+          }`,
+        );
+      }
+    }
+
+    return {
+      drifted: true,
+      clusterId,
+      resourceName: name,
+      eventType,
+      expectedHash,
+      actualHash,
+      autoHealed,
+    };
+  }
+
+  /**
+   * GitOps 정책 저장소(k8s-manifests/policies 또는 k8s-manifests/policies-hub-only)에서 원본 정책 YAML을 로드합니다.
+   */
+  loadGitOpsPolicyManifest(name: string): Record<string, unknown> | null {
+    const baseCandidates = [
+      path.resolve(process.cwd(), "k8s-manifests"),
+      path.resolve(process.cwd(), "..", "k8s-manifests"),
+      path.resolve(process.cwd(), "..", "..", "k8s-manifests"),
+    ];
+    let baseDir = baseCandidates[0];
+    for (const c of baseCandidates) {
+      if (fs.existsSync(c)) {
+        baseDir = c;
+        break;
+      }
+    }
+
+    const possiblePaths = [
+      path.join(baseDir, "policies", `${name}.yaml`),
+      path.join(baseDir, "policies-hub-only", `${name}.yaml`),
+    ];
+
+    for (const filePath of possiblePaths) {
+      if (fs.existsSync(filePath)) {
+        try {
+          const raw = fs.readFileSync(filePath, "utf8");
+          const loaded = yaml.load(raw) as Record<string, unknown>;
+          if (loaded && typeof loaded === "object") {
+            return loaded;
+          }
+        } catch {
+          // ignore parse failure
+        }
+      }
+    }
+
+    return null;
   }
 }

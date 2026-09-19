@@ -30,6 +30,8 @@ describe("PolicyDriftDetectorService", () => {
   };
   let mockKyvernoAdapter: {
     restorePolicyException: jest.Mock;
+    createClusterPolicy?: jest.Mock;
+    updateClusterPolicy?: jest.Mock;
   };
   let mockConfigService: {
     get: jest.Mock;
@@ -482,6 +484,98 @@ describe("PolicyDriftDetectorService", () => {
       );
 
       expect(result).toBeNull();
+    });
+
+    describe("ClusterPolicy Drift Detection", () => {
+      beforeEach(() => {
+        mockKyvernoAdapter.createClusterPolicy = jest
+          .fn()
+          .mockResolvedValue({});
+        mockKyvernoAdapter.updateClusterPolicy = jest
+          .fn()
+          .mockResolvedValue({});
+      });
+
+      it("detects out-of-band mutation on ClusterPolicy, records incident, and triggers auto-healing", async () => {
+        const baseline = {
+          metadata: { name: "require-labels" },
+          spec: {
+            validationFailureAction: "Enforce",
+            rules: [{ name: "check-labels" }],
+          },
+        };
+        jest
+          .spyOn(service, "loadGitOpsPolicyManifest")
+          .mockReturnValue(baseline);
+
+        const mutatedK8sObj = {
+          metadata: { name: "require-labels" },
+          spec: {
+            validationFailureAction: "Audit",
+            rules: [{ name: "check-labels" }],
+          },
+        };
+
+        const result = await service.handleResourceMutation(
+          sampleClusterId,
+          "clusterpolicies",
+          "update",
+          mutatedK8sObj,
+        );
+
+        expect(result).not.toBeNull();
+        expect(result?.drifted).toBe(true);
+        expect(result?.autoHealed).toBe(true);
+        expect(mockIncidentsService.recordAdmissionBlock).toHaveBeenCalledWith(
+          expect.objectContaining({
+            resourceKind: "ClusterPolicy",
+            resourceName: "require-labels",
+            ruleName: "UNAUTHORIZED_POLICY_MUTATION",
+          }),
+        );
+        expect(mockKyvernoAdapter.updateClusterPolicy).toHaveBeenCalledWith(
+          sampleClusterId,
+          "require-labels",
+          baseline,
+        );
+      });
+
+      it("detects out-of-band deletion on ClusterPolicy, records incident, and restores resource", async () => {
+        const baseline = {
+          metadata: { name: "require-labels" },
+          spec: { validationFailureAction: "Enforce" },
+        };
+        jest
+          .spyOn(service, "loadGitOpsPolicyManifest")
+          .mockReturnValue(baseline);
+
+        const result = await service.handleResourceMutation(
+          sampleClusterId,
+          "clusterpolicies",
+          "delete",
+          { metadata: { name: "require-labels" } },
+        );
+
+        expect(result?.drifted).toBe(true);
+        expect(result?.autoHealed).toBe(true);
+        expect(mockKyvernoAdapter.createClusterPolicy).toHaveBeenCalledWith(
+          sampleClusterId,
+          baseline,
+        );
+      });
+
+      it("ignores unmanaged ClusterPolicy without GitOps baseline", async () => {
+        jest.spyOn(service, "loadGitOpsPolicyManifest").mockReturnValue(null);
+
+        const result = await service.handleResourceMutation(
+          sampleClusterId,
+          "clusterpolicies",
+          "update",
+          { metadata: { name: "unknown-policy" } },
+        );
+
+        expect(result).toBeNull();
+      });
     });
   });
 
