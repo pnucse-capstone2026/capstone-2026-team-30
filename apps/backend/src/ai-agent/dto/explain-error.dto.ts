@@ -1,12 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import {
-  IsEnum,
-  IsInt,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  Min,
-} from "class-validator";
+import { IsEnum, IsInt, IsOptional, IsString, Min } from "class-validator";
+import { KyvernoViolationDetail } from "../../simulation/dto/dry-run-validation.dto";
 
 /**
  * AI 분석 작업 스코프 (단일 리소스 / 다중 정책 / 클러스터 전역)
@@ -30,16 +24,17 @@ export enum AnalysisMode {
  */
 export class ExplainKyvernoErrorDto {
   /**
-   * Kyverno에서 발생한 차단/경고 오류 메시지
+   * Kyverno에서 발생한 차단/경고 오류 메시지 (선택사항, 사전 검증 시 생략 가능)
    */
-  @ApiProperty({
-    description: "Kyverno policy validation error message",
+  @ApiPropertyOptional({
+    description:
+      "Kyverno policy validation error message (optional for pre-deployment checks)",
     example:
       "action: deny, rule check-read-only-root-filesystem failed: rootFS must be read-only",
   })
   @IsString()
-  @IsNotEmpty()
-  errorMessage!: string;
+  @IsOptional()
+  errorMessage?: string;
 
   /**
    * 검증 대상이 된 Kyverno 정책(Policy 또는 ClusterPolicy) YAML 문자열
@@ -177,7 +172,7 @@ export class KyvernoErrorExplanationResultDto {
   @ApiPropertyOptional({
     description: "Suggested manifest YAML snippet with fix applied",
   })
-  suggestedFixYaml?: string;
+  suggestedFixYaml?: string | null;
 
   /**
    * 해당 정책이 요구되는 보안 및 클러스터 거버넌스 배경 설명
@@ -186,6 +181,41 @@ export class KyvernoErrorExplanationResultDto {
     description: "Why this policy exists in the cluster governance model",
   })
   governanceRationale!: string;
+
+  /**
+   * 매니페스트가 클러스터 거버넌스 정책을 완벽히 준수하는지 여부 (위반이 없을 시 true)
+   */
+  @ApiPropertyOptional({
+    description:
+      "Whether the resource manifest is fully compliant with cluster governance policies",
+    example: true,
+  })
+  isCompliant?: boolean;
+
+  /**
+   * 종합 진단 결과 상태 (COMPLIANT: 정상 준수, BLOCKED: 정책 차단, ERROR: 인프라/API 오류)
+   */
+  @ApiPropertyOptional({
+    description: "Diagnostic assessment status (COMPLIANT, BLOCKED, or ERROR)",
+    example: "COMPLIANT",
+  })
+  status?: "COMPLIANT" | "BLOCKED" | "ERROR";
+
+  /**
+   * 통과 및 검증 완료된 거버넌스 규칙/표준 목록
+   */
+  @ApiPropertyOptional({
+    description: "List of passed governance rules or compliance details",
+  })
+  passedRules?: string[];
+
+  /**
+   * 감지된 Kyverno 정책 위반 세부 목록
+   */
+  @ApiPropertyOptional({
+    description: "Detected violation details",
+  })
+  violations?: KyvernoViolationDetail[];
 
   /**
    * 해설 결과를 제공한 프로바이더 (BEDROCK, OPENAI, RULE_ENGINE_FALLBACK 등)

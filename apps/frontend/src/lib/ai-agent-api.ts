@@ -1,7 +1,7 @@
 import { requestWithAuth } from "@/lib/api-client";
 
 export type ExplainKyvernoErrorRequest = {
-  errorMessage: string;
+  errorMessage?: string;
   policyYaml?: string;
   resourceManifest?: string;
   clusterContext?: string;
@@ -14,7 +14,16 @@ export type ExplainKyvernoErrorResponse = {
   governanceRationale: string;
   resolutionSteps: string[];
   suggestedFixYaml: string | null;
-  policySnippet: string | null;
+  policySnippet?: string | null;
+  isCompliant?: boolean;
+  status?: "COMPLIANT" | "BLOCKED" | "ERROR";
+  passedRules?: string[];
+  violations?: Array<{
+    policyName: string;
+    ruleName?: string;
+    reason: string;
+    path?: string;
+  }>;
   provider?: string;
   latencyMs?: number;
 };

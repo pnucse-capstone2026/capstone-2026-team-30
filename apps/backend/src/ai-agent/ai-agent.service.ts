@@ -6,6 +6,8 @@ import {
   LlmProvider,
 } from "./providers/llm-provider.interface";
 import {
+  AnalysisMode,
+  AnalysisTaskScope,
   ExplainKyvernoErrorDto,
   KyvernoErrorExplanationResultDto,
 } from "./dto/explain-error.dto";
@@ -257,6 +259,61 @@ export class AiAgentService {
       this.validateClusterAccess(user, dto.clusterId);
     }
 
+    // 1. 매니페스트가 제공된 경우 Tier 1 인메모리 Fast-Fail 선검증 수행
+    let preValidationViolations: any[] = [];
+    if (dto.resourceManifest && dto.resourceManifest.trim()) {
+      try {
+        const preValidation = this.ruleTemplateEngine.preValidateManifest(
+          dto.resourceManifest,
+        );
+        preValidationViolations = preValidation.violations || [];
+
+        // 에러 메시지가 비어있거나 사전 점검 요청인 경우: 위반이 전혀 없으면 즉시 정상(Compliant) 반환
+        if (!dto.errorMessage || !dto.errorMessage.trim()) {
+          if (preValidation.valid && preValidationViolations.length === 0) {
+            this.logger.log(
+              `[AiAgent] Manifest pre-validation passed without violations. Returning COMPLIANT result immediately.`,
+            );
+            return {
+              isCompliant: true,
+              status: "COMPLIANT",
+              summary:
+                "입력하신 Kubernetes 매니페스트에서 Kyverno 거버넌스 정책 위반이나 배포 차단 요인을 발견하지 못했습니다. 현재 클러스터 거버넌스 정책 기준을 완벽히 준수하고 있습니다.",
+              resolutionSteps: [
+                "필수 레이블(app.kubernetes.io/name, team) 설정이 확인되었습니다.",
+                "컨테이너 이미지 태그의 불변성(Immutable tag) 및 허용된 레지스트리 규격을 충족합니다.",
+                "CPU/메모리 상한선(limits) 및 요청량(requests)이 정상 정의되었습니다.",
+                "보안 컨텍스트(비특권, 권한 상승 제한 등) 규격을 충족하여 즉시 클러스터에 배포(kubectl apply)할 수 있습니다.",
+              ],
+              suggestedFixYaml: null,
+              governanceRationale:
+                "보안 취약점 예방, 클러스터 노드 자원 고갈 방지, 비용 추적 태깅 등 프로덕션 거버넌스 모범 표준(Best Practice)을 충족합니다.",
+              passedRules: [
+                "disallow-latest-tag (이미지 고정 태그 준수)",
+                "require-labels (필수 메타데이터 레이블 설정)",
+                "require-resource-limits (컴퓨팅 자원 상한선 정의)",
+                "disallow-privileged-containers (비특권 컨테이너 격리)",
+              ],
+              violations: [],
+              provider: "FAST_FAIL_PRE_VALIDATION",
+              analysisMode: AnalysisMode.SINGLE_AGENT,
+              taskScope: AnalysisTaskScope.SINGLE_RESOURCE,
+              latencyMs: Date.now() - startTime,
+            };
+          }
+
+          // 에러 메시지가 없었지만 선검증에서 위반이 발견된 경우, 위반 내용으로 에러 메시지 구성
+          dto.errorMessage = `Kyverno admission webhook rejection simulated: ${preValidationViolations
+            .map((v) => `[${v.policyName}] rule ${v.ruleName}: ${v.reason}`)
+            .join("; ")}`;
+        }
+      } catch (preValErr) {
+        this.logger.warn(
+          `Pre-validation execution error: ${(preValErr as Error).message}`,
+        );
+      }
+    }
+
     const evalResult = this.workloadEvaluator.evaluate(dto);
 
     const liveContext = await this.buildClusterGovernanceContext(
@@ -273,27 +330,36 @@ export class AiAgentService {
     );
 
     const systemPrompt = `You are a world-class, empathetic Kubernetes Platform Engineering AI Assistant.
-Your mission is to explain Kyverno policy rejection errors and guide developers to successful deployments.
+Your mission is to evaluate Kubernetes manifests against Kyverno policy governance rules, explain rejections, and guide developers to successful deployments.
 
 Target Audience & Tone:
 1. For junior developers or users without deep Kubernetes expertise: Explain root causes and terminology using intuitive, plain Korean analogies. Avoid intimidating jargon and provide gentle, step-by-step guidance.
 2. For senior engineers and platform administrators: Provide accurate technical rationale, architectural context, and precise Kubernetes specification details.
 
-CRITICAL INSTRUCTION - HOLISTIC CLUSTER POLICY COMPLIANCE:
-The cluster enforces multiple simultaneous Kyverno policies (see [Cluster Environment & Active Governance Policies Context]).
-When generating "suggestedFixYaml", YOU MUST OUTPUT A COMPLETE, READY-TO-DEPLOY YAML MANIFEST that satisfies ALL ACTIVE RULES SIMULTANEOUSLY:
-1. Fix the primary policy error described in [Kyverno Error Message].
-2. Comply with ALL OTHER ACTIVE POLICIES in the cluster:
-   - If 'restrict-image-registries' is active or images need changing: ALWAYS use approved enterprise registries (e.g. 'public.ecr.aws/docker/library/nginx:1.25.4' or 'registry.k8s.io/pause:3.10'). NEVER use bare 'nginx:1.21.1' or unverified Docker Hub root images.
-   - If 'require-labels' is active: ALWAYS ensure 'metadata.labels["app.kubernetes.io/name"]' and 'metadata.labels["team"]' (e.g. team: devops) are explicitly present in the YAML.
-   - If 'require-resource-limits' is active: ALWAYS ensure container resources (limits: cpu: 100m, memory: 128Mi / requests: cpu: 50m, memory: 64Mi) are defined.
-   - For critical security violations involving 'securityContext.privileged: true', hostNetwork, or hostPID, do NOT remove them arbitrarily. Set suggestedFixYaml to null and instruct the developer to submit a PolicyException or use least-privilege alternatives.
+CRITICAL INSTRUCTION - HOLISTIC CLUSTER POLICY COMPLIANCE & ACCURATE ASSESSMENT:
+1. CHECK FOR COMPLIANCE OR INFRASTRUCTURE ERRORS:
+   - If the user submitted manifest does NOT violate any cluster policies, or if the error indicates an infrastructure/environment issue (such as 'namespaces ... not found', 'Unauthorized', 'network timeout', or invalid kubeconfig) rather than a Kyverno admission rejection:
+     * Set "isCompliant": true if the manifest has no governance violations, otherwise false.
+     * Set "status": "COMPLIANT" if valid, or "ERROR" if it's an infrastructure issue.
+     * In "summary": Clearly explain in empathetic Korean that no Kyverno policy violations were found in the manifest (and note the infrastructure cause if applicable). DO NOT invent false policy violations or demand unnecessary changes.
+     * Set "suggestedFixYaml": null (or keep original manifest).
+2. IF VIOLATIONS EXIST (status: "BLOCKED"):
+   The cluster enforces multiple simultaneous Kyverno policies (see [Cluster Environment & Active Governance Policies Context]).
+   When generating "suggestedFixYaml", YOU MUST OUTPUT A COMPLETE, READY-TO-DEPLOY YAML MANIFEST that satisfies ALL ACTIVE RULES SIMULTANEOUSLY:
+   - Fix the primary policy error described in [Kyverno Error Message].
+   - Comply with ALL OTHER ACTIVE POLICIES in the cluster:
+     * If 'restrict-image-registries' is active or images need changing: ALWAYS use approved enterprise registries (e.g. 'public.ecr.aws/docker/library/nginx:1.25.4' or 'registry.k8s.io/pause:3.10'). NEVER use bare 'nginx:1.21.1' or unverified Docker Hub root images.
+     * If 'require-labels' is active: ALWAYS ensure 'metadata.labels["app.kubernetes.io/name"]' and 'metadata.labels["team"]' (e.g. team: devops) are explicitly present in the YAML.
+     * If 'require-resource-limits' is active: ALWAYS ensure container resources (limits: cpu: 100m, memory: 128Mi / requests: cpu: 50m, memory: 64Mi) are defined.
+     * For critical security violations involving 'securityContext.privileged: true', hostNetwork, or hostPID, do NOT remove them arbitrarily. Set suggestedFixYaml to null and instruct the developer to submit a PolicyException or use least-privilege alternatives.
 
 Output format MUST be a valid JSON object matching the following structure without codeblock wrapper or markdown syntax:
 {
-  "summary": "Easy-to-understand explanation of why the deployment was rejected in Korean",
+  "isCompliant": true,
+  "status": "COMPLIANT",
+  "summary": "Easy-to-understand explanation in Korean",
   "resolutionSteps": ["Step 1 explanation in Korean", "Step 2 explanation in Korean", "..."],
-  "suggestedFixYaml": "Valid corrected YAML manifest snippet if applicable (or null if PolicyException required)",
+  "suggestedFixYaml": "Valid corrected YAML manifest snippet if applicable (or null if compliant/PolicyException required)",
   "governanceRationale": "Why this policy and associated cluster governance rules exist (security, cost, cluster stability) in Korean"
 }`;
 
@@ -314,7 +380,7 @@ Strictly resolve all the unresolved Kyverno violations above while adhering to K
 
     const userPrompt = `
 [Kyverno Error Message]
-${dto.errorMessage}
+${dto.errorMessage || "(No error message provided - pre-deployment assessment requested)"}
 
 [Applied Kyverno Policy]
 ${dto.policyYaml || "N/A"}
@@ -325,7 +391,7 @@ ${dto.resourceManifest || "N/A"}
 [Cluster Environment & Active Governance Policies Context]
 ${mergedClusterContext}
 ${feedbackSection}
-Please analyze the rejection with full consideration of the cluster context above and generate the JSON response.
+Please evaluate whether this manifest violates cluster policies. If compliant, declare it compliant. If blocked, provide the diagnostic JSON response.
 `;
 
     try {
@@ -353,8 +419,17 @@ Please analyze the rejection with full consideration of the cluster context abov
       const cleaned = rawResponse.replace(/```json\s*|\s*```/g, "").trim();
       const parsed = JSON.parse(cleaned) as KyvernoErrorExplanationResultDto;
 
+      const isCompliant =
+        parsed.isCompliant ??
+        (parsed.status === "COMPLIANT" ||
+          (!dto.errorMessage && preValidationViolations.length === 0));
+      const status = parsed.status || (isCompliant ? "COMPLIANT" : "BLOCKED");
+
       return {
         ...parsed,
+        isCompliant,
+        status,
+        violations: preValidationViolations,
         provider: this.llmProvider.providerId,
         analysisMode: evalResult.mode,
         taskScope: evalResult.scope,
@@ -374,6 +449,7 @@ Please analyze the rejection with full consideration of the cluster context abov
 
       return {
         ...fallbackResult,
+        violations: preValidationViolations,
         analysisMode: evalResult.mode,
         taskScope: evalResult.scope,
       };

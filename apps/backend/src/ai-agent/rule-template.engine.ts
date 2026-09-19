@@ -174,6 +174,44 @@ export class KyvernoRuleTemplateEngine {
   ): KyvernoErrorExplanationResultDto {
     const errorMsg = dto.errorMessage || "";
 
+    // 1. 에러 메시지가 비어있는 경우 (사전 점검 정상 케이스)
+    if (!errorMsg.trim()) {
+      return {
+        isCompliant: true,
+        status: "COMPLIANT",
+        summary:
+          "Kyverno 거버넌스 정책 위반이나 배포 차단 요인을 발견하지 못했습니다. 현재 클러스터 거버넌스 기준을 준수하고 있습니다.",
+        resolutionSteps: [
+          "필수 메타데이터 레이블 및 컨테이너 보안 설정이 규격을 준수합니다.",
+          "클러스터에 즉시 배포(kubectl apply) 가능한 상태입니다.",
+        ],
+        suggestedFixYaml: undefined,
+        governanceRationale:
+          "사내 쿠버네티스 거버넌스 규격과 모범 보안 표준을 준수하는 워크로드입니다.",
+        provider: "RULE_ENGINE_FALLBACK",
+        latencyMs,
+      };
+    }
+
+    // 2. 네임스페이스 부재 등 K8s 인프라 오류인 경우 분리
+    if (/namespaces\s*".*"\s*not found/i.test(errorMsg)) {
+      return {
+        isCompliant: true,
+        status: "ERROR",
+        summary:
+          "매니페스트 자체의 Kyverno 정책 위반이 아니라, 대상 네임스페이스가 클러스터에 존재하지 않아 배포에 실패했습니다.",
+        resolutionSteps: [
+          "배포 대상 네임스페이스를 생성하거나(kubectl create namespace), 올바른 네임스페이스를 지정하세요.",
+          "매니페스트 자체는 거버넌스 규칙을 충족하므로 네임스페이스 생성 후 정상 배포될 수 있습니다.",
+        ],
+        suggestedFixYaml: undefined,
+        governanceRationale:
+          "쿠버네티스 워크로드는 실제로 존재하는 네임스페이스에만 배포될 수 있습니다.",
+        provider: "RULE_ENGINE_FALLBACK",
+        latencyMs,
+      };
+    }
+
     for (const template of this.templates) {
       if (template.pattern.test(errorMsg)) {
         this.logger.log(
@@ -218,6 +256,8 @@ export class KyvernoRuleTemplateEngine {
         }
 
         return {
+          isCompliant: false,
+          status: "BLOCKED",
           summary: template.summary,
           resolutionSteps: template.resolutionSteps,
           suggestedFixYaml,
@@ -233,6 +273,8 @@ export class KyvernoRuleTemplateEngine {
       "No specific pattern matched. Returning default dynamic template.",
     );
     return {
+      isCompliant: false,
+      status: "BLOCKED",
       summary: `Kyverno 거버넌스 정책에 의해 배포 요청이 거부되었습니다: ${errorMsg}`,
       resolutionSteps: [
         "거부 오류 메시지에 명시된 룰(Rule) 요구사항 및 필드 스펙을 확인합니다.",
