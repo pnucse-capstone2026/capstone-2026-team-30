@@ -46,7 +46,7 @@ import { IncidentsService } from "./incidents.service";
 @ApiTags("Incidents")
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, PermissionsGuard)
-@Controller("api/v1/incidents")
+@Controller(["v1/incidents", "api/v1/incidents", "incidents"])
 export class IncidentsController {
   constructor(
     private readonly incidentsService: IncidentsService,

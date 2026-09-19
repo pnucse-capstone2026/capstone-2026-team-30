@@ -76,11 +76,13 @@ echo ">>> Ensuring 'kyverno-platform' namespace and foundational resources exist
 "${KUBECTL}" apply -f "${ROOT_DIR}/k8s-manifests/system/rbac.yaml"
 
 # 백엔드 환경변수 시크릿 및 PostgreSQL 초기화 SQL 컨피그맵 자동 동기화
+# 기존 멀티클러스터 설정(KUBERNETES_CLUSTERS 등)이 초기화되지 않도록 시크릿이 없을 때만 기본 생성
 if [ -f "${ROOT_DIR}/apps/backend/.env" ]; then
-  "${KUBECTL}" create secret generic backend-env-secret \
-    --from-env-file="${ROOT_DIR}/apps/backend/.env" \
-    -n kyverno-platform \
-    --dry-run=client -o yaml | "${KUBECTL}" apply -f -
+  if ! "${KUBECTL}" get secret backend-env-secret -n kyverno-platform >/dev/null 2>&1; then
+    "${KUBECTL}" create secret generic backend-env-secret \
+      --from-env-file="${ROOT_DIR}/apps/backend/.env" \
+      -n kyverno-platform
+  fi
 fi
 
 if [ -f "${ROOT_DIR}/k8s-manifests/system/postgres-init.sql" ]; then

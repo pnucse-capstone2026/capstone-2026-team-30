@@ -83,7 +83,7 @@ export async function listIncidents(
 
   const queryString = query.toString();
   return requestWithAuth<PaginatedIncidents>(
-    `/api/v1/incidents${queryString ? `?${queryString}` : ""}`,
+    `/v1/incidents${queryString ? `?${queryString}` : ""}`,
   );
 }
 
@@ -91,7 +91,7 @@ export async function listIncidents(
  * 특정 배포 차단 인시던트의 상세 정보를 단일 조회합니다.
  */
 export async function getIncidentById(id: string): Promise<DeploymentIncident> {
-  return requestWithAuth<DeploymentIncident>(`/api/v1/incidents/${id}`);
+  return requestWithAuth<DeploymentIncident>(`/v1/incidents/${id}`);
 }
 
 /**
@@ -101,7 +101,7 @@ export async function getIncidentRemediationDraft(
   id: string,
 ): Promise<RemediationDraft> {
   return requestWithAuth<RemediationDraft>(
-    `/api/v1/incidents/${id}/remediation-draft`,
+    `/v1/incidents/${id}/remediation-draft`,
   );
 }
 
@@ -113,7 +113,7 @@ export async function remediateIncidentEmergency(
   body: EmergencyRemediateInput,
 ): Promise<DeploymentIncident> {
   return requestWithAuth<DeploymentIncident>(
-    `/api/v1/incidents/${id}/remediate-emergency`,
+    `/v1/incidents/${id}/remediate-emergency`,
     {
       method: "POST",
       body,
@@ -129,7 +129,7 @@ export async function resolveIncidentHotfix(
   body: ResolveHotfixInput = {},
 ): Promise<DeploymentIncident> {
   return requestWithAuth<DeploymentIncident>(
-    `/api/v1/incidents/${id}/resolve-hotfix`,
+    `/v1/incidents/${id}/resolve-hotfix`,
     {
       method: "POST",
       body,
@@ -144,7 +144,7 @@ export async function ignoreIncident(
   id: string,
   body: { reason?: string } = {},
 ): Promise<DeploymentIncident> {
-  return requestWithAuth<DeploymentIncident>(`/api/v1/incidents/${id}/ignore`, {
+  return requestWithAuth<DeploymentIncident>(`/v1/incidents/${id}/ignore`, {
     method: "PATCH",
     body,
   });
