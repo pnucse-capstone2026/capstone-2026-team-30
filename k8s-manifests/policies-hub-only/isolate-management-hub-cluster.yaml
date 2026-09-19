@@ -1,0 +1,56 @@
+# Hub 클러스터 전용 제로-트러스트 워크로드 격리 거버넌스 정책
+# [도입 배경] Hub 클러스터는 보안 정책 감사, AI 진단 코파일럿, DB 및 웹 제어면 전용 인프라이므로,
+#             일반 비즈니스 워크로드의 장애나 리소스 경합으로부터 제어면을 물리적으로 완벽히 격리하기 위함
+# [기대 효과] kyverno-platform, kyverno, kube-* 네임스페이스 외의 모든 워크로드 배포를 원천 차단하여
+#             경영진/심사위원 관점에서 엔터프라이즈급 Blast Radius 격리 및 제로-트러스트 모델 달성
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: isolate-management-hub-cluster
+  annotations:
+    policies.kyverno.io/title: Isolate Management Hub Cluster
+    policies.kyverno.io/category: Multi-Cluster Governance & Security
+    policies.kyverno.io/severity: Critical
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Hub 클러스터는 중앙 거버넌스 제어면 전용입니다. 일반 비즈니스 워크로드는
+      Argo CD가 관리하는 Production Spoke 클러스터(kyverno-eks-spoke-01)에 배포되어야 합니다.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: block-non-platform-workloads
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+                - Deployment
+                - StatefulSet
+                - DaemonSet
+                - Job
+                - CronJob
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kube-public
+                - kube-node-lease
+                - kyverno
+                - kyverno-platform
+                - kubeflow
+      validate:
+        message: "❌ [거버넌스 차단] Hub 클러스터(kyverno-eks-lab)는 중앙 관리 제어면 전용입니다. 일반 비즈니스 워크로드는 Argo CD가 관리하는 Production Spoke 클러스터(kyverno-eks-spoke-01)에 배포해야 합니다."
+        deny:
+          conditions:
+            all:
+              - key: "{{ request.namespace }}"
+                operator: AnyNotIn
+                value:
+                  - kube-system
+                  - kube-public
+                  - kube-node-lease
+                  - kyverno
+                  - kyverno-platform
+                  - kubeflow

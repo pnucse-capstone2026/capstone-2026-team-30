@@ -58,7 +58,7 @@ rules:
       - "list"
       - "watch"
 
-  # 네임스페이스 격리 상태 및 위반 파드/서비스/설정 등의 점검, AI 오류 분석 시 메타데이터 참조를 위한 코어 리소스 및 PVC 관리 권한
+  # 네임스페이스 격리 상태, 위반 파드/서비스/설정 점검, 클러스터 노드 지표 및 이벤트 실시간 감시를 위한 코어 리소스 권한
   - apiGroups:
       - ""
     resources:
@@ -67,6 +67,8 @@ rules:
       - "services"
       - "configmaps"
       - "persistentvolumeclaims"
+      - "events"
+      - "nodes"
     verbs:
       - "get"
       - "list"
@@ -75,6 +77,30 @@ rules:
       - "update"
       - "patch"
       - "delete"
+
+  # 분산 백엔드 고가용성(HA) 지원 및 단일 Watcher/Informer 기동을 위한 Kubernetes 리더 선출 Lease 관리 권한
+  - apiGroups:
+      - "coordination.k8s.io"
+    resources:
+      - "leases"
+    verbs:
+      - "get"
+      - "list"
+      - "watch"
+      - "create"
+      - "update"
+      - "patch"
+      - "delete"
+
+  # Argo CD 거버넌스 동기화 상태 감시를 위한 애플리케이션 조회 권한
+  - apiGroups:
+      - "argoproj.io"
+    resources:
+      - "applications"
+    verbs:
+      - "get"
+      - "list"
+      - "watch"
 
   # MLOps Kubeflow Notebook 프로비저닝 및 생명주기 관리를 위한 권한
   - apiGroups:

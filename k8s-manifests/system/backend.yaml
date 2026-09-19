@@ -70,6 +70,13 @@ spec:
               value: "kyverno"
             - name: KUBERNETES_CLUSTER_ID
               value: "kyverno-eks-lab"
+            # 분산 리더 선출용 Lease 네임스페이스 격리 및 Pod 식별자 주입
+            - name: K8S_LEASE_NAMESPACE
+              value: "kyverno-platform"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
           ports:
             - containerPort: 3001
           # 인스턴스 자원 고갈 및 OOMKilled 방지를 위한 리소스 상한선 설정
