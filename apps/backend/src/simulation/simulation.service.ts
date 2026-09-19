@@ -46,7 +46,7 @@ export class SimulationService {
       targetPolicy: "disallow-latest-tag",
       expectedResult: "BLOCKED",
       description:
-        "컨테이너 이미지에 명시적 버전 대신 ':latest' 태그를 사용한 워크로드입니다. Kyverno 어드미션 컨트롤러에 의해 입구 단계에서 즉시 배포가 차단(Denied)됩니다.",
+        "컨테이너 이미지에 불변 태그 대신 ':latest'를 사용한 워크로드입니다. Kyverno 어드미션 컨트롤러(Enforce 모드) 및 Tier 1 Fast-Fail 사전 검증에 의해 파드 생성이 즉시 차단(Denied/Blocked)됩니다.",
       namespace: "governance-testbed",
       yaml: `apiVersion: v1
 kind: Pod
@@ -62,20 +62,28 @@ spec:
     - name: test-container
       image: registry.k8s.io/pause:latest
       resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
         limits:
           cpu: 50m
           memory: 64Mi
+      securityContext:
+        privileged: false
+        allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        runAsUser: 10001
 `,
     },
     {
       id: "disallow-privileged",
-      title: "2. 특권(Privileged) 컨테이너 배포 (감사 위반 검증)",
+      title: "2. 특권(Privileged) 컨테이너 배포 (보안 감사 검증)",
       category: "Pod Security",
       severity: "CRITICAL",
       targetPolicy: "disallow-privileged-containers",
       expectedResult: "AUDIT_VIOLATION",
       description:
-        "securityContext.privileged가 true로 설정된 파드입니다. Audit 모드 정책에 의해 배포는 성공하지만 비동기로 정책 위반 보고서(PolicyReport)가 생성됩니다.",
+        "securityContext.privileged: true가 설정된 고위험 파드입니다. Audit 모드 정책에 의해 입구 단계 배포는 허용되지만, 비동기 PolicyReport에 위반으로 기록되어 보안 감사 관제 대상이 됩니다.",
       namespace: "governance-testbed",
       yaml: `apiVersion: v1
 kind: Pod
@@ -92,7 +100,12 @@ spec:
       image: registry.k8s.io/pause:3.10
       securityContext:
         privileged: true
+        runAsNonRoot: true
+        runAsUser: 10001
       resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
         limits:
           cpu: 50m
           memory: 64Mi
@@ -106,7 +119,7 @@ spec:
       targetPolicy: "require-resource-limits",
       expectedResult: "AUDIT_VIOLATION",
       description:
-        "resources.limits가 정의되지 않아 노드 자원 고갈 위험이 있는 파드입니다. Audit 모드로 배포 후 위반 보고서에 수집됩니다.",
+        "resources(requests/limits) 설정이 누락되어 노드 자원 고갈 위험이 있는 파드입니다. Audit 모드로 배포는 허용되나 위반 보고서에 수집되어 FinOps 및 안정성 거버넌스 개선 대상으로 분류됩니다.",
       namespace: "governance-testbed",
       yaml: `apiVersion: v1
 kind: Pod
@@ -121,6 +134,11 @@ spec:
   containers:
     - name: test-container
       image: registry.k8s.io/pause:3.10
+      securityContext:
+        privileged: false
+        allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        runAsUser: 10001
 `,
     },
     {
@@ -131,7 +149,7 @@ spec:
       targetPolicy: "none",
       expectedResult: "PASSED",
       description:
-        "명시적 태그, 보안 컨텍스트, 자원 한도를 모두 충족하는 모범 규격 파드입니다. 어드미션 통과 및 감사 위반 없이 정상 실행됩니다.",
+        "표준 식별 레이블, 고정 버전 태그, 비특권/Non-Root 보안 컨텍스트, 컴퓨팅 자원 한도를 모두 충족하는 모범 규격 파드입니다. 어드미션 통과 및 감사 위반 없이 정상 실행됩니다.",
       namespace: "governance-testbed",
       yaml: `apiVersion: v1
 kind: Pod
@@ -156,6 +174,8 @@ spec:
       securityContext:
         privileged: false
         allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        runAsUser: 10001
 `,
     },
   ];

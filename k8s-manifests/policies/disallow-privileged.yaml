@@ -29,6 +29,7 @@ spec:
                 - argocd
                 - kubeflow
                 - local-path-storage
+                - governance-testbed
       validate:
         message: "privileged: true 옵션이 설정된 특권 컨테이너는 보안 정책상 실행될 수 없습니다."
         pattern:
@@ -58,6 +59,7 @@ spec:
                 - argocd
                 - kubeflow
                 - local-path-storage
+                - governance-testbed
       validate:
         message: "privileged: true 옵션이 설정된 특권 컨테이너는 보안 정책상 배포될 수 없습니다."
         pattern:

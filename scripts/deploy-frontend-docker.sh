@@ -49,7 +49,7 @@ if [ "${IS_EKS}" = true ]; then
   aws ecr get-login-password --region "${REGION}" | docker login --username AWS --password-stdin "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
 
   # 고유 이미지 태그 발급으로 EKS 노드의 로컬 이미지 캐시 바이패스 보장
-  TAG="$(git -C "${ROOT_DIR}" rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)"
+  TAG="${IMAGE_TAG:-$(git -C "${ROOT_DIR}" rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)}"
   ECR_URI_TAGGED="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/${REPO_NAME}:${TAG}"
 
   echo ">>> Tagging and Pushing image to Amazon ECR (${TAG} & latest)..."

@@ -55,11 +55,28 @@ describe("SimulationService", () => {
     service = module.get<SimulationService>(SimulationService);
   });
 
-  it("should return predefined simulation scenarios", () => {
+  it("should return predefined simulation scenarios with 1 blocked, 2 audit, and 1 passed", () => {
     const scenarios = service.getScenarios();
-    expect(scenarios.length).toBeGreaterThan(0);
-    expect(scenarios.some((s) => s.id === "disallow-latest-tag")).toBe(true);
-    expect(scenarios.some((s) => s.id === "disallow-privileged")).toBe(true);
+    expect(scenarios).toHaveLength(4);
+
+    const blocked = scenarios.filter((s) => s.expectedResult === "BLOCKED");
+    const audit = scenarios.filter(
+      (s) => s.expectedResult === "AUDIT_VIOLATION",
+    );
+    const passed = scenarios.filter((s) => s.expectedResult === "PASSED");
+
+    expect(blocked).toHaveLength(1);
+    expect(audit).toHaveLength(2);
+    expect(passed).toHaveLength(1);
+
+    expect(blocked[0].id).toBe("disallow-latest-tag");
+    expect(audit.map((s) => s.id)).toEqual(
+      expect.arrayContaining([
+        "disallow-privileged",
+        "missing-resource-limits",
+      ]),
+    );
+    expect(passed[0].id).toBe("compliant-workload");
   });
 
   it("should deploy pod and return ALLOWED when K8s API succeeds", async () => {

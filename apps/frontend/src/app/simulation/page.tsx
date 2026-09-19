@@ -25,7 +25,6 @@ import {
   Trash2,
   Wand2,
   XCircle,
-  Zap,
 } from "lucide-react";
 
 import { ProtectedRoute } from "@/components/auth/protected-route";
@@ -56,102 +55,6 @@ import {
   ExplainKyvernoErrorResponse,
 } from "@/lib/ai-agent-api";
 
-// 사전 정의된 자주 발생하는 Enforce 차단 프리셋 샘플
-const ENFORCE_PRESET_SAMPLES = [
-  {
-    id: "preset-latest-tag",
-    title: "최신(:latest) 태그 이미지 사용",
-    category: "Best Practice",
-    policy: "disallow-latest-tag",
-    error: `Error from server (Forbidden): admission webhook "validate.kyverno.svc-fail" denied the request: 
-
-resource Pod/default/sample-latest-pod was blocked due to the following policies 
-
-disallow-latest-tag:
-  disallow-latest-tag: 'validation error: Using a :latest tag is prohibited. A specific image tag or digest must be used. rule disallow-latest-tag failed at path /spec/containers/0/image/'`,
-    yaml: `apiVersion: v1
-kind: Pod
-metadata:
-  name: sample-latest-pod
-  namespace: default
-  labels:
-    app.kubernetes.io/name: web-server
-    team: devops
-spec:
-  restartPolicy: Never
-  containers:
-    - name: web-server
-      image: public.ecr.aws/docker/library/nginx:latest
-      resources:
-        limits:
-          cpu: 100m
-          memory: 128Mi
-`,
-  },
-  {
-    id: "preset-privileged",
-    title: "특권(Privileged) 컨테이너 모드",
-    category: "Pod Security",
-    policy: "disallow-privileged-containers",
-    error: `Error from server (Forbidden): admission webhook "validate.kyverno.svc-fail" denied the request: 
-
-resource Pod/default/sample-priv-pod was blocked due to the following policies 
-
-disallow-privileged-containers:
-  privileged-containers: 'validation error: Privileged mode is not allowed. rule privileged-containers failed at path /spec/containers/0/securityContext/privileged/'`,
-    yaml: `apiVersion: v1
-kind: Pod
-metadata:
-  name: sample-priv-pod
-  namespace: default
-  labels:
-    app.kubernetes.io/name: system-tool
-    team: devops
-spec:
-  restartPolicy: Never
-  containers:
-    - name: system-tool
-      image: registry.k8s.io/pause:3.10
-      securityContext:
-        privileged: true
-      resources:
-        limits:
-          cpu: 50m
-          memory: 64Mi
-`,
-  },
-  {
-    id: "preset-registry",
-    title: "미승인 외부 레지스트리 사용",
-    category: "Supply Chain",
-    policy: "restrict-image-registries",
-    error: `Error from server (Forbidden): admission webhook "validate.kyverno.svc-fail" denied the request: 
-
-resource Pod/default/sample-registry-pod was blocked due to the following policies 
-
-restrict-image-registries:
-  validate-registries: 'validation error: Unknown image registry "docker.io/unverified/app:1.0.0". Only authorized corporate registries are permitted.'`,
-    yaml: `apiVersion: v1
-kind: Pod
-metadata:
-  name: sample-registry-pod
-  namespace: default
-  labels:
-    app.kubernetes.io/name: payment-service
-    team: devops
-spec:
-  restartPolicy: Never
-  containers:
-    - name: unapproved-app
-      image: docker.io/unverified/app:1.0.0
-      resources:
-        limits:
-          cpu: 100m
-          memory: 128Mi
-`,
-  },
-];
-
 export default function PolicySimulationAndDiagnosticsPage() {
   const user = useAuthStore((state) => state.user);
   const router = useRouter();
@@ -180,9 +83,6 @@ export default function PolicySimulationAndDiagnosticsPage() {
   const [scenarios, setScenarios] = useState<SimulationScenario[]>([]);
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>(
     "disallow-latest-tag",
-  );
-  const [activeTab, setActiveTab] = useState<"scenarios" | "presets">(
-    "scenarios",
   );
   const [manifestYaml, setManifestYaml] = useState<string>("");
   const [optionalErrorMsg, setOptionalErrorMsg] = useState<string>("");
@@ -270,19 +170,6 @@ export default function PolicySimulationAndDiagnosticsPage() {
     setOptionalErrorMsg("");
     setDeployResult(null);
     setDiagnosticResult(null);
-  };
-
-  // Enforce 프리셋 선택 핸들러
-  const handleSelectPreset = (
-    preset: (typeof ENFORCE_PRESET_SAMPLES)[number],
-  ) => {
-    setSelectedScenarioId(preset.id);
-    setManifestYaml(preset.yaml);
-    setOptionalErrorMsg(preset.error);
-    setShowErrorInput(true);
-    setDeployResult(null);
-    setDiagnosticResult(null);
-    toast.info(`"${preset.title}" 샘플이 로드되었습니다.`);
   };
 
   // 1. AI 거버넌스 사전 진단 (Fast-Fail & Dry-Run 선검증)
@@ -495,124 +382,65 @@ export default function PolicySimulationAndDiagnosticsPage() {
 
           {/* 메인 2열 그리드: 좌측 시나리오/프리셋 + 우측 편집/실행/결과 */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-            {/* 좌측: 시나리오 및 Enforce 프리셋 탭 (5 cols) */}
+            {/* 좌측: 거버넌스 검증 시나리오 목록 패널 (5 cols) */}
             <div className="space-y-4 lg:col-span-5">
               <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("scenarios")}
-                    className={`text-xs font-bold pb-1 transition-all border-b-2 ${
-                      activeTab === "scenarios"
-                        ? "border-cyan-600 text-cyan-700"
-                        : "border-transparent text-slate-500 hover:text-slate-800"
-                    }`}
-                  >
-                    거버넌스 시나리오 ({scenarios.length})
-                  </button>
-                  <span className="text-slate-300">|</span>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("presets")}
-                    className={`text-xs font-bold pb-1 transition-all border-b-2 ${
-                      activeTab === "presets"
-                        ? "border-indigo-600 text-indigo-700"
-                        : "border-transparent text-slate-500 hover:text-slate-800"
-                    }`}
-                  >
-                    Enforce 차단 예시 ({ENFORCE_PRESET_SAMPLES.length})
-                  </button>
+                  <span className="text-xs font-bold text-slate-800">
+                    거버넌스 검증 시나리오 ({scenarios.length})
+                  </span>
                 </div>
               </div>
 
-              {activeTab === "scenarios" && (
-                <>
-                  {isLoadingScenarios ? (
-                    <div className="space-y-3">
-                      <Skeleton className="h-24 w-full rounded-xl bg-slate-200" />
-                      <Skeleton className="h-24 w-full rounded-xl bg-slate-200" />
-                      <Skeleton className="h-24 w-full rounded-xl bg-slate-200" />
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {scenarios.map((scenario) => {
-                        const isSelected = scenario.id === selectedScenarioId;
-                        return (
-                          <button
-                            key={scenario.id}
-                            type="button"
-                            onClick={() => handleSelectScenario(scenario)}
-                            className={`w-full text-left rounded-xl p-3.5 transition-all shadow-sm ${
-                              isSelected
-                                ? "border-2 border-cyan-600 bg-cyan-50/80 ring-1 ring-cyan-500/20"
-                                : "border border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/70"
-                            }`}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <span className="text-xs font-bold text-slate-900">
-                                {scenario.title}
-                              </span>
-                              <span
-                                className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold border ${
-                                  scenario.expectedResult === "BLOCKED"
-                                    ? "bg-rose-50 text-rose-700 border-rose-200"
-                                    : scenario.expectedResult ===
-                                        "AUDIT_VIOLATION"
-                                      ? "bg-amber-50 text-amber-700 border-amber-200"
-                                      : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                }`}
-                              >
-                                {scenario.expectedResult === "BLOCKED"
-                                  ? "차단 (Enforce)"
-                                  : scenario.expectedResult ===
-                                      "AUDIT_VIOLATION"
-                                    ? "감사 (Audit)"
-                                    : "준수 (Pass)"}
-                              </span>
-                            </div>
-                            <p className="mt-1.5 text-[11px] leading-relaxed text-slate-600">
-                              {scenario.description}
-                            </p>
-                            <div className="mt-2.5 flex items-center gap-2 text-[10px] text-slate-400">
-                              <span>분류: {scenario.category}</span>
-                              <span>•</span>
-                              <span>정책: {scenario.targetPolicy}</span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </>
-              )}
-
-              {activeTab === "presets" && (
+              {isLoadingScenarios ? (
                 <div className="space-y-3">
-                  {ENFORCE_PRESET_SAMPLES.map((preset) => {
-                    const isSelected = preset.id === selectedScenarioId;
+                  <Skeleton className="h-24 w-full rounded-xl bg-slate-200" />
+                  <Skeleton className="h-24 w-full rounded-xl bg-slate-200" />
+                  <Skeleton className="h-24 w-full rounded-xl bg-slate-200" />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {scenarios.map((scenario) => {
+                    const isSelected = scenario.id === selectedScenarioId;
                     return (
                       <button
-                        key={preset.id}
+                        key={scenario.id}
                         type="button"
-                        onClick={() => handleSelectPreset(preset)}
+                        onClick={() => handleSelectScenario(scenario)}
                         className={`w-full text-left rounded-xl p-3.5 transition-all shadow-sm ${
                           isSelected
-                            ? "border-2 border-indigo-600 bg-indigo-50/80 ring-1 ring-indigo-500/20"
+                            ? "border-2 border-cyan-600 bg-cyan-50/80 ring-1 ring-cyan-500/20"
                             : "border border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/70"
                         }`}
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                            <Zap className="size-3.5 text-amber-500 shrink-0" />
-                            {preset.title}
+                          <span className="text-xs font-bold text-slate-900">
+                            {scenario.title}
                           </span>
-                          <span className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold border bg-rose-50 text-rose-700 border-rose-200">
-                            Enforce 위반
+                          <span
+                            className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold border ${
+                              scenario.expectedResult === "BLOCKED"
+                                ? "bg-rose-50 text-rose-700 border-rose-200"
+                                : scenario.expectedResult === "AUDIT_VIOLATION"
+                                  ? "bg-amber-50 text-amber-700 border-amber-200"
+                                  : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            }`}
+                          >
+                            {scenario.expectedResult === "BLOCKED"
+                              ? "차단 (Enforce)"
+                              : scenario.expectedResult === "AUDIT_VIOLATION"
+                                ? "감사 (Audit)"
+                                : "준수 (Pass)"}
                           </span>
                         </div>
-                        <p className="mt-1.5 text-[11px] font-mono text-slate-500 truncate">
-                          정책: {preset.policy}
+                        <p className="mt-1.5 text-[11px] leading-relaxed text-slate-600">
+                          {scenario.description}
                         </p>
+                        <div className="mt-2.5 flex items-center gap-2 text-[10px] text-slate-400">
+                          <span>분류: {scenario.category}</span>
+                          <span>•</span>
+                          <span>정책: {scenario.targetPolicy}</span>
+                        </div>
                       </button>
                     );
                   })}
