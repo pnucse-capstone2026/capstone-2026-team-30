@@ -72,12 +72,32 @@ export default function PolicySimulationAndDiagnosticsPage() {
       user.clusterIds.length === 0 ||
       clusters.length === 0);
 
+  // 워크로드 배포가 허용된 Spoke 클러스터 탐색 (Hub는 제어면 전용으로 일반 배포 차단됨)
+  const preferredSpokeClusterId = useMemo(() => {
+    if (!clusters || clusters.length === 0) return "";
+    const spoke = clusters.find(
+      (c) =>
+        c.id !== "kyverno-eks-lab" &&
+        !c.displayName?.toLowerCase().includes("management only") &&
+        !c.displayName?.toLowerCase().includes("central"),
+    );
+    return spoke ? spoke.id : clusters[0]?.id || "";
+  }, [clusters]);
+
   const selectedClusterId = isUnassignedUser
     ? ""
     : globalClusterId ||
+      preferredSpokeClusterId ||
       user?.clusterIds?.[0] ||
-      clusters?.[0]?.id ||
       (user?.role === "ADMIN" ? "default" : "");
+
+  // 현재 선택된 클러스터가 관리 제어면 전용 Hub 클러스터인지 판별
+  const isHubClusterSelected =
+    selectedClusterId === "kyverno-eks-lab" ||
+    clusters
+      .find((c) => c.id === selectedClusterId)
+      ?.displayName?.toLowerCase()
+      .includes("management only");
 
   // 시뮬레이션 시나리오 및 에디터 상태
   const [scenarios, setScenarios] = useState<SimulationScenario[]>([]);
@@ -207,7 +227,18 @@ export default function PolicySimulationAndDiagnosticsPage() {
 
   // 2. 클러스터 시뮬레이션 배포 실행
   const handleDeploy = async () => {
-    if (!selectedClusterId) {
+    let targetClusterId = selectedClusterId;
+
+    // 관리 제어면 전용 Hub 클러스터가 선택되어 있을 경우 Spoke 클러스터로 자동 라우팅
+    if (isHubClusterSelected && preferredSpokeClusterId) {
+      toast.info(
+        "Hub 클러스터는 제어면 전용이므로 워크로드 실행용 Spoke 클러스터로 전환하여 배포합니다.",
+      );
+      targetClusterId = preferredSpokeClusterId;
+      setGlobalClusterId(preferredSpokeClusterId);
+    }
+
+    if (!targetClusterId) {
       toast.error("테스트를 실행할 배정된 클러스터가 없습니다.");
       return;
     }
@@ -219,7 +250,7 @@ export default function PolicySimulationAndDiagnosticsPage() {
         scenarioId: selectedScenarioId,
         customYaml: manifestYaml,
         namespace: detectedNamespace,
-        clusterId: selectedClusterId,
+        clusterId: targetClusterId,
       });
 
       setDeployResult(result);
@@ -227,7 +258,13 @@ export default function PolicySimulationAndDiagnosticsPage() {
       if (result.status === "ALLOWED") {
         toast.success("파드가 성공적으로 배포되었습니다.");
       } else if (result.status === "BLOCKED") {
-        toast.error("Kyverno 어드미션 정책에 의해 배포가 차단되었습니다.");
+        if (result.policyName === "isolate-management-hub-cluster") {
+          toast.warning(
+            "Hub 제어면 격리 정책에 의해 차단되었습니다. 상단에서 Spoke 클러스터를 선택하세요.",
+          );
+        } else {
+          toast.error("Kyverno 어드미션 정책에 의해 배포가 차단되었습니다.");
+        }
       } else {
         toast.error(result.message || "배포 중 인프라 오류가 발생했습니다.");
       }
@@ -326,15 +363,24 @@ export default function PolicySimulationAndDiagnosticsPage() {
                     disabled={isUnassignedUser || clusters.length === 0}
                     className="bg-transparent text-slate-100 text-xs border-none outline-none focus:ring-0 cursor-pointer"
                   >
-                    {clusters.map((c) => (
-                      <option
-                        key={c.id}
-                        value={c.id}
-                        className="bg-slate-900 text-white"
-                      >
-                        {c.displayName || c.id}
-                      </option>
-                    ))}
+                    {clusters.map((c) => {
+                      const isHub =
+                        c.id === "kyverno-eks-lab" ||
+                        c.displayName
+                          ?.toLowerCase()
+                          .includes("management only");
+                      return (
+                        <option
+                          key={c.id}
+                          value={c.id}
+                          className="bg-slate-900 text-white"
+                        >
+                          {isHub
+                            ? `🛡️ ${c.displayName || c.id} (제어면 전용)`
+                            : `🚀 ${c.displayName || c.id} (배포 권장)`}
+                        </option>
+                      );
+                    })}
                     {clusters.length === 0 && (
                       <option value="" className="bg-slate-900 text-white">
                         {isUnassignedUser ? "클러스터 배정 필요" : "default"}
@@ -362,6 +408,37 @@ export default function PolicySimulationAndDiagnosticsPage() {
               </div>
             </div>
           </div>
+
+          {/* Hub 클러스터 선택 시 거버넌스 격리 안내 배너 */}
+          {isHubClusterSelected && !isUnassignedUser && (
+            <div className="rounded-xl border border-sky-200 bg-sky-50/90 p-4 text-sky-900 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-200">
+              <div className="flex items-start gap-3">
+                <Info className="size-5 text-sky-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-sm">
+                    중앙 관리 Hub 클러스터는 워크로드 배포가 격리되어 있습니다
+                  </p>
+                  <p className="text-xs text-sky-700 mt-0.5 leading-relaxed">
+                    Hub 클러스터(kyverno-eks-lab)는 제로-트러스트 제어면
+                    전용(Management Only)입니다. 거버넌스 정책 시뮬레이션 파드
+                    배포 및 예외 검증은{" "}
+                    <strong>Production Spoke 클러스터</strong>에서 수행해야 정상
+                    동작합니다.
+                  </p>
+                </div>
+              </div>
+              {preferredSpokeClusterId && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setGlobalClusterId(preferredSpokeClusterId)}
+                  className="shrink-0 border-sky-300 bg-white text-sky-700 hover:bg-sky-100 text-xs font-semibold shadow-xs"
+                >
+                  🚀 Spoke 클러스터로 전환
+                </Button>
+              )}
+            </div>
+          )}
 
           {/* 배정된 클러스터가 없는 일반 사용자 안내 배너 */}
           {isUnassignedUser && (

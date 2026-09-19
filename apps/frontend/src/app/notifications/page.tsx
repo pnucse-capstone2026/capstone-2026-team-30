@@ -33,6 +33,7 @@ type SeverityFilter = "all" | NotificationSeverity;
 type ReadFilter = "all" | "unread" | "read";
 
 const typeOptions: NotificationType[] = [
+  "incident",
   "exception",
   "violation",
   "cluster",

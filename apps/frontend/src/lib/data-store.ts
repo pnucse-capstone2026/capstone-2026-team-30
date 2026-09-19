@@ -41,6 +41,18 @@ let violationsPromise: Promise<PolicyViolation[]> | null = null;
 let exceptionsPromise: Promise<ExceptionRequest[]> | null = null;
 let auditLogsPromise: Promise<AuditLog[]> | null = null;
 
+function resolveDefaultClusterId(clusters: ClusterMetadata[]): string {
+  if (!clusters || clusters.length === 0) return "";
+  // Hub 클러스터는 제어면 전용이므로 워크로드가 실행되는 Spoke 클러스터를 기본값으로 우선 선택
+  const spoke = clusters.find(
+    (c) =>
+      c.id !== "kyverno-eks-lab" &&
+      !c.displayName?.toLowerCase().includes("management only") &&
+      !c.displayName?.toLowerCase().includes("central"),
+  );
+  return spoke ? spoke.id : clusters[0].id;
+}
+
 export const useDataStore = create<DataState>((set, get) => ({
   clusters: null,
   selectedClusterId: null,
@@ -73,7 +85,7 @@ export const useDataStore = create<DataState>((set, get) => ({
                 state.selectedClusterId &&
                 fresh.some((c) => c.id === state.selectedClusterId)
                   ? state.selectedClusterId
-                  : fresh[0].id,
+                  : resolveDefaultClusterId(fresh),
             }));
           }
         } catch {
@@ -99,7 +111,7 @@ export const useDataStore = create<DataState>((set, get) => ({
               state.selectedClusterId &&
               fresh.some((c) => c.id === state.selectedClusterId)
                 ? state.selectedClusterId
-                : fresh[0].id,
+                : resolveDefaultClusterId(fresh),
           }));
           return fresh;
         }

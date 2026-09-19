@@ -25,6 +25,7 @@ import {
   Check,
   AlertTriangle,
 } from "lucide-react";
+import { useDataStore } from "@/lib/data-store";
 
 interface AiErrorExplainerDialogProps {
   trigger?: React.ReactNode;
@@ -33,10 +34,11 @@ interface AiErrorExplainerDialogProps {
   resourceManifest?: string;
   clusterContext?: string;
   policyName?: string;
+  clusterId?: string;
 }
 
 /**
- * AWS Bedrock Claude 3.5 Sonnet AI 기반 Kyverno 에러 분석 및 해결 가이드 다이얼로그 컴포넌트
+ * AWS Bedrock AI 기반 Kyverno 에러 분석 및 해결 가이드 다이얼로그 컴포넌트
  */
 export function AiErrorExplainerDialog({
   trigger,
@@ -45,6 +47,7 @@ export function AiErrorExplainerDialog({
   resourceManifest,
   clusterContext,
   policyName,
+  clusterId,
 }: AiErrorExplainerDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -53,6 +56,7 @@ export function AiErrorExplainerDialog({
   );
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const globalClusterId = useDataStore((state) => state.selectedClusterId);
 
   const handleAnalyze = async () => {
     setIsLoading(true);
@@ -63,6 +67,7 @@ export function AiErrorExplainerDialog({
         policyYaml,
         resourceManifest,
         clusterContext,
+        clusterId: clusterId || globalClusterId || undefined,
       });
       setResult(response);
     } catch (err: any) {

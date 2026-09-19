@@ -1,4 +1,10 @@
-import { forwardRef, Inject, Injectable, Logger } from "@nestjs/common";
+import {
+  forwardRef,
+  Inject,
+  Injectable,
+  Logger,
+  Optional,
+} from "@nestjs/common";
 import {
   CoreV1Api,
   KubernetesObject,
@@ -7,6 +13,7 @@ import {
 } from "@kubernetes/client-node";
 import * as yaml from "js-yaml";
 import { ClusterProvider } from "../kubernetes/cluster-provider";
+import { IncidentsService } from "../incidents/incidents.service";
 import { BusinessException } from "../common/errors/business.exception";
 import { SIMULATION_ERROR } from "./simulation.errors";
 import {
@@ -184,6 +191,9 @@ spec:
     @Inject(forwardRef(() => ClusterProvider))
     private readonly clusterProvider: ClusterProvider,
     private readonly fastFailEngine: InMemoryFastFailEngine,
+    @Optional()
+    @Inject(forwardRef(() => IncidentsService))
+    private readonly incidentsService?: IncidentsService,
   ) {}
 
   /**
@@ -194,10 +204,59 @@ spec:
   }
 
   /**
+   * 시뮬레이션 워크로드가 배포될 유효한 대상 클러스터 식별자를 결정합니다.
+   *
+   * [멀티클러스터 거버넌스 라우팅 원칙]
+   * 중앙 Hub 클러스터('kyverno-eks-lab')는 관리 제어면 전용으로 일반 워크로드 배포가 차단됩니다.
+   * 따라서 clusterId가 지정되지 않았거나 'default'인 경우, 실제 워크로드가 실행되는
+   * Production Spoke 클러스터('external-argocd-cluster' 등)를 우선 탐색하여 자동 라우팅합니다.
+   *
+   * @param requestedClusterId 사용자가 요청한 클러스터 식별자
+   * @returns 실제 배포/검증 대상 클러스터 식별자
+   */
+  resolveTargetClusterId(requestedClusterId?: string): string {
+    const allClusters =
+      typeof this.clusterProvider?.list === "function"
+        ? this.clusterProvider.list()
+        : [];
+
+    if (!allClusters || allClusters.length === 0) {
+      return requestedClusterId || "default";
+    }
+
+    // 명시적으로 특정 클러스터가 전달되었고, 'default'가 아닌 경우
+    if (requestedClusterId && requestedClusterId !== "default") {
+      const matched = allClusters.find(
+        (c) =>
+          c.id === requestedClusterId || c.displayName === requestedClusterId,
+      );
+      if (matched) return matched.id;
+    }
+
+    // clusterId가 누락되었거나 'default'인 경우: 워크로드 실행용 Spoke 클러스터 우선 탐색
+    const spokeCluster = allClusters.find(
+      (c) =>
+        c.id !== "kyverno-eks-lab" &&
+        !c.displayName?.toLowerCase().includes("management only") &&
+        !c.displayName?.toLowerCase().includes("central"),
+    );
+
+    if (spokeCluster) {
+      this.logger.debug(
+        `[SimulationService] Auto-routing simulation workload to Spoke cluster '${spokeCluster.id}' (${spokeCluster.displayName})`,
+      );
+      return spokeCluster.id;
+    }
+
+    return requestedClusterId || allClusters[0].id;
+  }
+
+  /**
    * Kubernetes CoreV1Api 클라이언트를 생성합니다.
    */
   private getCoreV1Api(clusterId = "default"): CoreV1Api {
-    const kubeConfig = this.clusterProvider.getKubeConfig(clusterId);
+    const targetClusterId = this.resolveTargetClusterId(clusterId);
+    const kubeConfig = this.clusterProvider.getKubeConfig(targetClusterId);
     return kubeConfig.makeApiClient(CoreV1Api);
   }
 
@@ -207,7 +266,8 @@ spec:
    * @param clusterId 대상 클러스터 식별자
    */
   private getKubernetesObjectApi(clusterId = "default"): KubernetesObjectApi {
-    const kubeConfig = this.clusterProvider.getKubeConfig(clusterId);
+    const targetClusterId = this.resolveTargetClusterId(clusterId);
+    const kubeConfig = this.clusterProvider.getKubeConfig(targetClusterId);
     return kubeConfig.makeApiClient(KubernetesObjectApi);
   }
 
@@ -427,6 +487,30 @@ spec:
       // Kyverno 웹훅 에러 메시지 파싱
       const parsed = this.parseKyvernoBlockedError(rawMessage);
 
+      // Hub 클러스터 워크로드 격리 거버넌스 차단 특화 감지
+      const isHubIsolation =
+        rawMessage.includes("isolate-management-hub-cluster") ||
+        rawMessage.includes("중앙 관리 제어면 전용");
+      if (isHubIsolation) {
+        return {
+          scenarioId: scenario?.id,
+          status: "BLOCKED",
+          allowed: false,
+          message:
+            "❌ [거버넌스 차단] Hub 클러스터(kyverno-eks-lab)는 중앙 관리 제어면 전용입니다. 정책 시뮬레이션 및 일반 워크로드는 Production Spoke 클러스터(kyverno-eks-spoke-01)를 선택하여 배포해야 합니다.",
+          blockedReason:
+            "Hub 클러스터 제로-트러스트 격리 정책(isolate-management-hub-cluster)에 의해 kyverno-platform 외 네임스페이스의 워크로드 생성이 차단되었습니다.",
+          policyName: "isolate-management-hub-cluster",
+          ruleName: "block-non-platform-workloads",
+          resourceKind: "Pod",
+          resourceName: podName,
+          namespace: targetNamespace,
+          timestamp: new Date().toISOString(),
+          exceptionApplicable: false,
+          suggestedException: undefined,
+        };
+      }
+
       // K8s API 인프라 오류 vs 실제 Kyverno 웹훅 차단 분리 판별
       const isNamespaceNotFound = /namespaces\s*".*"\s*not found/i.test(
         rawMessage,
@@ -458,6 +542,36 @@ spec:
           exceptionApplicable: false,
           suggestedException: undefined,
         };
+      }
+
+      const blockedPolicy =
+        parsed.policyName || scenario?.targetPolicy || "kyverno-policy";
+
+      // Closed-Loop 인시던트 관제 연동: 배포 차단 발생 시 DB 영속화 및 대시보드 경보 브로드캐스트
+      if (
+        this.incidentsService &&
+        blockedPolicy !== "isolate-management-hub-cluster"
+      ) {
+        this.incidentsService
+          .recordAdmissionBlock({
+            clusterId,
+            namespace: targetNamespace,
+            resourceKind: "Pod",
+            resourceName: podName,
+            policyName: blockedPolicy,
+            ruleName: parsed.ruleName,
+            blockReason: parsed.reason || rawMessage,
+            metadata: {
+              source: "PolicySimulation",
+              scenarioId: scenario?.id,
+              blockedAt: new Date().toISOString(),
+            },
+          })
+          .catch((incErr) => {
+            this.logger.debug(
+              `Failed to record simulation admission block incident: ${(incErr as Error).message}`,
+            );
+          });
       }
 
       return {
@@ -691,6 +805,34 @@ spec:
           }
         } else {
           rawMessage = String(err);
+        }
+
+        const isHubIsolation =
+          rawMessage.includes("isolate-management-hub-cluster") ||
+          rawMessage.includes("중앙 관리 제어면 전용");
+
+        if (isHubIsolation) {
+          const violation: KyvernoViolationDetail = {
+            policyName: "isolate-management-hub-cluster",
+            ruleName: "block-non-platform-workloads",
+            reason:
+              "❌ [거버넌스 차단] Hub 클러스터(kyverno-eks-lab)는 중앙 관리 제어면 전용입니다. 일반 비즈니스 워크로드는 Production Spoke 클러스터(kyverno-eks-spoke-01)에 배포해야 합니다.",
+          };
+          results.push({
+            apiVersion,
+            kind,
+            name,
+            namespace,
+            allowed: false,
+            status: "BLOCKED",
+            message:
+              "Hub 클러스터 제어면 격리 정책(isolate-management-hub-cluster)에 의해 차단되었습니다.",
+            blockedReason: violation.reason,
+            violations: [violation],
+            rawError: rawMessage,
+          });
+          allViolations.push(violation);
+          continue;
         }
 
         const isBlockedByWebhook =

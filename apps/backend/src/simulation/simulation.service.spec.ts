@@ -294,5 +294,52 @@ spec:
         service.validateManifestDryRun("just a plain string", "default"),
       ).rejects.toThrow(BusinessException);
     });
+
+    it("should correctly handle isolate-management-hub-cluster block in deploySimulation", async () => {
+      mockCoreV1Api.createNamespacedPod.mockRejectedValueOnce({
+        message:
+          'admission webhook "validate.kyverno.svc-fail" denied the request: ❌ [거버넌스 차단] Hub 클러스터(kyverno-eks-lab)는 중앙 관리 제어면 전용입니다. 일반 비즈니스 워크로드는 Argo CD가 관리하는 Production Spoke 클러스터(kyverno-eks-spoke-01)에 배포해야 합니다.',
+      });
+
+      const result = await service.deploySimulation({
+        scenarioId: "disallow-latest-tag",
+        clusterId: "kyverno-eks-lab",
+      });
+
+      expect(result.status).toBe("BLOCKED");
+      expect(result.policyName).toBe("isolate-management-hub-cluster");
+      expect(result.ruleName).toBe("block-non-platform-workloads");
+      expect(result.message).toContain(
+        "Hub 클러스터(kyverno-eks-lab)는 중앙 관리 제어면 전용입니다",
+      );
+    });
+  });
+
+  describe("resolveTargetClusterId (Multi-cluster Routing)", () => {
+    it("should auto-route to Spoke cluster when clusterId is omitted or 'default'", () => {
+      const mockClusters = [
+        {
+          id: "kyverno-eks-lab",
+          displayName: "Central Governance Hub (Management Only)",
+        },
+        {
+          id: "external-argocd-cluster",
+          displayName: "Production Spoke Cluster (Argo CD Managed)",
+        },
+      ];
+      (mockClusterProvider as any).list = jest
+        .fn()
+        .mockReturnValue(mockClusters);
+
+      const resolvedDefault = service.resolveTargetClusterId();
+      expect(resolvedDefault).toBe("external-argocd-cluster");
+
+      const resolvedExplicitDefault = service.resolveTargetClusterId("default");
+      expect(resolvedExplicitDefault).toBe("external-argocd-cluster");
+
+      const resolvedSpecific =
+        service.resolveTargetClusterId("kyverno-eks-lab");
+      expect(resolvedSpecific).toBe("kyverno-eks-lab");
+    });
   });
 });

@@ -156,12 +156,18 @@ export class AiAgentService {
     if (clusterProvider) {
       try {
         const allClusters = clusterProvider.list();
-        const cluster = targetClusterId
-          ? allClusters.find(
-              (c) =>
-                c.id === targetClusterId || c.displayName === targetClusterId,
-            )
-          : allClusters[0];
+        const cluster =
+          targetClusterId && targetClusterId !== "default"
+            ? allClusters.find(
+                (c) =>
+                  c.id === targetClusterId || c.displayName === targetClusterId,
+              )
+            : allClusters.find(
+                (c) =>
+                  c.id !== "kyverno-eks-lab" &&
+                  !c.displayName?.toLowerCase().includes("management only") &&
+                  !c.displayName?.toLowerCase().includes("central"),
+              ) || allClusters[0];
 
         if (cluster) {
           targetClusterId = cluster.id;
@@ -312,6 +318,49 @@ export class AiAgentService {
           `Pre-validation execution error: ${(preValErr as Error).message}`,
         );
       }
+    }
+
+    // Hub 클러스터 제어면 격리 거버넌스 차단 특화 진단
+    const isHubIsolation =
+      (dto.errorMessage &&
+        (dto.errorMessage.includes("isolate-management-hub-cluster") ||
+          dto.errorMessage.includes("중앙 관리 제어면 전용") ||
+          dto.errorMessage.includes("block-non-platform-workloads"))) ||
+      false;
+
+    if (isHubIsolation) {
+      this.logger.log(
+        `[AiAgent] Detected isolate-management-hub-cluster error. Returning specialized multi-cluster governance guidance.`,
+      );
+      return {
+        isCompliant: true,
+        status: "BLOCKED",
+        summary:
+          "입력하신 매니페스트 자체의 문법이나 사양 문제가 아닌, 중앙 거버넌스 제어면 전용인 Hub 클러스터(kyverno-eks-lab)에 일반 비즈니스 워크로드를 배포하려고 시도하여 발생한 제로-트러스트 클러스터 격리 거버넌스 차단입니다.",
+        resolutionSteps: [
+          "정책 시뮬레이션 및 진단 화면 상단의 '대상 클러스터' 선택기에서 'Production Spoke Cluster (Argo CD Managed)'를 선택하세요.",
+          "Hub 클러스터(kyverno-eks-lab)는 kyverno, kyverno-platform 등 관리 제어면 외의 모든 일반 워크로드 배포가 원천 차단됩니다.",
+          "Argo CD가 관리하는 Production Spoke 클러스터(kyverno-eks-spoke-01)로 대상을 전환하여 배포 및 진단을 진행하세요.",
+        ],
+        suggestedFixYaml: dto.resourceManifest || null,
+        governanceRationale:
+          "엔터프라이즈 멀티클러스터 거버넌스 표준(Blast Radius 최소화): 중앙 제어면(Hub)과 비즈니스 워크로드 실행면(Spoke)을 물리적으로 분리하여 플랫폼 가용성과 제로-트러스트 보안을 철저히 보장합니다.",
+        passedRules: [
+          "isolate-management-hub-cluster (Hub 제어면 격리 정책 준수 요구)",
+        ],
+        violations: [
+          {
+            policyName: "isolate-management-hub-cluster",
+            ruleName: "block-non-platform-workloads",
+            reason:
+              "Hub 클러스터(kyverno-eks-lab)는 중앙 관리 제어면 전용입니다. 일반 비즈니스 워크로드는 Argo CD가 관리하는 Production Spoke 클러스터(kyverno-eks-spoke-01)에 배포해야 합니다.",
+          },
+        ],
+        provider: "MULTI_CLUSTER_ISOLATION_EXPLAINER",
+        analysisMode: AnalysisMode.SINGLE_AGENT,
+        taskScope: AnalysisTaskScope.SINGLE_RESOURCE,
+        latencyMs: Date.now() - startTime,
+      };
     }
 
     const evalResult = this.workloadEvaluator.evaluate(dto);

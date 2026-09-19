@@ -6,7 +6,8 @@ export type NotificationType =
   | "violation"
   | "cluster"
   | "audit"
-  | "policy";
+  | "policy"
+  | "incident";
 
 export type NotificationSeverity = "info" | "warning" | "critical" | "success";
 

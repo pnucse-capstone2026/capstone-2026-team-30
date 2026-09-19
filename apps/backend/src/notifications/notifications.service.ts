@@ -60,6 +60,31 @@ export class NotificationsService {
       });
     }
 
+    // 2-1. 실시간 배포 차단 인시던트 (DeploymentIncident - ACTIVE)
+    const activeIncidents =
+      typeof this.prisma.deploymentIncident?.findMany === "function"
+        ? await this.prisma.deploymentIncident.findMany({
+            where: { status: "ACTIVE" },
+            orderBy: { lastBlockedAt: "desc" },
+            take: 10,
+          })
+        : [];
+
+    for (const inc of activeIncidents) {
+      const id = `noti-inc-${inc.id}`;
+      notifications.push({
+        id,
+        title: `배포 차단 인시던트 감지: ${inc.resourceKind}/${inc.resourceName}`,
+        message: `${inc.clusterId} 클러스터 (${inc.namespace})에서 ${inc.policyName} 정책에 의해 워크로드 생성이 차단되었습니다. (누적 ${inc.blockCount}회)`,
+        type: "incident",
+        severity: "critical",
+        read: readSet.has(id),
+        createdAt: this.formatDate(inc.lastBlockedAt),
+        href: user.role === Role.ADMIN ? "/admin/dashboard" : "/dashboard",
+        targetRoles: [Role.ADMIN, Role.APPROVER, Role.REQUESTER, Role.VIEWER],
+      });
+    }
+
     // 3. 실시간 승인 대기 예외 신청 (ADMIN, APPROVER 대상)
     if (user.role === Role.ADMIN || user.role === Role.APPROVER) {
       const pendingRequests = await this.prisma.policyExceptionRequest.findMany(

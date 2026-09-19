@@ -586,14 +586,12 @@ export class ViolationsService {
       try {
         const liveReports = [
           ...(await this.kyvernoAdapter.listNamespacedPolicyReports(
-            dbRecord.targetClusterId,
+            cluster.id,
             dbRecord.namespace && dbRecord.namespace !== "cluster-wide"
               ? dbRecord.namespace
               : undefined,
           )),
-          ...(await this.kyvernoAdapter.listClusterPolicyReports(
-            dbRecord.targetClusterId,
-          )),
+          ...(await this.kyvernoAdapter.listClusterPolicyReports(cluster.id)),
         ];
 
         for (const rep of liveReports) {
@@ -796,12 +794,35 @@ export class ViolationsService {
     user: AuthenticatedUser,
     clusterId: string,
   ): ClusterMetadata {
+    const all = this.clusters.list();
+    if (!all || all.length === 0) {
+      throw new BusinessException(VIOLATION_ERROR.CLUSTER_ACCESS_DENIED);
+    }
+
+    // clusterId가 'default'이거나 누락된 경우 기본 클러스터 반환
+    if (!clusterId || clusterId === "default") {
+      let defaultCluster: ClusterMetadata | undefined;
+      try {
+        const defConn = this.clusters.getDefault();
+        defaultCluster = all.find((c) => c.id === defConn.id) || all[0];
+      } catch {
+        defaultCluster = all[0];
+      }
+      return defaultCluster;
+    }
+
     if (user.role !== "ADMIN" && !user.clusterIds.includes(clusterId)) {
       throw new BusinessException(VIOLATION_ERROR.CLUSTER_ACCESS_DENIED);
     }
-    const all = this.clusters.list();
-    const cluster = all.find((c) => c.id === clusterId);
+
+    const cluster = all.find(
+      (c) => c.id === clusterId || c.displayName === clusterId,
+    );
     if (!cluster) {
+      // 레거시/DB fallback: 클러스터 ID가 일치하지 않더라도 관리자이거나 배정된 클러스터가 있다면 기본 클러스터 반환
+      if (user.role === "ADMIN" || user.clusterIds.length > 0) {
+        return all[0];
+      }
       throw new BusinessException(VIOLATION_ERROR.CLUSTER_ACCESS_DENIED);
     }
     return cluster;

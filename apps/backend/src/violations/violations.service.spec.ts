@@ -312,6 +312,33 @@ describe("ViolationsService", () => {
       expect(detail.reportName).toBe("db-fallback");
     });
 
+    it("targetClusterId가 'default'로 저장된 DB Fallback UUID 기록도 정상 조회한다", async () => {
+      mockPrismaService.violationHistory.findUnique.mockResolvedValueOnce({
+        id: "b7de0cc4-2156-4de0-980d-13d7e6cd4073",
+        policyName: "require-resource-limits",
+        ruleName: "autogen-validate-resource-requests-limits",
+        targetClusterId: "default",
+        targetClusterDisplayName: "default",
+        namespace: "kube-system",
+        resourceKind: "Unknown",
+        resourceName: "Unknown",
+        severity: "medium",
+        status: "open",
+        message: "validation error",
+        occurredAt: new Date("2026-08-30T13:26:22Z"),
+      });
+
+      const detail = await service.getDetail(
+        "default",
+        "b7de0cc4-2156-4de0-980d-13d7e6cd4073",
+        mockUser,
+      );
+
+      expect(detail).toBeDefined();
+      expect(detail.id).toBe("b7de0cc4-2156-4de0-980d-13d7e6cd4073");
+      expect(detail.policyName).toBe("require-resource-limits");
+    });
+
     it("네임스페이스를 포함한 신규 ID로 정확한 네임스페이스의 보고서를 조회한다", async () => {
       const makeReport = (namespace: string, policy: string) => ({
         metadata: {

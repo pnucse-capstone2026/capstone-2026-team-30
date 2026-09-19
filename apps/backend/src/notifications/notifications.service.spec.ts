@@ -37,6 +37,9 @@ describe("NotificationsService", () => {
     auditLog: {
       findMany: jest.fn().mockResolvedValue([]),
     },
+    deploymentIncident: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
   };
 
   const adminUser: AuthenticatedUser = {

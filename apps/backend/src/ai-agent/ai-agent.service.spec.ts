@@ -289,5 +289,19 @@ describe("AiAgentService", () => {
 
       expect(result.summary).toBe("정상 진단");
     });
+
+    it("should provide specialized guidance when isolate-management-hub-cluster error is passed", async () => {
+      const result = await service.explainKyvernoError({
+        errorMessage:
+          "admission webhook denied the request: ❌ [거버넌스 차단] Hub 클러스터(kyverno-eks-lab)는 중앙 관리 제어면 전용입니다. 일반 비즈니스 워크로드는 Argo CD가 관리하는 Production Spoke 클러스터(kyverno-eks-spoke-01)에 배포해야 합니다.",
+      });
+
+      expect(result.status).toBe("BLOCKED");
+      expect(result.provider).toBe("MULTI_CLUSTER_ISOLATION_EXPLAINER");
+      expect(result.summary).toContain(
+        "중앙 거버넌스 제어면 전용인 Hub 클러스터",
+      );
+      expect(result.resolutionSteps[0]).toContain("Production Spoke Cluster");
+    });
   });
 });

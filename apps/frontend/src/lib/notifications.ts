@@ -1,6 +1,7 @@
 import { type UserRole } from "@/lib/auth-api";
 
 export type NotificationType =
+  | "incident"
   | "exception"
   | "violation"
   | "cluster"
@@ -24,6 +25,7 @@ export type AppNotification = {
 export const notifications: AppNotification[] = [];
 
 export const notificationTypeLabel: Record<NotificationType, string> = {
+  incident: "배포 차단",
   exception: "예외",
   violation: "정책 오류",
   cluster: "클러스터",
