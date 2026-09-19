@@ -434,6 +434,25 @@ export class GitOpsPublisherService {
   }
 
   /**
+   * 모노레포 루트 또는 하위 패키지 디렉터리 실행 환경에 맞추어 k8s-manifests 기본 디렉터리를 탐색합니다.
+   *
+   * @returns k8s-manifests 절대 경로
+   */
+  resolveManifestsBaseDir(): string {
+    const candidates = [
+      path.resolve(process.cwd(), "k8s-manifests"),
+      path.resolve(process.cwd(), "..", "k8s-manifests"),
+      path.resolve(process.cwd(), "..", "..", "k8s-manifests"),
+    ];
+    for (const candidate of candidates) {
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
+    }
+    return candidates[0];
+  }
+
+  /**
    * 승인된 PolicyException 요청에 대한 GitOps 매니페스트를 생성하고 로컬 및 원격 저장소에 게시합니다.
    *
    * @param request 승인된 정책 예외 요청 객체
@@ -459,13 +478,7 @@ export class GitOpsPublisherService {
       const relativePath = getGitOpsRelativePath(request);
 
       // 모노레포 루트 또는 패키지 실행 위치에 대응하여 k8s-manifests 디렉토리 결정
-      let baseDir = path.resolve(process.cwd(), "k8s-manifests");
-      if (
-        !fs.existsSync(baseDir) &&
-        fs.existsSync(path.resolve(process.cwd(), "../../k8s-manifests"))
-      ) {
-        baseDir = path.resolve(process.cwd(), "../../k8s-manifests");
-      }
+      const baseDir = this.resolveManifestsBaseDir();
 
       const namespace = request.resourceNamespace || "default";
       const targetDir = path.join(baseDir, "exceptions", namespace);
@@ -553,13 +566,7 @@ export class GitOpsPublisherService {
         : namespaceArg) || "default";
 
     try {
-      let baseDir = path.resolve(process.cwd(), "k8s-manifests");
-      if (
-        !fs.existsSync(baseDir) &&
-        fs.existsSync(path.resolve(process.cwd(), "../../k8s-manifests"))
-      ) {
-        baseDir = path.resolve(process.cwd(), "../../k8s-manifests");
-      }
+      const baseDir = this.resolveManifestsBaseDir();
 
       const targetDir = path.join(baseDir, "exceptions", namespace);
       const targetFilePath = path.join(targetDir, `${requestId}.yaml`);
@@ -648,6 +655,238 @@ export class GitOpsPublisherService {
           error instanceof Error ? error.message : String(error)
         }`,
       );
+    }
+  }
+
+  /**
+   * 신규 또는 수정된 Kyverno 정책 매니페스트를 GitOps 저장소(k8s-manifests/policies)로 발행(커밋/PR)합니다.
+   *
+   * @param policyManifest Kyverno 정책 K8s 매니페스트 객체
+   * @param clusterId 대상 클러스터 식별자
+   * @returns 발행 결과 객체
+   */
+  async publishPolicyManifest(
+    policyManifest: Record<string, unknown>,
+    clusterId?: string,
+  ): Promise<{
+    publishedToGitOps: boolean;
+    filePath?: string;
+    prUrl?: string;
+  }> {
+    if (this.publishingMode === "RUNTIME_ONLY") {
+      return { publishedToGitOps: false };
+    }
+
+    const metadata = (policyManifest.metadata as Record<string, unknown>) || {};
+    const policyName = (metadata.name as string) || "unnamed-policy";
+    const baseDir = this.resolveManifestsBaseDir();
+    const targetDir = path.join(baseDir, "policies");
+    const filename = `${policyName}.yaml`;
+    const targetFilePath = path.join(targetDir, filename);
+    const relativePath = path.join("k8s-manifests", "policies", filename);
+    const yamlContent = dumpYaml(policyManifest);
+
+    let localSaved = false;
+    try {
+      fs.mkdirSync(targetDir, { recursive: true });
+      fs.writeFileSync(targetFilePath, yamlContent, "utf8");
+      this.updateKustomizationYaml(targetDir, filename, "add");
+      localSaved = true;
+      this.logger.log(
+        `[GitOps Publisher] Policy manifest successfully saved locally to ${targetFilePath}`,
+      );
+    } catch (fileErr) {
+      this.logger.warn(
+        `[GitOps Publisher] Local policy file write bypassed: ${
+          fileErr instanceof Error ? fileErr.message : String(fileErr)
+        }`,
+      );
+    }
+
+    let prUrl: string | undefined;
+    if (this.gitOpsStrategy === "GITHUB_PR") {
+      let targetRepo = this.githubRepo;
+      let targetBaseBranch = this.githubBaseBranch;
+
+      if (this.clusterProvider && clusterId) {
+        try {
+          const clusterMeta = this.clusterProvider.getMetadata(clusterId);
+          if (clusterMeta.gitopsRepo) targetRepo = clusterMeta.gitopsRepo;
+          if (clusterMeta.gitopsBranch)
+            targetBaseBranch = clusterMeta.gitopsBranch;
+        } catch {
+          // fallback
+        }
+      }
+
+      if (this.githubToken && targetRepo) {
+        prUrl = await this.createPolicyGitHubPullRequest(
+          policyName,
+          yamlContent,
+          relativePath,
+          targetRepo,
+          targetBaseBranch,
+        );
+      }
+    }
+
+    return {
+      publishedToGitOps: Boolean(prUrl || localSaved),
+      filePath: relativePath,
+      prUrl,
+    };
+  }
+
+  /**
+   * 삭제된 Kyverno 정책의 GitOps 매니페스트 파일을 로컬 및 kustomization.yaml에서 제거합니다.
+   *
+   * @param policyName 정책 이름
+   * @returns 삭제 결과 객체
+   */
+  async unpublishPolicyManifest(policyName: string): Promise<{
+    unpublishedFromGitOps: boolean;
+    filePath?: string;
+  }> {
+    try {
+      const baseDir = this.resolveManifestsBaseDir();
+      const targetDir = path.join(baseDir, "policies");
+      const filename = `${policyName}.yaml`;
+      const targetFilePath = path.join(targetDir, filename);
+      const relativePath = path.join("k8s-manifests", "policies", filename);
+
+      let fileRemoved = false;
+      if (fs.existsSync(targetFilePath)) {
+        fs.unlinkSync(targetFilePath);
+        fileRemoved = true;
+      }
+
+      this.updateKustomizationYaml(targetDir, filename, "remove");
+
+      this.logger.log(
+        `[GitOps Publisher] Policy manifest removed from ${targetFilePath}`,
+      );
+
+      return {
+        unpublishedFromGitOps: fileRemoved,
+        filePath: relativePath,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to delete GitOps policy manifest for ${policyName}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return { unpublishedFromGitOps: false };
+    }
+  }
+
+  /**
+   * Kyverno 정책 배포/수정을 위한 GitHub PR을 생성합니다.
+   */
+  private async createPolicyGitHubPullRequest(
+    policyName: string,
+    yamlContent: string,
+    relativePath: string,
+    targetRepo: string,
+    targetBaseBranch: string,
+  ): Promise<string | undefined> {
+    const [owner, repo] = targetRepo.split("/");
+    if (!owner || !repo) return undefined;
+
+    const branchName = `gitops/policy-${policyName}-${Date.now()}`;
+    const headers = {
+      Authorization: `Bearer ${this.githubToken}`,
+      Accept: "application/vnd.github+json",
+      "User-Agent": "Kyverno-Governance-Platform",
+      "Content-Type": "application/json",
+    };
+
+    try {
+      const refRes = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${targetBaseBranch}`,
+        { headers },
+      );
+      if (!refRes.ok) return undefined;
+      const refData = (await refRes.json()) as { object?: { sha?: string } };
+      const baseSha = refData.object?.sha;
+      if (!baseSha) return undefined;
+
+      const createRefRes = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/git/refs`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            ref: `refs/heads/${branchName}`,
+            sha: baseSha,
+          }),
+        },
+      );
+      if (!createRefRes.ok) return undefined;
+
+      let existingSha: string | undefined;
+      const fileRes = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/contents/${relativePath}?ref=${targetBaseBranch}`,
+        { headers },
+      );
+      if (fileRes.ok) {
+        const fileData = (await fileRes.json()) as { sha?: string };
+        existingSha = fileData.sha;
+      }
+
+      const putRes = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/contents/${relativePath}`,
+        {
+          method: "PUT",
+          headers,
+          body: JSON.stringify({
+            message: `chore(governance): publish policy manifest for ${policyName}`,
+            content: Buffer.from(yamlContent).toString("base64"),
+            branch: branchName,
+            ...(existingSha ? { sha: existingSha } : {}),
+          }),
+        },
+      );
+      if (!putRes.ok) return undefined;
+
+      const prRes = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/pulls`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            title: `chore(governance): sync policy manifest for ${policyName}`,
+            head: branchName,
+            base: targetBaseBranch,
+            body: `## 🛡️ Kyverno Governance Platform - Policy Sync\n\nAutomated GitOps sync for policy \`${policyName}\`.`,
+          }),
+        },
+      );
+      if (!prRes.ok) return undefined;
+      const prData = (await prRes.json()) as {
+        html_url?: string;
+        number?: number;
+      };
+
+      if (this.autoMerge && prData.number) {
+        await this.autoMergePullRequest(
+          owner,
+          repo,
+          prData.number,
+          policyName,
+          targetBaseBranch,
+          headers,
+        );
+      }
+
+      return prData.html_url;
+    } catch (err) {
+      this.logger.warn(
+        `Failed to create policy GitHub PR: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return undefined;
     }
   }
 }
