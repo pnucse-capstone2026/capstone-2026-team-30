@@ -98,6 +98,13 @@ spec:
               value: "true"
             - name: GITOPS_MIN_DURATION_HOURS
               value: "24"
+            # 분산 리더 선출용 Lease 네임스페이스 격리 및 Pod 식별자 주입
+            - name: K8S_LEASE_NAMESPACE
+              value: "kyverno-platform"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
           ports:
             - containerPort: 3001
           resources:
