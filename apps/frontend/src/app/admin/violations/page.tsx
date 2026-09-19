@@ -10,7 +10,6 @@ import {
   Filter,
   Search,
   ShieldAlert,
-  ShieldCheck,
   SlidersHorizontal,
   XCircle,
 } from "lucide-react";
@@ -602,27 +601,6 @@ function AdminViolationsContent() {
         </div>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-3">
-        <StatusNote
-          icon={AlertTriangle}
-          title="긴급 조치 기준"
-          description="production high 이상 우선 검토"
-          className="bg-rose-50 text-rose-600"
-        />
-        <StatusNote
-          icon={Clock3}
-          title="예외 신청 대기"
-          description="검토 중인 예외 신청 1건"
-          className="bg-violet-50 text-violet-600"
-        />
-        <StatusNote
-          icon={ShieldCheck}
-          title="최근 해결"
-          description="1건이 정책 검사를 통과했습니다."
-          className="bg-emerald-50 text-emerald-600"
-        />
-      </section>
-
       <ProcessingStandardsDialog
         open={isStandardsOpen}
         onOpenChange={setIsStandardsOpen}
@@ -684,33 +662,5 @@ function FilterSelect({
         {children}
       </select>
     </label>
-  );
-}
-
-function StatusNote({
-  icon: Icon,
-  title,
-  description,
-  className,
-}: {
-  icon: typeof AlertTriangle;
-  title: string;
-  description: string;
-  className: string;
-}) {
-  return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-5">
-      <div className="flex items-center gap-3">
-        <div
-          className={`flex size-9 items-center justify-center rounded-xl ${className}`}
-        >
-          <Icon className="size-4.5" />
-        </div>
-        <div>
-          <h3 className="text-sm font-semibold">{title}</h3>
-          <p className="mt-1 text-xs text-slate-400">{description}</p>
-        </div>
-      </div>
-    </article>
   );
 }
