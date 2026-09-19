@@ -137,7 +137,7 @@ if [ "${CLUSTER_MODE_CHOICE}" = "2" ]; then
     const clusters = [
       {
         id: 'kyverno-eks-lab',
-        displayName: 'Primary Governance Hub (EKS)',
+        displayName: 'Central Governance Hub (Management Only)',
         server: 'https://kubernetes.default.svc',
         caData: '${HUB_CA_DATA}',
         token: '${HUB_TOKEN}',
@@ -145,7 +145,7 @@ if [ "${CLUSTER_MODE_CHOICE}" = "2" ]; then
         default: true,
         gitopsRepo: '${GITOPS_REPO}',
         gitopsBranch: '${GITOPS_BRANCH}',
-        gitopsPath: 'k8s-manifests/policies'
+        gitopsPath: 'k8s-manifests/exceptions'
       },
       {
         id: '${SPOKE_ID}',
@@ -157,7 +157,7 @@ if [ "${CLUSTER_MODE_CHOICE}" = "2" ]; then
         default: false,
         gitopsRepo: '${GITOPS_REPO}',
         gitopsBranch: '${GITOPS_BRANCH}',
-        gitopsPath: 'k8s-manifests/policies'
+        gitopsPath: 'k8s-manifests/exceptions'
       }
     ];
     console.log(JSON.stringify(clusters));

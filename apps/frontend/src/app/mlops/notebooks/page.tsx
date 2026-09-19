@@ -49,7 +49,24 @@ export default function NotebooksPage() {
       user?.clusterIds?.[0] ||
       clusters?.[0]?.id ||
       (user?.role === "ADMIN" ? "default" : "");
-  const [selectedNamespace, setSelectedNamespace] = useState<string>("default");
+
+  // 클러스터 격리 아키텍처에 맞추어 Hub는 'kubeflow', Spoke는 'mlops-workspace'를 기본 네임스페이스로 추천
+  const getDefaultNamespaceForCluster = (clusterId: string) => {
+    if (clusterId === "kyverno-eks-lab") return "kubeflow";
+    if (clusterId === "external-argocd-cluster") return "mlops-workspace";
+    return "default";
+  };
+
+  const [selectedNamespace, setSelectedNamespace] = useState<string>(() =>
+    getDefaultNamespaceForCluster(selectedClusterId),
+  );
+
+  // 클러스터 선택 변경 시 해당 클러스터의 권장 MLOps 네임스페이스로 자동 전환
+  useEffect(() => {
+    if (selectedClusterId) {
+      setSelectedNamespace(getDefaultNamespaceForCluster(selectedClusterId));
+    }
+  }, [selectedClusterId]);
 
   const [isDiagnosticOpen, setIsDiagnosticOpen] = useState(false);
   const [diagnosticTarget, setDiagnosticTarget] = useState<{
