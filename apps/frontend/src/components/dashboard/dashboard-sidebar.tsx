@@ -40,16 +40,10 @@ const navigation: Record<"user" | "admin", NavigationItem[]> = {
   user: [
     { label: "대시보드", href: "/dashboard", icon: LayoutDashboard },
     {
-      label: "정책 테스트 랩",
+      label: "정책 시뮬레이션 & AI 진단",
       href: "/simulation",
       icon: FlaskConical,
       moduleId: "simulation",
-    },
-    {
-      label: "Enforce 차단 AI 진단",
-      href: "/diagnostics",
-      icon: Sparkles,
-      moduleId: "aiAgent",
     },
     {
       label: "MLOps 노트북",
@@ -71,16 +65,10 @@ const navigation: Record<"user" | "admin", NavigationItem[]> = {
       icon: LayoutDashboard,
     },
     {
-      label: "정책 테스트 랩",
+      label: "정책 시뮬레이션 & AI 진단",
       href: "/simulation",
       icon: FlaskConical,
       moduleId: "simulation",
-    },
-    {
-      label: "Enforce 차단 AI 진단",
-      href: "/diagnostics",
-      icon: Sparkles,
-      moduleId: "aiAgent",
     },
     {
       label: "MLOps 노트북 관리",
