@@ -66,6 +66,35 @@ export class SimulationController {
   }
 
   /**
+   * 임의의 쿠버네티스 매니페스트 YAML을 Server-Side Dry-Run 방식으로 사전 검증합니다.
+   */
+  @Post("dry-run")
+  @RequirePermissions("policies.read")
+  @ApiOperation({
+    summary: "Server-Side Dry-Run 매니페스트 사전 검증",
+    description:
+      "쿠버네티스 etcd에 영속화하지 않고 dryRun으로 Kyverno 어드미션 웹훅 동작을 검증합니다.",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Dry-run 사전 검증 결과 반환",
+  })
+  validateDryRun(
+    @Body()
+    dto: {
+      manifestYaml: string;
+      namespace?: string;
+      clusterId?: string;
+    },
+  ) {
+    return this.simulationService.validateManifestDryRun(
+      dto.manifestYaml,
+      dto.namespace || "default",
+      dto.clusterId || "default",
+    );
+  }
+
+  /**
    * 현재 클러스터에 배포된 시뮬레이션 리소스 목록을 조회합니다.
    */
   @Get("resources")

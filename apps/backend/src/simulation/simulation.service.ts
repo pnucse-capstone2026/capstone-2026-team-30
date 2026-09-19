@@ -192,6 +192,70 @@ spec:
   }
 
   /**
+   * 시뮬레이션 파드가 배포될 대상 네임스페이스의 존재 여부를 확인하고, 없을 경우 안전하게 자동 생성합니다.
+   *
+   * @param clusterId 대상 클러스터 식별자
+   * @param namespace 확인할 네임스페이스명
+   */
+  async ensureNamespaceExists(
+    clusterId = "default",
+    namespace = "default",
+  ): Promise<void> {
+    if (!namespace || namespace === "default" || namespace === "kube-system") {
+      return;
+    }
+
+    const coreV1 = this.getCoreV1Api(clusterId);
+    try {
+      await coreV1.readNamespace({ name: namespace });
+    } catch (err: any) {
+      const statusCode =
+        err?.response?.statusCode || err?.statusCode || err?.status;
+      const rawMessage = err?.message || err?.body || "";
+      const isNotFound =
+        statusCode === 404 || /not found/i.test(String(rawMessage));
+
+      if (isNotFound) {
+        this.logger.log(
+          `Namespace '${namespace}' not found in cluster '${clusterId}'. Creating it automatically for simulation...`,
+        );
+        try {
+          await coreV1.createNamespace({
+            body: {
+              apiVersion: "v1",
+              kind: "Namespace",
+              metadata: {
+                name: namespace,
+                labels: {
+                  "app.kubernetes.io/managed-by": "kyverno-simulation",
+                  [this.TESTBED_LABEL_KEY]: this.TESTBED_LABEL_VALUE,
+                },
+              },
+            },
+          });
+          this.logger.log(
+            `Namespace '${namespace}' successfully created for simulation.`,
+          );
+        } catch (createErr: any) {
+          const createStatus =
+            createErr?.response?.statusCode ||
+            createErr?.statusCode ||
+            createErr?.status;
+          // 동시 생성 경쟁으로 인한 409 Conflict는 정상 처리
+          if (
+            createStatus !== 409 &&
+            !/already exists/i.test(String(createErr?.message))
+          ) {
+            this.logger.warn(
+              `Failed to automatically create namespace '${namespace}': ${(createErr as Error).message}`,
+            );
+          }
+        }
+      }
+    }
+  }
+
+  /**
    * 시나리오 또는 커스텀 매니페스트를 클러스터에 배포하고 어드미션/감사 결과를 획득합니다.
    *
    * @param dto 배포 시뮬레이션 요청 DTO
@@ -234,14 +298,17 @@ spec:
       });
     }
 
-    // 타겟 네임스페이스 결정
+    // 타겟 네임스페이스 결정 (사용자가 작성한 매니페스트 네임스페이스 최우선 반영)
     const targetNamespace =
-      dto.namespace ||
       manifest.metadata?.namespace ||
+      dto.namespace ||
       scenario?.namespace ||
-      "governance-testbed";
+      "default";
     manifest.metadata = manifest.metadata || {};
     manifest.metadata.namespace = targetNamespace;
+
+    // 대상 네임스페이스 자동 보장 (Self-Healing Namespace)
+    await this.ensureNamespaceExists(clusterId, targetNamespace);
 
     // 시뮬레이션 리소스 식별용 라벨 주입
     manifest.metadata.labels = manifest.metadata.labels || {};
@@ -334,11 +401,44 @@ spec:
       }
 
       this.logger.warn(
-        `Simulation Pod deployment blocked: ${targetNamespace}/${podName}, error: ${rawMessage}`,
+        `Simulation Pod deployment error: ${targetNamespace}/${podName}, error: ${rawMessage}`,
       );
 
       // Kyverno 웹훅 에러 메시지 파싱
       const parsed = this.parseKyvernoBlockedError(rawMessage);
+
+      // K8s API 인프라 오류 vs 실제 Kyverno 웹훅 차단 분리 판별
+      const isNamespaceNotFound = /namespaces\s*".*"\s*not found/i.test(
+        rawMessage,
+      );
+      const isKyvernoWebhookBlock =
+        /admission webhook.*denied the request|validation error|blocked due to the following policies/i.test(
+          rawMessage,
+        ) ||
+        (parsed.violations.length > 0 && !isNamespaceNotFound);
+
+      if (!isKyvernoWebhookBlock) {
+        // 네임스페이스 부재, 권한 부족(RBAC), 파싱 오류 등 인프라 시스템 오류인 경우
+        const userFriendlyMessage = isNamespaceNotFound
+          ? `배포 대상 네임스페이스('${targetNamespace}')가 클러스터에 존재하지 않거나 접근할 수 없습니다.`
+          : `Kubernetes API 서버 오류가 발생했습니다: ${rawMessage}`;
+
+        return {
+          scenarioId: scenario?.id,
+          status: "ERROR",
+          allowed: false,
+          message: userFriendlyMessage,
+          blockedReason: rawMessage,
+          policyName: undefined,
+          ruleName: undefined,
+          resourceKind: "Pod",
+          resourceName: podName,
+          namespace: targetNamespace,
+          timestamp: new Date().toISOString(),
+          exceptionApplicable: false,
+          suggestedException: undefined,
+        };
+      }
 
       return {
         scenarioId: scenario?.id,

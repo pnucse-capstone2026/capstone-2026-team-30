@@ -28,12 +28,12 @@ export class DeploySimulationDto {
   customYaml?: string;
 
   /**
-   * 배포 대상 네임스페이스 (기본값: governance-testbed)
+   * 배포 대상 네임스페이스 (선택사항, 미지정 시 매니페스트 네임스페이스 또는 default)
    */
   @ApiPropertyOptional({
-    description: "배포 대상 네임스페이스",
-    default: "governance-testbed",
-    example: "governance-testbed",
+    description:
+      "배포 대상 네임스페이스 (미지정 시 매니페스트 네임스페이스 또는 default)",
+    example: "default",
   })
   @IsOptional()
   @IsString()
@@ -72,7 +72,7 @@ export interface SimulationScenario {
  */
 export interface SimulationDeployResult {
   scenarioId?: string;
-  status: "BLOCKED" | "ALLOWED";
+  status: "BLOCKED" | "ALLOWED" | "ERROR";
   allowed: boolean;
   message: string;
   blockedReason?: string;

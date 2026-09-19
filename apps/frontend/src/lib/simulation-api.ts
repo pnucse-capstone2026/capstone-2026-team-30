@@ -21,7 +21,7 @@ export type DeploySimulationDto = {
 
 export type SimulationDeployResult = {
   scenarioId?: string;
-  status: "BLOCKED" | "ALLOWED";
+  status: "BLOCKED" | "ALLOWED" | "ERROR";
   allowed: boolean;
   message: string;
   blockedReason?: string;
