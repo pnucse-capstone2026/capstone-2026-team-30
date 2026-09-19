@@ -62,7 +62,7 @@ rules:
       - patch
       - delete
 
-  # 5. 코어 리소스 조회, 노드 관제 지표 수집 및 PVC 프로비저닝 권한
+  # 5. 코어 리소스 조회, 노드 관제 지표 수집, 파드 시뮬레이션 배포 및 PVC 프로비저닝 권한
   - apiGroups:
       - ""
     resources:
@@ -76,6 +76,10 @@ rules:
       - get
       - list
       - watch
+      - create
+      - update
+      - patch
+      - delete
   - apiGroups:
       - ""
     resources:

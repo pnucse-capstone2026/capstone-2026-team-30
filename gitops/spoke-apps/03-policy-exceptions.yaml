@@ -1,0 +1,27 @@
+# Spoke Cluster: 승인된 정책 예외 (PolicyException) GitOps 동기화
+# 도입 배경: 플랫폼 대시보드에서 승인되어 main에 머지된 PolicyException YAML을 클러스터에 자동 수렴
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: 03-spoke-policy-exceptions
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/YeongrimGo/test-for.git'
+    targetRevision: main
+    path: k8s-manifests/exceptions
+    directory:
+      recurse: true
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: kyverno
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - SkipDryRunOnMissingResource=true
+      - ServerSideApply=true
