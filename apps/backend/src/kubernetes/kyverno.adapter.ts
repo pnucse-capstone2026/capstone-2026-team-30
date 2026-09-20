@@ -851,6 +851,10 @@ export class KyvernoAdapter {
     cluster: ClusterMetadata,
   ): ViolationSummaryDto[] {
     const metadata = (report.metadata as Record<string, unknown>) ?? {};
+    const scope = (report.scope as Record<string, unknown>) ?? {};
+    const ownerRefs =
+      (metadata.ownerReferences as Array<Record<string, unknown>>) ?? [];
+    const ownerRef = ownerRefs[0];
     const results = (report.results as Array<Record<string, unknown>>) ?? [];
     const violations: ViolationSummaryDto[] = [];
 
@@ -872,13 +876,17 @@ export class KyvernoAdapter {
         const targetResource = resources[0];
         const properties = (result.properties as Record<string, string>) ?? {};
 
-        // 리소스명 및 종류 파싱 (resources 배열 -> properties -> 메시지 정규식 fallback)
+        // 리소스명 및 종류 파싱 (scope -> ownerReferences -> resources 배열 -> properties -> 메시지 정규식 fallback)
         let resourceKind =
+          (scope?.kind as string) ||
+          (ownerRef?.kind as string) ||
           (targetResource?.kind as string) ||
           properties["resource.kind"] ||
           properties["kind"] ||
           "";
         let resourceName =
+          (scope?.name as string) ||
+          (ownerRef?.name as string) ||
           (targetResource?.name as string) ||
           properties["resource.name"] ||
           properties["name"] ||
@@ -898,6 +906,7 @@ export class KyvernoAdapter {
         if (!resourceName) resourceName = "Unknown";
 
         const namespace =
+          (scope?.namespace as string) ??
           (targetResource?.namespace as string) ??
           properties["resource.namespace"] ??
           (metadata.namespace as string) ??
