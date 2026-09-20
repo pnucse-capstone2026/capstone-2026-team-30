@@ -1211,22 +1211,40 @@ export class ViolationsService {
             },
           });
         } else {
-          await this.prisma.violationHistory.create({
-            data: {
-              id: violation.id,
-              targetClusterId: violation.clusterId,
-              targetClusterDisplayName: violation.clusterDisplayName,
-              policyName: violation.policyName,
-              ruleName: violation.ruleName,
-              namespace: violation.namespace,
-              resourceKind: violation.resourceKind,
-              resourceName: violation.resourceName,
-              severity: violation.severity,
-              status: violation.status || "open",
-              message: violation.message,
-              occurredAt,
-            },
-          });
+          try {
+            await this.prisma.violationHistory.create({
+              data: {
+                id: violation.id,
+                targetClusterId: violation.clusterId,
+                targetClusterDisplayName: violation.clusterDisplayName,
+                policyName: violation.policyName,
+                ruleName: violation.ruleName,
+                namespace: violation.namespace,
+                resourceKind: violation.resourceKind,
+                resourceName: violation.resourceName,
+                severity: violation.severity,
+                status: violation.status || "open",
+                message: violation.message,
+                occurredAt,
+              },
+            });
+          } catch (createErr: any) {
+            // 동시성 경합으로 인한 Unique constraint(P2002) 에러 발생 시 update로 fallback
+            if (createErr?.code === "P2002") {
+              await this.prisma.violationHistory.update({
+                where: { id: violation.id },
+                data: {
+                  targetClusterDisplayName: violation.clusterDisplayName,
+                  resourceKind: violation.resourceKind,
+                  severity: violation.severity,
+                  message: violation.message,
+                  occurredAt,
+                },
+              });
+            } else {
+              throw createErr;
+            }
+          }
         }
       }
     } catch (error) {

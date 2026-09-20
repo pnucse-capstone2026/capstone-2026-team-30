@@ -93,9 +93,11 @@ if [ -f "${ROOT_DIR}/k8s-manifests/system/postgres-init.sql" ]; then
 fi
 
 "${KUBECTL}" apply -f "${ROOT_DIR}/k8s-manifests/system/postgres.yaml"
+"${KUBECTL}" apply -f "${ROOT_DIR}/k8s-manifests/system/redis.yaml"
 
-# PostgreSQL 롤아웃 상태 대기
+# PostgreSQL 및 Redis 인프라 롤아웃 상태 대기
 "${KUBECTL}" rollout status deployment/postgres -n kyverno-platform --timeout=120s || true
+"${KUBECTL}" rollout status deployment/redis -n kyverno-platform --timeout=120s || true
 
 # PostgreSQL 데이터베이스 스키마 및 시드 데이터 자동 동기화
 echo ">>> Synchronizing PostgreSQL schema and seeding initial admin/RBAC..."

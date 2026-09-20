@@ -60,6 +60,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       this.publisherClient = injectedClients.publisher;
       this.subscriberClient = injectedClients.subscriber;
       this.isConnectedFlag = true;
+      this.bindPublisherEvents(this.publisherClient);
       this.bindSubscriberEvents(this.subscriberClient);
     }
   }
@@ -215,13 +216,41 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     this.publisherClient = new Redis(redisOptions);
     this.subscriberClient = new Redis(redisOptions);
 
+    this.bindPublisherEvents(this.publisherClient);
     this.bindSubscriberEvents(this.subscriberClient);
+  }
+
+  /**
+   * Publisher 클라이언트의 Redis 이벤트 핸들러를 등록합니다.
+   * ioredis의 Unhandled error event를 방어하고 연결 상태 플래그를 동기화합니다.
+   */
+  private bindPublisherEvents(publisher: Redis): void {
+    if (!publisher || typeof publisher.on !== "function") return;
+
+    publisher.on("error", (err: unknown) => {
+      this.logger.debug(
+        `[Redis Publisher Notice] ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      this.isConnectedFlag = false;
+    });
+
+    publisher.on("connect", () => {
+      this.isConnectedFlag = true;
+      this.logger.log("[Redis] Publisher connected to Redis event mesh.");
+    });
+
+    publisher.on("close", () => {
+      this.isConnectedFlag = false;
+    });
   }
 
   /**
    * Subscriber 클라이언트의 Redis 이벤트 핸들러를 등록합니다.
    */
   private bindSubscriberEvents(subscriber: Redis): void {
+    if (!subscriber || typeof subscriber.on !== "function") return;
     subscriber.on(
       "pmessage",
       (pattern: string, channel: string, message: string) => {

@@ -259,6 +259,13 @@ echo ">>> Creating backend-env-secret with multi-cluster configuration on Hub...
   --from-literal=KUBERNETES_CLUSTERS="${KUBERNETES_CLUSTERS_JSON}" \
   --from-literal=DATABASE_URL="postgresql://devuser:devpassword@postgres:5432/kyverno_dashboard?schema=public" \
   --from-literal=JWT_SECRET="kyverno-super-secret-jwt-key-2026-production" \
+  --from-literal=JWT_ACCESS_SECRET="in-cluster-jwt-access-secret-key-12345" \
+  --from-literal=JWT_REFRESH_SECRET="in-cluster-jwt-refresh-secret-key-12345" \
+  --from-literal=JWT_ACCESS_EXPIRES_IN="1d" \
+  --from-literal=JWT_REFRESH_EXPIRES_IN="7d" \
+  --from-literal=GITOPS_CI_TOKEN="test-ci-token-secret" \
+  --from-literal=PLATFORM_BASE_URL="http://localhost:3000" \
+  --from-literal=PORT="3001" \
   --from-literal=K8S_LEASE_NAMESPACE="kyverno-platform" \
   --from-literal=GITOPS_GITHUB_REPO="YeongrimGo/test-for" \
   --from-literal=GITOPS_GITHUB_BRANCH="main" \
