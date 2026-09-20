@@ -555,6 +555,73 @@ describe("ViolationsService", () => {
       expect(result[0].status).toBe("resolved");
       expect(result[0].exceptionStatus).toBe("requested");
     });
+
+    it("K8s 라이브 리포트 외에 타 클러스터에서 발생하여 DB에만 존재하는 위반 이력을 정상적으로 병합하여 반환한다", async () => {
+      // cluster-1, 2, 3의 K8s 호출은 빈 배열 반환
+      (
+        mockKyvernoAdapter.listClusterPolicyReports as jest.Mock
+      ).mockResolvedValue([]);
+      (
+        mockKyvernoAdapter.listNamespacedPolicyReports as jest.Mock
+      ).mockResolvedValue([]);
+
+      // DB에는 타 클러스터(spoke-cluster)에서 발생한 위반이 저장되어 있는 상황
+      mockPrismaService.violationHistory.findMany.mockResolvedValueOnce([
+        {
+          id: "viol-spoke-1",
+          policyName: "disallow-privileged-containers",
+          ruleName: "privileged-containers",
+          targetClusterId: "kyverno-eks-spoke-01",
+          targetClusterDisplayName: "Spoke Production Cluster",
+          resourceName: "crawler-worker",
+          namespace: "default",
+          severity: "high",
+          status: "open",
+          occurredAt: new Date("2026-08-20T00:00:00Z"),
+        },
+      ]);
+
+      const result = await service.getViolations(mockUser, {});
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe("viol-spoke-1");
+      expect(result[0].clusterId).toBe("kyverno-eks-spoke-01");
+      expect(result[0].clusterDisplayName).toBe("Spoke Production Cluster");
+      expect(result[0].policyName).toBe("disallow-privileged-containers");
+    });
+
+    it("관리자가 미등록 클러스터 ID로 필터 조회 시에도 가상 메타데이터를 통해 DB 조회를 성공한다", async () => {
+      (
+        mockKyvernoAdapter.listClusterPolicyReports as jest.Mock
+      ).mockRejectedValue(new Error("Cluster not found"));
+      (
+        mockKyvernoAdapter.listNamespacedPolicyReports as jest.Mock
+      ).mockRejectedValue(new Error("Cluster not found"));
+
+      mockPrismaService.violationHistory.findMany.mockResolvedValueOnce([
+        {
+          id: "viol-remote-99",
+          policyName: "require-resource-limits",
+          ruleName: "limits-check",
+          targetClusterId: "unregistered-remote-cluster",
+          targetClusterDisplayName: "Unregistered Remote",
+          resourceName: "api-gateway",
+          namespace: "prod",
+          severity: "medium",
+          status: "open",
+          occurredAt: new Date("2026-08-20T01:00:00Z"),
+        },
+      ]);
+
+      const adminUser = { ...mockUser, role: Role.ADMIN };
+      const result = await service.getViolations(adminUser, {
+        clusterId: "unregistered-remote-cluster",
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].clusterId).toBe("unregistered-remote-cluster");
+      expect(result[0].resourceName).toBe("api-gateway");
+    });
   });
 
   describe("syncLiveViolations", () => {

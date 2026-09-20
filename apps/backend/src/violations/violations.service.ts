@@ -115,8 +115,6 @@ export class ViolationsService {
     try {
       // K8s API 커스텀 객체 조회를 통한 라이브 위반 보고서 수집
       const allViolations: ViolationSummaryDto[] = [];
-      let successClusterCount = 0;
-      let failedClusterCount = 0;
 
       let exceptionsMap:
         | Map<string, { id: string; status: string }>
@@ -171,22 +169,32 @@ export class ViolationsService {
               }
             }
           }
-          successClusterCount++;
         } catch (err) {
-          // 단일 클러스터 장애 시 개별 처리 후 실패 카운트 증가
-          failedClusterCount++;
+          // 단일 클러스터 장애 시 개별 처리 후 경고 로그 기록 (타 클러스터 영향 차단)
           this.logger.warn(
             `Failed to fetch live policy reports for cluster ${cluster.id}: ${err instanceof Error ? err.message : String(err)}`,
           );
         }
       }
 
-      // 모든 대상 클러스터 조회가 실패하였을 경우 PostgreSQL DB Fallback 실행
-      if (successClusterCount === 0 && failedClusterCount > 0) {
-        this.logger.warn(
-          `All K8s cluster connections failed (${failedClusterCount} failed). Falling back to ViolationHistory DB.`,
+      // K8s 라이브 리포트에 없거나 K8s 장애가 발생한 타 클러스터/과거/차단 위반 이력 DB 병합
+      const existingIds = new Set(allViolations.map((v) => v.id));
+      try {
+        const dbRecords = await this.getViolationsFromDb(
+          accessibleClusters,
+          query,
+          user,
         );
-        return this.getViolationsFromDb(accessibleClusters, query);
+        for (const item of dbRecords) {
+          if (!existingIds.has(item.id)) {
+            allViolations.push(item);
+            existingIds.add(item.id);
+          }
+        }
+      } catch (dbError) {
+        this.logger.warn(
+          `Failed to merge DB violation history: ${dbError instanceof Error ? dbError.message : String(dbError)}`,
+        );
       }
 
       let sorted = allViolations.sort((a, b) => {
@@ -207,7 +215,7 @@ export class ViolationsService {
         `Unexpected error fetching live policy reports, falling back to ViolationHistory DB`,
         error instanceof Error ? error.message : String(error),
       );
-      return this.getViolationsFromDb(accessibleClusters, query);
+      return this.getViolationsFromDb(accessibleClusters, query, user);
     }
   }
 
@@ -839,7 +847,23 @@ export class ViolationsService {
         : all.filter((c) => user.clusterIds.includes(c.id));
 
     if (targetClusterId) {
-      return userClusters.filter((c) => c.id === targetClusterId);
+      const matched = userClusters.filter(
+        (c) => c.id === targetClusterId || c.displayName === targetClusterId,
+      );
+      if (matched.length > 0) {
+        return matched;
+      }
+      // 관리자이거나 배정된 클러스터인 경우, K8s provider에 미등록되어 있어도 DB 조회를 위해 가상 메타데이터 반환
+      if (user.role === "ADMIN" || user.clusterIds.includes(targetClusterId)) {
+        return [
+          {
+            id: targetClusterId,
+            displayName: targetClusterId,
+            exceptionNamespace: "kyverno",
+          },
+        ];
+      }
+      return [];
     }
     return userClusters;
   }
@@ -1224,6 +1248,7 @@ export class ViolationsService {
   private async getViolationsFromDb(
     accessibleClusters: ClusterMetadata[],
     query: ListViolationsQueryDto,
+    user?: AuthenticatedUser,
   ): Promise<ViolationSummaryDto[]> {
     const clusterIds = accessibleClusters.map((c) => c.id);
     const clusterMap = new Map(
@@ -1231,7 +1256,11 @@ export class ViolationsService {
     );
 
     const whereClause: Record<string, unknown> = {};
-    if (clusterIds.length > 0) {
+    if (query.clusterId) {
+      whereClause.targetClusterId = query.clusterId;
+    } else if (user && user.role !== "ADMIN") {
+      whereClause.targetClusterId = { in: user.clusterIds };
+    } else if (!user && clusterIds.length > 0) {
       whereClause.targetClusterId = { in: clusterIds };
     }
     if (query.namespace) {
