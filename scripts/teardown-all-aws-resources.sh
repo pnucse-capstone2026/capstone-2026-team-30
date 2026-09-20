@@ -35,6 +35,15 @@ echo ">>> ✅ Spoke 클러스터 ('kyverno-eks-spoke-01') 삭제 완료"
 wait $HUB_PID
 echo ">>> ✅ Hub 클러스터 ('kyverno-eks-lab') 삭제 완료"
 
+echo ">>> 3. ECR 리포지토리 삭제 시작..."
+ECR_REPOS=("kyverno-backend" "kyverno-frontend" "pac/dashboard-backend" "pac/dashboard-frontend")
+for repo in "${ECR_REPOS[@]}"; do
+  echo ">>> ECR 리포지토리 '${repo}' 삭제 시도..."
+  aws ecr delete-repository --repository-name "${repo}" --region "${REGION}" --force 2>/dev/null || true
+done
+echo ">>> ✅ ECR 리포지토리 정리 완료"
+
 echo "=========================================================="
-echo " 🎉 모든 AWS EKS 리소스 회수가 성공적으로 완료되었습니다."
+echo " 🎉 모든 AWS EKS 및 ECR 리소스 회수가 성공적으로 완료되었습니다."
 echo "=========================================================="
+
