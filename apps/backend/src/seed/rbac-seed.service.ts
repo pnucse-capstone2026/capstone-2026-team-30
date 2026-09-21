@@ -68,6 +68,7 @@ export const ROLE_PERMISSIONS: Record<Role, PermissionKey[]> = {
     "exception_requests.read",
     "exception_requests.approve",
     "exception_requests.reject",
+    "exception_requests.cancel",
     "exception_requests.retry",
     "audit_logs.read",
     "notifications.read",

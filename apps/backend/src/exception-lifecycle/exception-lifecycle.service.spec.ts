@@ -387,13 +387,25 @@ describe("ExceptionLifecycleService", () => {
       new Error("timeout"),
     );
 
-    const result = await context.service.cancel("request-1", "requester-1");
+    const result = await context.service.cancel(
+      "request-1",
+      "requester-1",
+      "보안 점검 후 회수",
+    );
     expect(result.status).toBe(ExceptionStatus.CANCELLING);
     expect(result).toMatchObject({
       status: ExceptionStatus.CANCELLING,
       applyAttempts: 10,
       lastError: "timeout",
     });
+    expect(context.audits.find((a) => a.action === "EXCEPTION_CANCEL_REQUESTED")).toEqual(
+      expect.objectContaining({
+        action: "EXCEPTION_CANCEL_REQUESTED",
+        actorType: AuditActorType.USER,
+        userId: "requester-1",
+        metadata: { reason: "보안 점검 후 회수" },
+      }),
+    );
 
     await context.service.reconcile(context.claim());
     expect(context.current().status).toBe(ExceptionStatus.CANCELLED);

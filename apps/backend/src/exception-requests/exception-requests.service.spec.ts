@@ -339,6 +339,19 @@ describe("ExceptionRequestsService access control", () => {
     expect(context.lifecycle.cancel).toHaveBeenCalledWith(
       "request-1",
       admin.id,
+      undefined,
+    );
+  });
+
+  it("allows approvers to cancel/revoke requests in their cluster with a reason", async () => {
+    const context = harness(record({ requestUserId: "someone-else" }));
+    await context.service.cancel("request-1", approver, {
+      reason: "보안 취약점 조치 완료로 인한 회수",
+    });
+    expect(context.lifecycle.cancel).toHaveBeenCalledWith(
+      "request-1",
+      approver.id,
+      "보안 취약점 조치 완료로 인한 회수",
     );
   });
 

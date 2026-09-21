@@ -24,6 +24,7 @@ import {
 import { KUBERNETES_ERROR } from "../kubernetes/kubernetes.errors";
 import { PrismaService } from "../prisma/prisma.service";
 import { ApproveExceptionRequestDto } from "./dto/approve-exception-request.dto";
+import { CancelExceptionRequestDto } from "./dto/cancel-exception-request.dto";
 import { CreateExceptionRequestDto } from "./dto/create-exception-request.dto";
 import { RejectExceptionRequestDto } from "./dto/reject-exception-request.dto";
 import { EXCEPTION_REQUEST_ERROR } from "./exception-request.errors";
@@ -231,17 +232,27 @@ export class ExceptionRequestsService {
   async cancel(
     id: string,
     user: AuthenticatedUser,
+    dto?: CancelExceptionRequestDto,
   ): Promise<PolicyExceptionRequest> {
     // 단일 레코드를 읽는 경로는 전부 get() 을 지난다 — 클러스터 스코프와 부재를
-    // 한 곳에서만 판정하기 위해서다. 취소는 그 위에 소유권 조건을 더 얹는다.
-    // get() 은 REQUESTER 에게만 본인 것으로 제한하므로 APPROVER 는 여기서 걸러야 한다.
+    // 한 곳에서만 판정하기 위해서다.
+    // ADMIN 및 APPROVER는 담당 클러스터 내 모든 예외를 취소/회수할 수 있으며,
+    // REQUESTER는 본인이 신청한 예외에 한해 취소/자진 회수할 수 있다.
     const request = await this.get(id, user);
-    if (user.role !== Role.ADMIN && request.requestUserId !== user.id) {
+    if (
+      user.role !== Role.ADMIN &&
+      user.role !== Role.APPROVER &&
+      request.requestUserId !== user.id
+    ) {
       throw new BusinessException(EXCEPTION_LIFECYCLE_ERROR.REQUEST_NOT_FOUND, {
         context: { requestId: id },
       });
     }
-    const cancelled = await this.lifecycle.cancel(id, user.id);
+    const cancelled = await this.lifecycle.cancel(
+      id,
+      user.id,
+      dto?.reason?.trim(),
+    );
     return this.visibleTo(cancelled, user);
   }
 

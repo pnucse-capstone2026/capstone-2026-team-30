@@ -69,6 +69,7 @@ describe("seedRbacPermissions", () => {
       "exception_requests.read",
       "exception_requests.approve",
       "exception_requests.reject",
+      "exception_requests.cancel",
       "exception_requests.retry",
       "audit_logs.read",
       "notifications.read",

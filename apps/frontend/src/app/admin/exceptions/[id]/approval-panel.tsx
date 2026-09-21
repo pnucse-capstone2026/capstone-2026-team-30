@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
+  AlertTriangle,
   CheckCircle2,
   Clock3,
   FileClock,
@@ -12,6 +13,14 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import {
   exceptionStatusClassName,
@@ -22,6 +31,7 @@ import {
 import { useDataStore } from "@/lib/data-store";
 import {
   approveExceptionRequest,
+  cancelExceptionRequest,
   rejectExceptionRequest,
   retryExceptionRequest,
   toExceptionRequest,
@@ -77,6 +87,35 @@ export function ExceptionApprovalPanel({
   const StatusIcon = statusIcon[status];
   const canDecide = status === "pending" && !isSubmitting;
   const canRetry = status === "failed" && !isSubmitting;
+  const canRevoke =
+    (status === "approved" || status === "applying") && !isSubmitting;
+  const [isRevokeDialogOpen, setIsRevokeDialogOpen] = useState(false);
+  const [revokeReason, setRevokeReason] = useState("");
+
+  async function handleRevoke() {
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    try {
+      const response = await cancelExceptionRequest(request.id, {
+        reason: revokeReason.trim() || undefined,
+      });
+      const updatedRequest = toExceptionRequest(response);
+      setStatus(updatedRequest.status);
+      setDecisionAt(new Date().toISOString().slice(0, 10));
+      onRequestChange?.(updatedRequest);
+      void useDataStore.getState().fetchExceptions(true);
+      setIsRevokeDialogOpen(false);
+      toast.success("예외를 회수하고 클러스터 리소스 삭제를 요청했습니다.");
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "예외 회수 처리에 실패했습니다.";
+      setErrorMessage(message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   const events = useMemo<ApprovalEvent[]>(() => {
     const baseEvents: ApprovalEvent[] = [
@@ -286,8 +325,60 @@ export function ExceptionApprovalPanel({
               {isSubmitting ? "재시도 중" : "재시도"}
             </Button>
           ) : null}
+          {canRevoke ? (
+            <Button
+              variant="outline"
+              className="h-10 rounded-xl border-rose-200 bg-white text-rose-700 hover:bg-rose-50"
+              disabled={isSubmitting}
+              onClick={() => setIsRevokeDialogOpen(true)}
+            >
+              <AlertTriangle className="size-4" />
+              {status === "cancelling" ? "회수 처리 중" : "예외 회수"}
+            </Button>
+          ) : null}
         </div>
       </article>
+
+      <Dialog open={isRevokeDialogOpen} onOpenChange={setIsRevokeDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>배포된 예외 회수</DialogTitle>
+            <DialogDescription>
+              배포된 예외를 회수하면 대상 클러스터에서 Kyverno PolicyException
+              리소스가 즉시 삭제되며 정책 위반 검사가 재개됩니다.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Label htmlFor="revoke-reason" className="text-xs text-slate-700">
+              회수 사유
+            </Label>
+            <textarea
+              id="revoke-reason"
+              placeholder="예: 보안 취약점 조치 완료, 운영 환경 긴급 보안 정책 재적용"
+              value={revokeReason}
+              onChange={(e) => setRevokeReason(e.target.value)}
+              className="min-h-24 w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-800 outline-none focus:border-rose-500 focus:bg-white"
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setIsRevokeDialogOpen(false)}
+              disabled={isSubmitting}
+            >
+              취소
+            </Button>
+            <Button
+              variant="destructive"
+              className="bg-rose-600 text-white hover:bg-rose-700"
+              disabled={isSubmitting}
+              onClick={() => void handleRevoke()}
+            >
+              {isSubmitting ? "회수 처리 중..." : "회수 실행"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <article className="rounded-2xl border border-slate-200 bg-white p-5">
         <h3 className="text-sm font-semibold">처리 이력</h3>

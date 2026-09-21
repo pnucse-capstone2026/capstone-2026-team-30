@@ -196,6 +196,7 @@ export class ExceptionLifecycleService {
   async cancel(
     requestId: string,
     actorUserId: string,
+    reason?: string,
   ): Promise<PolicyExceptionRequest> {
     const outcome = await this.prisma.runSerializableTransaction(async (tx) => {
       const current = await tx.policyExceptionRequest.findUnique({
@@ -244,6 +245,7 @@ export class ExceptionLifecycleService {
         userId: actorUserId,
         beforeStatus: current.status,
         afterStatus,
+        metadata: reason ? { reason } : undefined,
       });
       return {
         request: await tx.policyExceptionRequest.findUnique({

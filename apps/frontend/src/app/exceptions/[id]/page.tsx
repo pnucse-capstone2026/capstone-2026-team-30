@@ -19,6 +19,15 @@ import {
 import { DashboardPageShell } from "@/components/dashboard/dashboard-page-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { useAuthStore } from "@/lib/auth-store";
 import {
   cancelExceptionRequest,
@@ -94,20 +103,33 @@ export default function MyExceptionRequestDetailPage({ params }: PageProps) {
     request?.status === "applying" ||
     request?.status === "approved" ||
     request?.status === "failed";
+  const isRevocation =
+    request?.status === "approved" || request?.status === "applying";
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
 
   async function handleCancel() {
     if (!request || !canCancel) return;
     setIsCancelling(true);
     setErrorMessage(null);
     try {
-      const response = await cancelExceptionRequest(request.id);
+      const response = await cancelExceptionRequest(request.id, {
+        reason: cancelReason.trim() || undefined,
+      });
       setRequest(toExceptionRequest(response));
-      toast.success("예외 신청 취소를 요청했습니다.");
+      setIsCancelDialogOpen(false);
+      toast.success(
+        isRevocation
+          ? "예외를 회수하고 클러스터 리소스 삭제를 요청했습니다."
+          : "예외 신청 취소를 요청했습니다.",
+      );
     } catch (error) {
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : "예외 신청 취소에 실패했습니다.",
+          : isRevocation
+            ? "예외 회수 요청에 실패했습니다."
+            : "예외 신청 취소에 실패했습니다.",
       );
     } finally {
       setIsCancelling(false);
@@ -156,15 +178,76 @@ export default function MyExceptionRequestDetailPage({ params }: PageProps) {
               variant="outline"
               className="h-10 rounded-xl border-rose-200 bg-white text-rose-700 hover:bg-rose-50"
               disabled={isCancelling}
-              onClick={() => void handleCancel()}
+              onClick={() => setIsCancelDialogOpen(true)}
             >
-              <XCircle className="size-4" />
-              {isCancelling ? "취소 중" : "신청 취소"}
+              {isRevocation ? (
+                <AlertTriangle className="size-4" />
+              ) : (
+                <XCircle className="size-4" />
+              )}
+              {isCancelling
+                ? isRevocation
+                  ? "회수 처리 중"
+                  : "취소 중"
+                : isRevocation
+                  ? "예외 회수"
+                  : "신청 취소"}
             </Button>
           ) : null}
         </>
       }
     >
+      <Dialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {isRevocation ? "배포된 예외 회수" : "예외 신청 취소"}
+            </DialogTitle>
+            <DialogDescription>
+              {isRevocation
+                ? "배포된 예외를 회수하면 대상 클러스터에서 Kyverno PolicyException 리소스가 즉시 삭제되며 정책 위반 검사가 재개됩니다."
+                : "예외 신청을 취소하면 검토 목록에서 제외되고 처리가 중단됩니다."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Label htmlFor="cancel-reason" className="text-xs text-slate-700">
+              {isRevocation ? "회수 사유" : "취소 사유 (선택)"}
+            </Label>
+            <textarea
+              id="cancel-reason"
+              placeholder={
+                isRevocation
+                  ? "예: 조기 보안 조치 완료로 인한 예외 자진 회수"
+                  : "취소 사유를 입력하세요"
+              }
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              className="min-h-24 w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-800 outline-none focus:border-rose-500 focus:bg-white"
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setIsCancelDialogOpen(false)}
+              disabled={isCancelling}
+            >
+              닫기
+            </Button>
+            <Button
+              variant="destructive"
+              className="bg-rose-600 text-white hover:bg-rose-700"
+              disabled={isCancelling}
+              onClick={() => void handleCancel()}
+            >
+              {isCancelling
+                ? "처리 중..."
+                : isRevocation
+                  ? "회수 실행"
+                  : "취소 실행"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {isLoading ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-8 text-sm text-slate-500">
           예외 신청 상세를 불러오는 중입니다.

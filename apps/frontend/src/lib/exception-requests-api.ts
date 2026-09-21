@@ -182,11 +182,19 @@ export function rejectExceptionRequest(
   );
 }
 
-export function cancelExceptionRequest(id: string) {
+export type CancelExceptionRequestInput = {
+  reason?: string;
+};
+
+export function cancelExceptionRequest(
+  id: string,
+  data: CancelExceptionRequestInput = {},
+) {
   return requestWithAuth<BackendExceptionRequest>(
     `/exception-requests/${id}/cancel`,
     {
       method: "PATCH",
+      body: data,
     },
   );
 }

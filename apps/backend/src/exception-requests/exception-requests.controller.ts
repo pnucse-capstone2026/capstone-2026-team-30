@@ -18,6 +18,7 @@ import { RequirePermissions } from "../auth/decorators/require-permissions.decor
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { PermissionsGuard } from "../auth/guards/permissions.guard";
 import { ApproveExceptionRequestDto } from "./dto/approve-exception-request.dto";
+import { CancelExceptionRequestDto } from "./dto/cancel-exception-request.dto";
 import { CreateExceptionRequestDto } from "./dto/create-exception-request.dto";
 import { RejectExceptionRequestDto } from "./dto/reject-exception-request.dto";
 import { ExceptionRequestsService } from "./exception-requests.service";
@@ -79,13 +80,15 @@ export class ExceptionRequestsController {
   }
 
   @Patch(":id/cancel")
+  @Post(":id/cancel")
   @RequirePermissions("exception_requests.cancel")
   async cancel(
     @Param("id") id: string,
     @CurrentUser() user: AuthenticatedUser,
     @Res({ passthrough: true }) response: Response,
+    @Body() dto?: CancelExceptionRequestDto,
   ) {
-    const request = await this.service.cancel(id, user);
+    const request = await this.service.cancel(id, user, dto);
     if (
       request.status === ExceptionStatus.CANCELLING ||
       (request.status === ExceptionStatus.CANCELLED && request.decidedAt)
