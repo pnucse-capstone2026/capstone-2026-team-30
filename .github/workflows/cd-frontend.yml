@@ -8,6 +8,7 @@ on:
       - "apps/frontend/**"
       - "packages/shared/**"
       - "pnpm-lock.yaml"
+  workflow_dispatch:
 
 # AWS OIDC AssumeRole 권한 획득을 위해 필수 권한 지정
 permissions:
@@ -32,6 +33,14 @@ jobs:
       - name: Log in to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Ensure ECR Repository Exists
+        env:
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_FRONTEND }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          aws ecr describe-repositories --repository-names "${ECR_REPOSITORY}" --region "${AWS_REGION}" 2>/dev/null || \
+          aws ecr create-repository --repository-name "${ECR_REPOSITORY}" --region "${AWS_REGION}"
 
       # 런타임 인프라(m7i-flex.large) 부하 방지를 위해 빌드 오프로딩 수행
       - name: Build and Push Frontend Docker Image

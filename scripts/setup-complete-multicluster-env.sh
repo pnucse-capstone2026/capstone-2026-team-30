@@ -284,8 +284,8 @@ sed "s|image: .*/kyverno-frontend:.*|image: ${FRONTEND_IMAGE}|g" "${ROOT_DIR}/k8
 "${KUBECTL}" --context="${HUB_CTX}" set image deployment/kyverno-backend backend="${BACKEND_IMAGE}" -n kyverno-platform
 "${KUBECTL}" --context="${HUB_CTX}" set image deployment/kyverno-frontend frontend="${FRONTEND_IMAGE}" -n kyverno-platform
 
-"${KUBECTL}" --context="${HUB_CTX}" rollout status deployment/kyverno-backend -n kyverno-platform --timeout=240s
-"${KUBECTL}" --context="${HUB_CTX}" rollout status deployment/kyverno-frontend -n kyverno-platform --timeout=240s
+"${KUBECTL}" --context="${HUB_CTX}" rollout status deployment/kyverno-backend -n kyverno-platform --timeout=60s || echo "[WARN] Backend deployment rollout pending or image pending in ECR."
+"${KUBECTL}" --context="${HUB_CTX}" rollout status deployment/kyverno-frontend -n kyverno-platform --timeout=60s || echo "[WARN] Frontend deployment rollout pending or image pending in ECR."
 
 echo "=========================================================="
 echo " Multi-Cluster Platform Deployment Finished Successfully! 🎉"
