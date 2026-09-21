@@ -512,7 +512,7 @@ function MyViolationsContent() {
           </div>
         </div>
 
-        <div className="divide-y divide-slate-100">
+        <div className="max-h-[calc(100vh-360px)] min-h-[420px] overflow-y-auto divide-y divide-slate-100 pr-1">
           {liveViolations === null
             ? [1, 2, 3].map((key) => (
                 <article

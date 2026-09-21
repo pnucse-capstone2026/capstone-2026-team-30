@@ -138,7 +138,7 @@ export default function NotificationsPage() {
       title="알림"
       description="내 역할과 계정에 해당하는 조치 알림을 확인합니다."
     >
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-3 grid-cols-1 sm:grid-cols-3">
         <SummaryCard
           label="전체 알림"
           value={String(visibleNotifications.length)}
@@ -169,59 +169,58 @@ export default function NotificationsPage() {
         />
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white">
-        <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+        <div className="border-b border-slate-100 px-5 py-3.5 sm:px-6">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50">
+              <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50 text-[10px]">
                   {user ? "계정 맞춤 알림" : "알림 메인"}
                 </Badge>
-                <span className="text-xs text-slate-400">
-                  {user?.email ?? "계정 권한 기반 실시간 필터링"}
+                <span className="text-xs text-slate-400 font-mono">
+                  {user?.email ?? "실시간 필터링"}
                 </span>
               </div>
-              <h2 className="text-2xl font-semibold tracking-tight">
-                알림 목록
+              <h2 className="text-base font-semibold tracking-tight text-slate-900">
+                알림 센터 ({visibleNotifications.length}건)
               </h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                역할 기반 알림과 개인 대상 알림을 현재 로그인 계정 기준으로
-                표시합니다.
-              </p>
             </div>
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <div className="flex flex-wrap items-center gap-2">
               <div className="relative">
-                <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400" />
+                <Search className="absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-slate-400" />
                 <Input
                   type="search"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="제목, 내용, 유형 검색"
-                  className="h-10 w-full rounded-xl border-slate-200 bg-slate-50 pr-3 pl-9 text-xs lg:w-72"
+                  placeholder="제목, 내용 검색"
+                  className="h-8.5 w-48 rounded-xl border-slate-200 bg-slate-50 pr-3 pl-8 text-xs"
                 />
               </div>
               <Button
                 type="button"
                 variant="outline"
-                className="h-10 rounded-xl border-slate-200 bg-white text-slate-700"
+                size="sm"
+                className="h-8.5 rounded-xl border-slate-200 text-xs text-slate-700 gap-1 px-2.5"
                 onClick={resetFilters}
               >
-                <Filter className="size-4" />
-                필터 초기화
+                <Filter className="size-3" />
+                초기화
               </Button>
               <Button
                 type="button"
                 variant="outline"
-                className="h-10 rounded-xl border-slate-200 bg-white text-slate-700"
+                size="sm"
+                className="h-8.5 rounded-xl border-slate-200 text-xs text-slate-700 gap-1 px-2.5"
                 onClick={handleMarkAllAsRead}
+                disabled={unreadCount === 0}
               >
-                <CheckCircle2 className="size-4" />
+                <CheckCircle2 className="size-3 text-emerald-600" />
                 모두 읽음
               </Button>
             </div>
           </div>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="mt-3 grid gap-2.5 sm:grid-cols-3">
             <FilterSelect
               label="유형"
               value={typeFilter}
@@ -258,14 +257,15 @@ export default function NotificationsPage() {
           </div>
         </div>
 
-        <div className="divide-y divide-slate-100">
+        {/* 수직 스크롤 컨테이너: 상단 헤더와 필터는 고정되고 알림 목록만 독립 스크롤 */}
+        <div className="max-h-[calc(100vh-350px)] min-h-[400px] overflow-y-auto divide-y divide-slate-100 pr-0.5">
           {loading ? (
             [1, 2, 3].map((key) => (
-              <div key={key} className="flex gap-4 px-5 py-4 sm:px-6">
-                <Skeleton className="mt-1 size-10 shrink-0 rounded-xl" />
-                <div className="min-w-0 flex-1 space-y-2">
-                  <Skeleton className="h-5 w-48 rounded-lg" />
-                  <Skeleton className="h-4 w-full rounded-lg" />
+              <div key={key} className="flex gap-3 px-5 py-3.5 sm:px-6">
+                <Skeleton className="mt-1 size-9 shrink-0 rounded-xl" />
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <Skeleton className="h-4 w-44 rounded" />
+                  <Skeleton className="h-3.5 w-full rounded" />
                 </div>
               </div>
             ))
@@ -277,42 +277,40 @@ export default function NotificationsPage() {
                 <Link
                   key={notification.id}
                   href={notification.href}
-                  className="flex gap-4 px-5 py-4 hover:bg-slate-50/70 sm:px-6"
+                  className="flex gap-3 px-5 py-3 hover:bg-slate-50/70 sm:px-6 transition-colors"
                   onClick={() => handleNotificationClick(notification.id)}
                 >
                   <div
-                    className={`mt-1 flex size-10 shrink-0 items-center justify-center rounded-xl ${
+                    className={`mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl ${
                       read
-                        ? "bg-slate-100 text-slate-500"
+                        ? "bg-slate-100 text-slate-400"
                         : "bg-blue-50 text-blue-600"
                     }`}
                   >
-                    <BellRing className="size-5" />
+                    <BellRing className="size-4.5" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-semibold text-slate-950">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <p className={`text-xs font-semibold ${read ? "text-slate-700" : "text-slate-950"}`}>
                         {notification.title}
                       </p>
                       {!read ? (
-                        <span className="size-2 rounded-full bg-blue-500" />
+                        <span className="size-1.5 rounded-full bg-blue-500" />
                       ) : null}
                       <Badge
-                        className={
-                          notificationSeverityClassName[notification.severity]
-                        }
+                        className={`${notificationSeverityClassName[notification.severity]} text-[10px] px-1.5 py-0`}
                       >
                         {notificationSeverityLabel[notification.severity]}
                       </Badge>
-                      <Badge className="bg-slate-100 text-slate-600 ring-1 ring-slate-200">
+                      <Badge className="bg-slate-100 text-slate-600 ring-1 ring-slate-200 text-[10px] px-1.5 py-0">
                         {notificationTypeLabel[notification.type]}
                       </Badge>
                     </div>
-                    <p className="mt-2 text-sm leading-6 text-slate-500">
+                    <p className="mt-1 text-xs leading-relaxed text-slate-500 line-clamp-2">
                       {notification.message}
                     </p>
-                    <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-400">
-                      <Clock3 className="size-3.5" />
+                    <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-slate-400">
+                      <Clock3 className="size-3" />
                       {notification.createdAt}
                     </div>
                   </div>
@@ -320,10 +318,17 @@ export default function NotificationsPage() {
               );
             })
           ) : (
-            <div className="px-5 py-12 text-center text-sm text-slate-500">
+            <div className="px-5 py-12 text-center text-xs text-slate-400">
               조건에 맞는 알림이 없습니다.
             </div>
           )}
+        </div>
+
+        <div className="flex flex-col gap-2 border-t border-slate-100 px-5 py-2.5 text-[11px] text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <span>
+            {visibleNotifications.length}개 알림 표시 중 (미읽음 {unreadCount}건)
+          </span>
+          <span>실시간 알림 및 조치 추적</span>
         </div>
       </section>
     </DashboardPageShell>
@@ -346,21 +351,21 @@ function SummaryCard({
   loading?: boolean;
 }) {
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-      <div className="flex items-start justify-between">
-        <div
-          className={`flex size-10 items-center justify-center rounded-xl ${className}`}
-        >
-          <Icon className="size-5" />
-        </div>
+    <article className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] flex items-center justify-between">
+      <div>
+        <p className="text-xs font-medium text-slate-500">{label}</p>
+        {loading ? (
+          <Skeleton className="mt-1 h-7 w-16 rounded" />
+        ) : (
+          <p className="mt-0.5 text-2xl font-bold tracking-tight text-slate-900">{value}</p>
+        )}
+        <p className="mt-0.5 text-[11px] text-slate-400">{detail}</p>
       </div>
-      <p className="mt-5 text-[13px] text-slate-500">{label}</p>
-      {loading ? (
-        <Skeleton className="mt-1 h-9 w-20 rounded-lg" />
-      ) : (
-        <p className="mt-1 text-3xl font-semibold tracking-tight">{value}</p>
-      )}
-      <p className="mt-2 text-[11px] text-slate-400">{detail}</p>
+      <div
+        className={`flex size-9 items-center justify-center rounded-xl ${className} shrink-0`}
+      >
+        <Icon className="size-4.5" />
+      </div>
     </article>
   );
 }

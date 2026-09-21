@@ -422,33 +422,35 @@ export default function MyExceptionRequestsPage() {
               </div>
             </div>
 
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-slate-50/80 hover:bg-slate-50/80">
-                  <TableHead className="w-[210px] px-5 text-xs text-slate-500 sm:px-6">
-                    신청 번호
-                  </TableHead>
-                  <TableHead className="text-xs text-slate-500">
-                    정책명
-                  </TableHead>
-                  <TableHead className="text-xs text-slate-500">
-                    신청 사유
-                  </TableHead>
-                  <TableHead className="text-xs text-slate-500">
-                    신청일
-                  </TableHead>
-                  <TableHead className="text-xs text-slate-500">
-                    만료일
-                  </TableHead>
-                  <TableHead className="text-xs text-slate-500">
-                    처리 상태
-                  </TableHead>
-                  <TableHead className="w-20 text-xs text-slate-500">
-                    상세
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            {/* 독립 수직 스크롤 컨테이너 & Sticky Header */}
+            <div className="max-h-[calc(100vh-380px)] min-h-[400px] overflow-y-auto overflow-x-auto relative">
+              <Table>
+                <TableHeader className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur-xs shadow-[0_1px_0_rgba(0,0,0,0.05)]">
+                  <TableRow className="bg-slate-50/95 hover:bg-slate-50/95">
+                    <TableHead className="w-[210px] px-5 text-xs font-semibold text-slate-600 sm:px-6">
+                      신청 번호
+                    </TableHead>
+                    <TableHead className="text-xs font-semibold text-slate-600">
+                      정책명
+                    </TableHead>
+                    <TableHead className="text-xs font-semibold text-slate-600">
+                      신청 사유
+                    </TableHead>
+                    <TableHead className="text-xs font-semibold text-slate-600">
+                      신청일
+                    </TableHead>
+                    <TableHead className="text-xs font-semibold text-slate-600">
+                      만료일
+                    </TableHead>
+                    <TableHead className="text-xs font-semibold text-slate-600">
+                      처리 상태
+                    </TableHead>
+                    <TableHead className="w-20 text-xs font-semibold text-slate-600">
+                      상세
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                 {isLoading
                   ? Array.from({ length: 4 }).map((_, index) => (
                       <TableRow key={`loading-${index}`}>
@@ -550,6 +552,7 @@ export default function MyExceptionRequestsPage() {
                     })}
               </TableBody>
             </Table>
+          </div>
 
             {!isLoading && errorMessage ? (
               <div className="border-t border-rose-100 bg-rose-50 px-5 py-6 text-sm text-rose-700 sm:px-6">

@@ -449,28 +449,30 @@ function AdminViolationsContent() {
           </div>
         </div>
 
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-slate-50/80 hover:bg-slate-50/80">
-              <TableHead className="w-[280px] px-5 text-xs text-slate-500 sm:px-6">
-                정책 / 규칙
-              </TableHead>
-              <TableHead className="text-xs text-slate-500">리소스</TableHead>
-              <TableHead className="text-xs text-slate-500">
-                Namespace
-              </TableHead>
-              <TableHead className="text-xs text-slate-500">심각도</TableHead>
-              <TableHead className="text-xs text-slate-500">
-                처리 상태
-              </TableHead>
-              <TableHead className="text-xs text-slate-500">예외</TableHead>
-              <TableHead className="text-xs text-slate-500">
-                발생 시간
-              </TableHead>
-              <TableHead className="w-12" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+        {/* 독립 수직 스크롤 컨테이너 & Sticky Header */}
+        <div className="max-h-[calc(100vh-380px)] min-h-[400px] overflow-y-auto overflow-x-auto relative">
+          <Table>
+            <TableHeader className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur-xs shadow-[0_1px_0_rgba(0,0,0,0.05)]">
+              <TableRow className="bg-slate-50/95 hover:bg-slate-50/95">
+                <TableHead className="w-[280px] px-5 text-xs font-semibold text-slate-600 sm:px-6">
+                  정책 / 규칙
+                </TableHead>
+                <TableHead className="text-xs font-semibold text-slate-600">리소스</TableHead>
+                <TableHead className="text-xs font-semibold text-slate-600">
+                  Namespace
+                </TableHead>
+                <TableHead className="text-xs font-semibold text-slate-600">심각도</TableHead>
+                <TableHead className="text-xs font-semibold text-slate-600">
+                  처리 상태
+                </TableHead>
+                <TableHead className="text-xs font-semibold text-slate-600">예외</TableHead>
+                <TableHead className="text-xs font-semibold text-slate-600">
+                  발생 시간
+                </TableHead>
+                <TableHead className="w-12" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
             {liveViolations === null
               ? [1, 2, 3].map((key) => (
                   <TableRow key={key}>
@@ -586,6 +588,7 @@ function AdminViolationsContent() {
                 ))}
           </TableBody>
         </Table>
+      </div>
 
         {filteredViolations.length === 0 ? (
           <div className="border-t border-slate-100 px-5 py-10 text-center text-sm text-slate-500">

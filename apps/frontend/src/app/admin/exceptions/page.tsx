@@ -445,37 +445,38 @@ export default function AdminExceptionsPage() {
                     ))}
                   </select>
                 </label>
-              </div>
             </div>
 
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-slate-50/80 hover:bg-slate-50/80">
-                  <TableHead className="w-[190px] px-5 text-xs text-slate-500 sm:px-6">
-                    신청 번호
-                  </TableHead>
-                  <TableHead className="text-xs text-slate-500">대상</TableHead>
-                  <TableHead className="text-xs text-slate-500">
-                    신청자
-                  </TableHead>
-                  <TableHead className="text-xs text-slate-500">
-                    위험도
-                  </TableHead>
-                  <TableHead className="text-xs text-slate-500">기간</TableHead>
-                  <TableHead className="text-xs text-slate-500">상태</TableHead>
-                  <TableHead className="min-w-[260px] text-xs text-slate-500">
-                    보완 통제
-                  </TableHead>
-                  <TableHead className="w-[120px] text-xs text-slate-500">
-                    조치
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading
-                  ? Array.from({ length: 4 }).map((_, index) => (
-                      <TableRow key={`loading-${index}`}>
-                        <TableCell className="px-5 py-4 sm:px-6">
+            {/* 독립 수직 스크롤 컨테이너 & Sticky Header */}
+            <div className="max-h-[calc(100vh-380px)] min-h-[400px] overflow-y-auto overflow-x-auto relative">
+              <Table>
+                <TableHeader className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur-xs shadow-[0_1px_0_rgba(0,0,0,0.05)]">
+                  <TableRow className="bg-slate-50/95 hover:bg-slate-50/95">
+                    <TableHead className="w-[190px] px-5 text-xs text-slate-600 font-semibold sm:px-6">
+                      신청 번호
+                    </TableHead>
+                    <TableHead className="text-xs text-slate-600 font-semibold">대상</TableHead>
+                    <TableHead className="text-xs text-slate-600 font-semibold">
+                      신청자
+                    </TableHead>
+                    <TableHead className="text-xs text-slate-600 font-semibold">
+                      위험도
+                    </TableHead>
+                    <TableHead className="text-xs text-slate-600 font-semibold">기간</TableHead>
+                    <TableHead className="text-xs text-slate-600 font-semibold">상태</TableHead>
+                    <TableHead className="min-w-[260px] text-xs text-slate-600 font-semibold">
+                      보완 통제
+                    </TableHead>
+                    <TableHead className="w-[120px] text-xs text-slate-600 font-semibold">
+                      조치
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading
+                    ? Array.from({ length: 4 }).map((_, index) => (
+                        <TableRow key={`loading-${index}`}>
+                          <TableCell className="px-5 py-3 sm:px-6">
                           <div className="h-4 w-32 animate-pulse rounded bg-slate-100" />
                           <div className="mt-2 h-3 w-24 animate-pulse rounded bg-slate-100" />
                         </TableCell>
@@ -596,6 +597,7 @@ export default function AdminExceptionsPage() {
                     })}
               </TableBody>
             </Table>
+          </div>
 
             {!isLoading && errorMessage ? (
               <div className="border-t border-rose-100 bg-rose-50 px-5 py-6 text-sm text-rose-700 sm:px-6">

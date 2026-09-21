@@ -106,7 +106,7 @@ export function AiErrorExplainerDialog({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto sm:max-w-3xl">
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
           <div className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-white shadow">
@@ -146,18 +146,7 @@ export function AiErrorExplainerDialog({
           </div>
         </DialogHeader>
 
-        <div className="mt-3 space-y-4">
-          {/* 차단 에러 원문 */}
-          <div className="rounded-lg border border-red-200 bg-red-50/50 p-3 dark:border-red-950 dark:bg-red-950/20">
-            <div className="flex items-center gap-2 text-xs font-semibold text-red-700 dark:text-red-400">
-              <ShieldAlert className="h-4 w-4" />
-              차단된 에러 메시지
-            </div>
-            <p className="mt-1 font-mono text-xs text-red-800 dark:text-red-300">
-              {errorMessage}
-            </p>
-          </div>
-
+        <div className="mt-2 space-y-4">
           {isLoading && (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Loader2 className="h-8 w-8 animate-spin text-indigo-600 dark:text-indigo-400" />
@@ -188,85 +177,113 @@ export function AiErrorExplainerDialog({
             </div>
           )}
 
-          {result && !isLoading && (
-            <div className="space-y-5">
-              {/* 1. 핵심 요약 */}
-              <div className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-4 dark:border-indigo-900/30 dark:bg-indigo-950/20">
-                <h4 className="flex items-center gap-2 text-sm font-bold text-indigo-900 dark:text-indigo-300">
-                  <Sparkles className="h-4 w-4 text-indigo-600" />
-                  원인 요약 (Summary)
-                </h4>
-                <p className="mt-2 text-sm leading-relaxed text-slate-800 dark:text-slate-200">
-                  {result.summary}
-                </p>
-              </div>
-
-              {/* 2. 거버넌스 배경 */}
-              <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-900/50">
-                <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                  🛡️ 거버넌스 및 보안 배경
-                </h4>
-                <p className="mt-2 text-xs leading-relaxed text-slate-700 dark:text-slate-300">
-                  {result.governanceRationale}
-                </p>
-              </div>
-
-              {/* 3. 단계별 해결 가이드 */}
-              {result.resolutionSteps?.length > 0 && (
-                <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                    🛠️ 단계별 해결 방법
+          {result && !isLoading ? (
+            /* 2단 Split-View: 좌측 원인/가이드 + 우측 에러/수정 YAML (한 화면 대조 가시성 극대화) */
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+              {/* 좌측 컬럼: 원인 분석 및 단계별 가이드 */}
+              <div className="space-y-3.5">
+                {/* 1. 핵심 요약 */}
+                <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3.5 dark:border-indigo-900/30 dark:bg-indigo-950/20">
+                  <h4 className="flex items-center gap-1.5 text-xs font-bold text-indigo-900 dark:text-indigo-300">
+                    <Sparkles className="h-3.5 w-3.5 text-indigo-600" />
+                    원인 요약 (Summary)
                   </h4>
-                  <ul className="mt-3 space-y-2">
-                    {result.resolutionSteps.map((step, idx) => (
-                      <li
-                        key={idx}
-                        className="flex items-start gap-2 text-xs leading-relaxed text-slate-700 dark:text-slate-300"
-                      >
-                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-                        <span>
-                          <strong className="font-semibold text-slate-900 dark:text-slate-100">
-                            {idx + 1}단계:
-                          </strong>{" "}
-                          {step}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                  <p className="mt-1.5 text-xs leading-relaxed text-slate-800 dark:text-slate-200">
+                    {result.summary}
+                  </p>
                 </div>
-              )}
 
-              {/* 4. 수정 추천 YAML */}
-              {result.suggestedFixYaml && (
-                <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                      📄 권장 수정 매니페스트 (YAML)
-                    </h4>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 gap-1 text-xs"
-                      onClick={handleCopyYaml}
-                    >
-                      {copied ? (
-                        <>
-                          <Check className="h-3.5 w-3.5 text-emerald-500" />
-                          복사 완료
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-3.5 w-3.5" />
-                          YAML 복사
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                  <pre className="mt-3 max-h-60 overflow-x-auto rounded bg-slate-900 p-3 font-mono text-xs text-slate-100">
-                    <code>{result.suggestedFixYaml}</code>
-                  </pre>
+                {/* 2. 거버넌스 배경 */}
+                <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 dark:border-slate-800 dark:bg-slate-900/50">
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                    🛡️ 사내 거버넌스 규격
+                  </h4>
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
+                    {result.governanceRationale}
+                  </p>
                 </div>
-              )}
+
+                {/* 3. 단계별 해결 방법 */}
+                {result.resolutionSteps?.length > 0 && (
+                  <div className="rounded-xl border border-slate-200 p-3.5 dark:border-slate-800 bg-white">
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                      🛠️ 단계별 해결 조치
+                    </h4>
+                    <ul className="mt-2 space-y-2">
+                      {result.resolutionSteps.map((step, idx) => (
+                        <li
+                          key={idx}
+                          className="flex items-start gap-2 text-xs leading-relaxed text-slate-700 dark:text-slate-300"
+                        >
+                          <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                          <span>
+                            <strong className="font-semibold text-slate-900 dark:text-slate-100">
+                              {idx + 1}단계:
+                            </strong>{" "}
+                            {step}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {/* 우측 컬럼: 차단 에러 원문 및 권장 수정 YAML */}
+              <div className="space-y-3.5">
+                {/* 차단 에러 원문 */}
+                <div className="rounded-xl border border-red-200 bg-red-50/50 p-3 dark:border-red-950 dark:bg-red-950/20">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-red-700 dark:text-red-400">
+                    <ShieldAlert className="h-3.5 w-3.5" />
+                    차단된 에러 메시지
+                  </div>
+                  <p className="mt-1 font-mono text-[11px] text-red-800 dark:text-red-300 break-all line-clamp-3" title={errorMessage}>
+                    {errorMessage}
+                  </p>
+                </div>
+
+                {/* 수정 추천 YAML */}
+                {result.suggestedFixYaml && (
+                  <div className="rounded-xl border border-slate-200 p-3.5 dark:border-slate-800 bg-white">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                        📄 권장 수정 매니페스트 (Compliant YAML)
+                      </h4>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-6.5 gap-1 text-[11px] px-2"
+                        onClick={handleCopyYaml}
+                      >
+                        {copied ? (
+                          <>
+                            <Check className="h-3 w-3 text-emerald-500" />
+                            복사 완료
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3 w-3" />
+                            YAML 복사
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    <pre className="mt-2 max-h-[320px] overflow-x-auto overflow-y-auto rounded-lg bg-slate-900 p-3 font-mono text-[11px] text-emerald-300 leading-relaxed">
+                      <code>{result.suggestedFixYaml}</code>
+                    </pre>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : !isLoading && !error && (
+            <div className="rounded-lg border border-red-200 bg-red-50/50 p-3 dark:border-red-950 dark:bg-red-950/20">
+              <div className="flex items-center gap-2 text-xs font-semibold text-red-700 dark:text-red-400">
+                <ShieldAlert className="h-4 w-4" />
+                차단된 에러 메시지
+              </div>
+              <p className="mt-1 font-mono text-xs text-red-800 dark:text-red-300">
+                {errorMessage}
+              </p>
             </div>
           )}
         </div>

@@ -127,7 +127,7 @@ export default function AdminAuditLogsPage() {
         </Button>
       }
     >
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-3 grid-cols-1 sm:grid-cols-3">
         <SummaryCard
           label="전체 로그"
           value={String(logs.length)}
@@ -158,51 +158,36 @@ export default function AdminAuditLogsPage() {
         />
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white">
-        <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+        {/* 컴팩트 1열 통합 필터 헤더 */}
+        <div className="border-b border-slate-100 px-5 py-3 sm:px-6">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h2 className="text-2xl font-semibold tracking-tight">
-                작업 이력
+              <h2 className="text-sm font-semibold text-slate-900">
+                작업 이력 ({filteredLogs.length}건)
               </h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                작업자, 액션, 대상 리소스, 생성 시각을 기준으로 운영 이력을
-                확인합니다.
+              <p className="text-xs text-slate-500">
+                작업자, 액션, 대상 리소스, 생성 시각을 기준으로 운영 이력을 확인합니다.
               </p>
             </div>
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <div className="flex flex-wrap items-center gap-2">
               <div className="relative">
-                <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400" />
+                <Search className="absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-slate-400" />
                 <Input
                   type="search"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="작업, 대상, 작업자 검색"
-                  className="h-10 w-full rounded-xl border-slate-200 bg-slate-50 pr-3 pl-9 text-xs lg:w-72"
+                  className="h-8.5 w-48 rounded-xl border-slate-200 bg-slate-50 pr-3 pl-8 text-xs"
                 />
               </div>
-              <Button
-                variant="outline"
-                className="h-10 rounded-xl border-slate-200 bg-white text-slate-700"
-                onClick={resetFilters}
-              >
-                <Filter className="size-4" />
-                필터 초기화
-              </Button>
-            </div>
-          </div>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <label className="space-y-1.5">
-              <span className="text-[11px] font-medium text-slate-500">
-                대상 유형
-              </span>
               <select
                 value={entityType}
                 onChange={(event) =>
                   setEntityType(event.target.value as EntityFilter)
                 }
-                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none focus:border-blue-500 focus:ring-3 focus:ring-blue-500/10"
+                className="h-8.5 rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-700 outline-none focus:border-blue-500"
               >
                 <option value="all">전체 대상</option>
                 {entityOptions.map((option) => (
@@ -211,117 +196,134 @@ export default function AdminAuditLogsPage() {
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="space-y-1.5">
-              <span className="text-[11px] font-medium text-slate-500">
-                작업자 역할
-              </span>
+
               <select
                 value={actorRole}
                 onChange={(event) =>
                   setActorRole(event.target.value as ActorRoleFilter)
                 }
-                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none focus:border-blue-500 focus:ring-3 focus:ring-blue-500/10"
+                className="h-8.5 rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-700 outline-none focus:border-blue-500"
               >
                 <option value="all">전체 역할</option>
                 {actorRoleOptions.map((option) => (
                   <option key={option} value={option}>
-                    {roleLabel[option]} ({option})
+                    {roleLabel[option]}
                   </option>
                 ))}
               </select>
-            </label>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8.5 rounded-xl border-slate-200 text-xs text-slate-600 gap-1 px-2.5"
+                onClick={resetFilters}
+              >
+                <Filter className="size-3" />
+                초기화
+              </Button>
+            </div>
           </div>
         </div>
 
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-slate-50/80 hover:bg-slate-50/80">
-              <TableHead className="w-[220px] px-5 text-xs text-slate-500 sm:px-6">
-                발생 시간
-              </TableHead>
-              <TableHead className="text-xs text-slate-500">작업</TableHead>
-              <TableHead className="text-xs text-slate-500">대상</TableHead>
-              <TableHead className="text-xs text-slate-500">작업자</TableHead>
-              <TableHead className="text-xs text-slate-500">요약</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {liveLogs === null
-              ? [1, 2, 3].map((key) => (
-                  <TableRow key={key}>
-                    <TableCell className="px-5 py-4 sm:px-6">
-                      <Skeleton className="h-5 w-32 rounded-lg" />
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <Skeleton className="h-5 w-24 rounded-lg" />
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <Skeleton className="h-5 w-20 rounded-lg" />
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <Skeleton className="h-5 w-28 rounded-lg" />
-                    </TableCell>
-                    <TableCell className="max-w-[420px] py-4 pr-5 sm:pr-6">
-                      <Skeleton className="h-5 w-48 rounded-lg" />
-                    </TableCell>
-                  </TableRow>
-                ))
-              : filteredLogs.map((log) => (
-                  <TableRow key={log.id} className="hover:bg-slate-50/70">
-                    <TableCell className="px-5 py-4 sm:px-6">
-                      <div className="flex items-center gap-2 text-xs text-slate-500">
-                        <Clock3 className="size-4 text-slate-400" />
-                        {log.createdAt}
-                      </div>
-                      <p className="mt-1 font-mono text-[11px] text-slate-400">
-                        {log.id}
-                      </p>
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <div className="flex items-center gap-2">
-                        <Activity className="size-4 text-slate-400" />
-                        <span className="font-mono text-xs font-medium text-slate-900">
-                          {log.action}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <Badge className={entityTypeClassName[log.entityType]}>
-                        {entityTypeLabel[log.entityType]}
-                      </Badge>
-                      <p className="mt-1 max-w-[220px] truncate font-mono text-[11px] text-slate-400">
-                        {log.entityId}
-                      </p>
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <p className="text-xs font-medium text-slate-900">
-                        {log.actorEmail}
-                      </p>
-                      <p className="mt-1 text-[11px] text-slate-400">
-                        {roleLabel[log.actorRole]} ({log.actorRole})
-                      </p>
-                    </TableCell>
-                    <TableCell className="max-w-[420px] py-4 pr-5 sm:pr-6">
-                      <p className="text-xs leading-5 text-slate-700">
-                        {log.summary}
-                      </p>
-                      <p className="mt-1 truncate font-mono text-[11px] text-slate-400">
-                        {log.metadata}
-                      </p>
-                    </TableCell>
-                  </TableRow>
-                ))}
-          </TableBody>
-        </Table>
+        <div className="relative w-full overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-slate-50/80 hover:bg-slate-50/80">
+                <TableHead className="w-[180px] px-4 text-xs font-semibold text-slate-600">
+                  발생 시간
+                </TableHead>
+                <TableHead className="w-[160px] text-xs font-semibold text-slate-600">
+                  작업
+                </TableHead>
+                <TableHead className="w-[160px] text-xs font-semibold text-slate-600">
+                  대상
+                </TableHead>
+                <TableHead className="w-[200px] text-xs font-semibold text-slate-600">
+                  작업자
+                </TableHead>
+                <TableHead className="min-w-[280px] pr-4 text-xs font-semibold text-slate-600">
+                  요약
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {liveLogs === null
+                ? [1, 2, 3, 4].map((key) => (
+                    <TableRow key={key}>
+                      <TableCell className="px-4 py-2.5">
+                        <Skeleton className="h-4 w-28 rounded" />
+                      </TableCell>
+                      <TableCell className="py-2.5">
+                        <Skeleton className="h-4 w-20 rounded" />
+                      </TableCell>
+                      <TableCell className="py-2.5">
+                        <Skeleton className="h-4 w-16 rounded" />
+                      </TableCell>
+                      <TableCell className="py-2.5">
+                        <Skeleton className="h-4 w-24 rounded" />
+                      </TableCell>
+                      <TableCell className="py-2.5 pr-4">
+                        <Skeleton className="h-4 w-40 rounded" />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                : filteredLogs.map((log) => (
+                    <TableRow key={log.id} className="hover:bg-slate-50/60">
+                      <TableCell className="px-4 py-2.5">
+                        <div className="flex items-center gap-1.5 text-xs text-slate-700">
+                          <Clock3 className="size-3.5 text-slate-400 shrink-0" />
+                          <span>{log.createdAt}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-2.5">
+                        <div className="flex items-center gap-1.5">
+                          <Activity className="size-3.5 text-slate-400 shrink-0" />
+                          <span className="font-mono text-xs font-medium text-slate-900">
+                            {log.action}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-2.5">
+                        <div className="flex items-center gap-1.5">
+                          <Badge className={`${entityTypeClassName[log.entityType]} text-[10px] px-1.5 py-0`}>
+                            {entityTypeLabel[log.entityType]}
+                          </Badge>
+                          <span className="max-w-[130px] truncate font-mono text-[11px] text-slate-500" title={log.entityId}>
+                            {log.entityId}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-2.5">
+                        <p className="text-xs font-medium text-slate-900 truncate max-w-[190px]" title={log.actorEmail}>
+                          {log.actorEmail}
+                        </p>
+                        <p className="text-[10px] text-slate-400">
+                          {roleLabel[log.actorRole]} ({log.actorRole})
+                        </p>
+                      </TableCell>
+                      <TableCell className="py-2.5 pr-4">
+                        <p className="text-xs leading-relaxed text-slate-700">
+                          {log.summary}
+                        </p>
+                        {log.metadata && (
+                          <p className="truncate font-mono text-[10px] text-slate-400 max-w-[400px]" title={log.metadata}>
+                            {log.metadata}
+                          </p>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+            </TableBody>
+          </Table>
+        </div>
 
         {filteredLogs.length === 0 ? (
-          <div className="border-t border-slate-100 px-5 py-10 text-center text-sm text-slate-500">
+          <div className="border-t border-slate-100 px-5 py-8 text-center text-xs text-slate-500">
             조건에 맞는 감사 로그가 없습니다.
           </div>
         ) : null}
 
-        <div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-4 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div className="flex flex-col gap-2 border-t border-slate-100 px-5 py-2.5 text-[11px] text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <span>
             {filteredLogs.length} / {logs.length}개 로그 표시
           </span>
@@ -346,19 +348,19 @@ function SummaryCard({
   loading?: boolean;
 }) {
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-      <div className="flex items-start justify-between">
-        <div className="flex size-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-          <Icon className="size-5" />
-        </div>
+    <article className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] flex items-center justify-between">
+      <div>
+        <p className="text-xs font-medium text-slate-500">{label}</p>
+        {loading ? (
+          <Skeleton className="mt-1 h-7 w-16 rounded" />
+        ) : (
+          <p className="mt-0.5 text-2xl font-bold tracking-tight text-slate-900">{value}</p>
+        )}
+        <p className="mt-0.5 text-[11px] text-slate-400">{detail}</p>
       </div>
-      <p className="mt-5 text-[13px] text-slate-500">{label}</p>
-      {loading ? (
-        <Skeleton className="mt-1 h-9 w-20 rounded-lg" />
-      ) : (
-        <p className="mt-1 text-3xl font-semibold tracking-tight">{value}</p>
-      )}
-      <p className="mt-2 text-[11px] text-slate-400">{detail}</p>
+      <div className="flex size-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 shrink-0">
+        <Icon className="size-4.5" />
+      </div>
     </article>
   );
 }

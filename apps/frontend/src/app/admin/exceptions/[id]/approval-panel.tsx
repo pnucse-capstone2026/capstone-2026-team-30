@@ -382,7 +382,7 @@ export function ExceptionApprovalPanel({
 
       <article className="rounded-2xl border border-slate-200 bg-white p-5">
         <h3 className="text-sm font-semibold">처리 이력</h3>
-        <div className="mt-5 space-y-5">
+        <div className="mt-5 max-h-64 space-y-5 overflow-y-auto pr-2">
           {events.map((event, index) => (
             <div
               key={`${event.label}-${event.at}-${index}`}

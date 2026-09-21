@@ -166,7 +166,7 @@ export function ProcessingStandardsDialog({
         </div>
 
         {/* Tab Content */}
-        <div className="min-h-[260px] py-2">
+        <div className="min-h-[260px] max-h-[60vh] overflow-y-auto py-2 pr-1">
           {activeTab === "sla" && (
             <div className="space-y-4">
               <p className="text-xs text-slate-500">
