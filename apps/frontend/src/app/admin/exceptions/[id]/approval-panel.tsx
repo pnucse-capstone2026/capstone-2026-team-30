@@ -333,7 +333,7 @@ export function ExceptionApprovalPanel({
               onClick={() => setIsRevokeDialogOpen(true)}
             >
               <AlertTriangle className="size-4" />
-              {status === "cancelling" ? "회수 처리 중" : "예외 회수"}
+              {isSubmitting ? "회수 처리 중" : "예외 회수"}
             </Button>
           ) : null}
         </div>

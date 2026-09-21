@@ -445,6 +445,7 @@ export default function AdminExceptionsPage() {
                     ))}
                   </select>
                 </label>
+              </div>
             </div>
 
             {/* 독립 수직 스크롤 컨테이너 & Sticky Header */}
