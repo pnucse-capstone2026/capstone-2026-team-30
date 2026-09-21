@@ -42,12 +42,10 @@
    - 4.1. [Kind Single-Node Bare-Minimum Setup (`scripts/setup-local-cluster.sh`)](#41-kind-single-node-bare-minimum-setup-scriptssetup-local-clustersh)
      - Minimal vs Full Mode Trade-Offs
      - Zero-I/O Optimization (BackgroundScan Throttling)
-     - Container Network DNS Fixes for DevContainer
-   - 4.2. [VS Code DevContainer Infrastructure (`.devcontainer/`)](#42-vs-code-devcontainer-infrastructure-devcontainer)
-     - Docker-outside-of-Docker (DooD) & Kind Network Bridging
-     - Monorepo Mount Points & Persistent Cache Volumes
-     - Automated Post-Creation Toolchain Provisioning (`.devcontainer/scripts/setup.sh`)
-     - Dedicated Development Database (`.devcontainer/docker-compose.yml`)
+   - 4.2. [Standalone Installation & Deployment Pipeline (`install.sh`)](#42-standalone-installation--deployment-pipeline-installsh)
+     - Universal One-Click Deployment (`install.sh` / `scripts/deploy.sh`)
+     - Monorepo Scope & Target Environment Detection
+     - Automated Database Provisioning & Health Verification
    - 4.3. [Docker Multi-Stage Optimization (`node:22-slim`)](#43-docker-multi-stage-optimization-node22-slim)
      - Backend Build Pipeline (`apps/backend/Dockerfile`)
      - Frontend Standalone Shrinking (`apps/frontend/Dockerfile`)
@@ -79,7 +77,7 @@ The **PaC Kyverno Governance Platform** provides centralized Kubernetes policy m
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **AWS EKS Production** | AWS EKS Multi-Node (Managed Node Groups / Karpenter) | AWS EBS CSI Driver (`gp3` / `gp2`) | AWS Load Balancer Controller (ALB `target-type: ip`) | AWS IAM Roles for Service Accounts (IRSA) + OIDC | `install.sh --env eks` |
 | **On-Premise / Bare-Metal** | kubeadm, k3s, OpenShift, VMware Tanzu | Default CSI / Local Path Provisioner | Ingress-Nginx or Direct NodePort (30080/30081) | In-Cluster ServiceAccount Tokens / X.509 PKI | `install.sh --env onprem` |
-| **Local Kind Development** | Kind (Kubernetes in Docker) Single-Node | Standard HostPath (`rancher.io/local-path`) | NodePort (30080/30081) or `kubectl port-forward` | Local `k8s-lab` ServiceAccount & DevContainer DooD | `install.sh --env onprem --build` |
+| **Local Kind Development** | Kind (Kubernetes in Docker) Single-Node | Standard HostPath (`rancher.io/local-path`) | NodePort (30080/30081) or `kubectl port-forward` | Local `k8s-lab` ServiceAccount & Docker Engine | `install.sh --env onprem --build` |
 
 ---
 
@@ -700,8 +698,8 @@ In local environments, standard Kyverno background scanning generates intense et
 - **Minimal Mode**: Sets `reportsController.backgroundScan=false` and `backgroundController.backgroundScanInterval=0`.
 - **Full Mode**: Throttles the scan loop to `1h` and disables ephemeral admission report creation (`features.admissionReports.enabled=false`).
 
-#### Container Network DNS Fixes for DevContainer
-When running inside VS Code DevContainers, Kind creates a Docker network named `kind`. The setup script checks if `k8s-lab-control-plane` is resolvable and re-points the kubeconfig server URL:
+#### Container Network DNS Fixes for Containerized Environments
+When running inside container network environments, Kind creates a Docker network named `kind`. The setup script checks if the control-plane host is resolvable and aligns the kubeconfig server URL:
 ```bash
 if getent hosts "${CLUSTER_NAME}-control-plane" > /dev/null 2>&1; then
   kubectl config set-cluster "kind-${CLUSTER_NAME}" \
@@ -712,45 +710,34 @@ fi
 
 ---
 
-### 4.2. VS Code DevContainer Infrastructure (`.devcontainer/`)
+### 4.2. Standalone Installation & Deployment Pipeline (`install.sh`)
 
-The repository includes a containerized development environment defined in [`.devcontainer/devcontainer.json`](file:///home/user/work_dir/.devcontainer/devcontainer.json).
+The platform provides a universal one-click installer ([`install.sh`](file:///home/user/PaC-KyvernoDashboard/install.sh) -> [`scripts/deploy.sh`](file:///home/user/PaC-KyvernoDashboard/scripts/deploy.sh)) designed for direct production deployment by end users across any Kubernetes distribution.
 
 ```mermaid
-graph LR
-    subgraph Host["Developer Host Machine"]
-        DockerDaemon["Docker Daemon (docker.sock)"]
-        KubeconfigHost["Host ~/.kube/config"]
-    end
+graph TD
+    User["Operator / User"]
+    Installer["install.sh / scripts/deploy.sh"]
+    Detect{"Target Environment Detection"}
+    EKS["AWS EKS Overlay (ALB, gp3, IRSA)"]
+    OnPrem["On-Premise Overlay (NodePort, HostPath)"]
+    K8s["Kubernetes Cluster"]
 
-    subgraph DevContainer["VS Code DevContainer (Ubuntu 24.04)"]
-        VSCodeUser["Remote User: vscode"]
-        NodeRuntime["Node.js v22 & pnpm 9"]
-        K8sTools["kubectl, helm, kind, kyverno CLI"]
-        PNPMStore[".pnpm-store (Docker Volume Cache)"]
-    end
-
-    subgraph KindNetwork["Docker Network: kind"]
-        KindNode["k8s-lab-control-plane (:6443)"]
-        DevPostgres["postgres (:55432)"]
-    end
-
-    DockerDaemon <==>|bind-mount| DevContainer
-    KubeconfigHost <==>|bind-mount| DevContainer
-    DevContainer -->|network: kind| KindNode
-    DevContainer -->|network: kind| DevPostgres
+    User -->|Executes with Options| Installer
+    Installer --> Detect
+    Detect -->|--env eks or EKS API detected| EKS
+    Detect -->|--env onprem or Bare-Metal| OnPrem
+    EKS -->|Kustomize Build & Apply| K8s
+    OnPrem -->|Kustomize Build & Apply| K8s
+    Installer -->|Verifies Kyverno & Rollout| K8s
 ```
 
-#### Key DevContainer Features
-1. **Network Integration**: Bound directly to `--network=kind`, enabling seamless communication with both the Kind control-plane and local auxiliary containers.
-2. **DooD (Docker-outside-of-Docker)**: Mounts `/var/run/docker.sock` to permit building and loading container images into Kind from within the DevContainer.
-3. **Volume Caching Strategy**: Dedicated Docker named volumes for `kyverno-platform-pnpm-store`, `node_modules`, and `.next` build caches prevent host-container filesystem synchronization bottlenecks.
-4. **Automated Setup Script ([`.devcontainer/scripts/setup.sh`](file:///home/user/work_dir/.devcontainer/scripts/setup.sh))**:
-   - Installs `pnpm`, `kind`, `gh`, and `kyverno-cli` (v1.12.0).
-   - Generates `.env` and `.env.local` files from examples.
-   - Generates Prisma client bindings automatically.
-5. **Auxiliary PostgreSQL Service ([`.devcontainer/docker-compose.yml`](file:///home/user/work_dir/.devcontainer/docker-compose.yml))**:
-   Runs PostgreSQL 17 Alpine exposed on port `55432` with healthcheck probing for local host-based testing.
+#### Key Installer Features
+1. **Zero External Toolchain Dependencies**: Operates with standard POSIX bash, automatically downloading required user CLI binaries locally into `scripts/bin/` if not present.
+2. **Dynamic Secret Generation**: Cryptographically generates strong random passwords and JWT secrets on-the-fly, injecting them securely into `backend-env-secret`.
+3. **Selective Component Modularization**: Allows toggling platform modules (`--disable-mlops`, `--enable-ai`, `--modules core,simulation`) to fit cluster resource budgets.
+4. **Automated Kyverno Health Verification**: Probes Kyverno admission and reports controllers to ensure the admission webhook is ready before platform services start.
+5. **Idempotent Deployment & Teardown**: Re-running updates existing resources without downtime; `--uninstall` performs a clean teardown of all provisioned platform resources.
 
 ---
 

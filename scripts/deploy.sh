@@ -9,10 +9,16 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 LOCAL_BIN="${SCRIPT_DIR}/bin"
-mkdir -p "${LOCAL_BIN}"
+mkdir -p "${LOCAL_BIN}" 2>/dev/null || true
 export PATH="${LOCAL_BIN}:${PATH}"
 
 # Default parameters
@@ -38,6 +44,16 @@ ENABLE_GITOPS=true
 MODULES_PARAM=""
 PROMPT_MODULES=false
 MODULE_FLAG_SPECIFIED=false
+
+# Multi-Cluster & Argo CD options
+CLUSTER_PROVIDER="incluster"
+SPOKE_CONTEXT=""
+SPOKE_CLUSTER_ID="external-argocd-cluster"
+SPOKE_DISPLAY_NAME="Production Spoke Cluster (Argo CD Managed)"
+SPOKE_SERVER=""
+MULTICLUSTER_CONFIG_FILE=""
+INSTALL_ARGOCD=false
+ARGOCD_STATUS="Not Detected"
 
 # Color output helpers
 BOLD="\033[1m"
@@ -71,6 +87,16 @@ Options:
   --uninstall                 Teardown and delete platform deployment from the cluster
   --dry-run                   Render manifests without applying to the cluster
   -h, --help                  Display this help message
+
+Multi-Cluster & Argo CD Options:
+  --cluster-provider <mode>   Cluster provider mode: auto (default), incluster, or multi
+  --spoke-context <context>   Remote Spoke Kubernetes context (auto-enables multi-cluster)
+  --spoke-cluster-id <id>     Spoke cluster ID (default: external-argocd-cluster)
+  --spoke-display-name <name> Spoke cluster display name
+  --spoke-server <url>        Explicit Spoke cluster API server endpoint (optional)
+  --multicluster-config <file> Path to custom KUBERNETES_CLUSTERS JSON configuration file
+  --install-argocd            Deploy official Argo CD into 'argocd' namespace if missing
+  --with-argocd               Alias for --install-argocd
 
 Platform Module Options:
   --enable-mlops              Enable MLOps suite (Notebook controller, Kubeflow CRDs, GPU FinOps) [default: true]
@@ -140,6 +166,37 @@ while [[ $# -gt 0 ]]; do
       ;;
     --dry-run)
       DRY_RUN=true
+      shift
+      ;;
+    --cluster-provider)
+      CLUSTER_PROVIDER="$2"
+      shift 2
+      ;;
+    --spoke-context)
+      SPOKE_CONTEXT="$2"
+      CLUSTER_PROVIDER="multi"
+      shift 2
+      ;;
+    --spoke-cluster-id)
+      SPOKE_CLUSTER_ID="$2"
+      shift 2
+      ;;
+    --spoke-display-name)
+      SPOKE_DISPLAY_NAME="$2"
+      shift 2
+      ;;
+    --spoke-server)
+      SPOKE_SERVER="$2"
+      CLUSTER_PROVIDER="multi"
+      shift 2
+      ;;
+    --multicluster-config)
+      MULTICLUSTER_CONFIG_FILE="$2"
+      CLUSTER_PROVIDER="multi"
+      shift 2
+      ;;
+    --install-argocd|--with-argocd)
+      INSTALL_ARGOCD=true
       shift
       ;;
     --enable-mlops)
@@ -346,6 +403,31 @@ else
   fi
 fi
 
+# 3-1. Check & Setup Argo CD
+TARGET_ARGO_CTX="${SPOKE_CONTEXT:-${CURRENT_CONTEXT}}"
+if [ "${DRY_RUN}" = true ]; then
+  log_info "[DRY-RUN] Skipping live Argo CD cluster presence check."
+else
+  log_info "Checking Argo CD availability on target cluster (${TARGET_ARGO_CTX})..."
+  if "${KUBECTL}" --context="${TARGET_ARGO_CTX}" get namespace argocd >/dev/null 2>&1; then
+    log_success "Argo CD namespace detected on ${TARGET_ARGO_CTX}."
+    ARGOCD_STATUS="Detected"
+  else
+    if [ "${INSTALL_ARGOCD}" = true ]; then
+      log_info "Deploying official Argo CD to ${TARGET_ARGO_CTX} (namespace: argocd)..."
+      "${KUBECTL}" --context="${TARGET_ARGO_CTX}" create namespace argocd --dry-run=client -o yaml | "${KUBECTL}" --context="${TARGET_ARGO_CTX}" apply -f -
+      "${KUBECTL}" --context="${TARGET_ARGO_CTX}" apply --server-side=true --force-conflicts -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml || {
+        log_warn "Server-side apply for Argo CD failed, falling back to standard client apply..."
+        "${KUBECTL}" --context="${TARGET_ARGO_CTX}" apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml || true
+      }
+      log_success "Argo CD manifests applied to ${TARGET_ARGO_CTX}."
+      ARGOCD_STATUS="Installed"
+    else
+      log_info "Argo CD not detected on ${TARGET_ARGO_CTX} (use --install-argocd to deploy)."
+    fi
+  fi
+fi
+
 # 4. Local image building if requested
 if [ "${BUILD_LOCAL}" = true ]; then
   log_header "Building Container Images Locally"
@@ -374,6 +456,54 @@ if [ "${DRY_RUN}" = false ]; then
   "${KUBECTL}" create namespace "${NAMESPACE}" --dry-run=client -o yaml | "${KUBECTL}" apply -f -
 fi
 
+# Multi-Cluster JSON generation
+KUBERNETES_CLUSTERS_VAL=""
+if [ "${CLUSTER_PROVIDER}" = "multi" ]; then
+  if [ -n "${MULTICLUSTER_CONFIG_FILE}" ] && [ -f "${MULTICLUSTER_CONFIG_FILE}" ]; then
+    log_info "Loading Multi-Cluster configuration from file: ${MULTICLUSTER_CONFIG_FILE}"
+    KUBERNETES_CLUSTERS_VAL="$(cat "${MULTICLUSTER_CONFIG_FILE}" | tr -d '\n')"
+  elif [ -n "${SPOKE_CONTEXT}" ]; then
+    log_info "Auto-configuring Multi-Cluster configuration for Hub & Spoke (${SPOKE_CLUSTER_ID})..."
+    HUB_CA_DATA=$("${KUBECTL}" config view --minify --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' 2>/dev/null || echo "")
+    if [ -z "${SPOKE_SERVER}" ]; then
+      SPOKE_SERVER=$("${KUBECTL}" --context="${SPOKE_CONTEXT}" config view --minify --raw -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null || echo "")
+    fi
+    SPOKE_CA_DATA=$("${KUBECTL}" --context="${SPOKE_CONTEXT}" config view --minify --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' 2>/dev/null || echo "")
+
+    SPOKE_TOKEN=""
+    if [ "${DRY_RUN}" = false ]; then
+      "${KUBECTL}" --context="${SPOKE_CONTEXT}" create namespace kyverno --dry-run=client -o yaml | "${KUBECTL}" --context="${SPOKE_CONTEXT}" apply -f - 2>/dev/null || true
+      "${KUBECTL}" --context="${SPOKE_CONTEXT}" apply -f "${ROOT_DIR}/k8s-manifests/rbac/spoke-remote-agent-rbac.yaml" 2>/dev/null || true
+      sleep 1
+      SPOKE_TOKEN=$("${KUBECTL}" --context="${SPOKE_CONTEXT}" create token kyverno-remote-agent-sa -n kyverno --duration=87600h 2>/dev/null || echo "")
+    fi
+
+    KUBERNETES_CLUSTERS_VAL=$(cat <<EOF | tr -d '\n'
+[
+  {
+    "id": "default-cluster",
+    "displayName": "Central Governance Hub (Management Only)",
+    "server": "https://kubernetes.default.svc",
+    "caData": "${HUB_CA_DATA}",
+    "exceptionNamespace": "kyverno",
+    "default": true
+  },
+  {
+    "id": "${SPOKE_CLUSTER_ID}",
+    "displayName": "${SPOKE_DISPLAY_NAME}",
+    "server": "${SPOKE_SERVER}",
+    "caData": "${SPOKE_CA_DATA}",
+    "token": "${SPOKE_TOKEN}",
+    "exceptionNamespace": "kyverno",
+    "default": false
+  }
+]
+EOF
+    )
+    log_success "Multi-Cluster configuration generated (Spoke ID: ${SPOKE_CLUSTER_ID})."
+  fi
+fi
+
 # Generate random secure passwords if not provided
 if [ -z "${ADMIN_PASSWORD}" ]; then
   ADMIN_PASSWORD="$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 14)!A1"
@@ -399,6 +529,9 @@ SECRET_YAML=$("${KUBECTL}" create secret generic kyverno-platform-secret \
   --from-literal=SEED_ADMIN_PASSWORD="${ADMIN_PASSWORD}" \
   --from-literal=SEED_USER_EMAIL="${USER_EMAIL}" \
   --from-literal=SEED_USER_PASSWORD="${USER_PASSWORD}" \
+  --from-literal=CLUSTER_PROVIDER="${CLUSTER_PROVIDER}" \
+  --from-literal=KUBERNETES_CLUSTERS="${KUBERNETES_CLUSTERS_VAL}" \
+  --from-literal=GITOPS_ENABLED="${ENABLE_GITOPS}" \
   --from-literal=MODULE_MLOPS_ENABLED="${ENABLE_MLOPS}" \
   --from-literal=MODULE_AI_AGENT_ENABLED="${ENABLE_AI}" \
   --from-literal=MODULE_SIMULATION_ENABLED="${ENABLE_SIMULATION}" \
@@ -501,11 +634,14 @@ cat <<SUMMARY
 ==============================================================================
  ${GREEN}${BOLD}🎉 PaC Kyverno Governance Platform Successfully Deployed!${NC}
 ==============================================================================
- Target Environment : ${BOLD}${ENV_TARGET}${NC}
- Target Namespace   : ${BOLD}${NAMESPACE}${NC}
- Kubernetes Context : ${BOLD}${CURRENT_CONTEXT}${NC}
+  Target Environment : ${BOLD}${ENV_TARGET}${NC}
+  Target Namespace   : ${BOLD}${NAMESPACE}${NC}
+  Kubernetes Context : ${BOLD}${CURRENT_CONTEXT}${NC}
+  Cluster Architecture: $([ "${CLUSTER_PROVIDER}" = "multi" ] && echo -e "${GREEN}Multi-Cluster (Hub & Spoke)${NC}" || echo -e "${CYAN}Single-Cluster (In-Cluster)${NC}")
+$([ "${CLUSTER_PROVIDER}" = "multi" ] && echo -e "  Spoke Cluster ID   : ${BOLD}${SPOKE_CLUSTER_ID}${NC}\n  Spoke Display Name : ${BOLD}${SPOKE_DISPLAY_NAME}${NC}")
+  Argo CD Integration: $([ "${ARGOCD_STATUS}" != "Not Detected" ] && echo -e "${GREEN}${ARGOCD_STATUS}${NC}" || echo -e "${YELLOW}Not Detected${NC}")
 
- ${CYAN}${BOLD}[ Active Platform Modules ]${NC}
+  ${CYAN}${BOLD}[ Active Platform Modules ]${NC}
  - Core Governance    : ${GREEN}ENABLED${NC} (Mandatory)
  - MLOps Platform     : $([ "${ENABLE_MLOPS}" = true ] && echo -e "${GREEN}ENABLED${NC}" || echo -e "${RED}DISABLED${NC}")
  - AI Copilot (Bedrock): $([ "${ENABLE_AI}" = true ] && echo -e "${GREEN}ENABLED${NC}" || echo -e "${RED}DISABLED${NC}")

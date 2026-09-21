@@ -9,6 +9,7 @@ CLUSTER_NAME="k8s-lab"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_PATH="${SCRIPT_DIR}/kind-config.yaml"
 MINIMAL_MODE=true
+INSTALL_ARGOCD=false
 
 # 터미널 파라미터 파싱 (--full 활성화 시 전체 컨트롤러 배포, 기본값은 경량화 모드 --minimal)
 while [[ $# -gt 0 ]]; do
@@ -25,6 +26,10 @@ while [[ $# -gt 0 ]]; do
       CLUSTER_NAME="$2"
       shift 2
       ;;
+    --with-argocd|--argocd)
+      INSTALL_ARGOCD=true
+      shift
+      ;;
     *)
       shift
       ;;
@@ -33,7 +38,7 @@ done
 
 # 1. 로컬 가상 실행 경로 바인딩 (Sudo 권한 불필요 조치)
 LOCAL_BIN_DIR="${SCRIPT_DIR}/bin"
-mkdir -p "${LOCAL_BIN_DIR}"
+mkdir -p "${LOCAL_BIN_DIR}" 2>/dev/null || true
 export PATH="${LOCAL_BIN_DIR}:${PATH}"
 
 echo "================================================="
@@ -188,6 +193,17 @@ if [ -d "${MANIFESTS_DIR}" ]; then
   echo ">>> Policies and testbed workloads successfully applied."
 else
   echo ">>> Manifests directory not found at: ${MANIFESTS_DIR}"
+fi
+
+# 9-1. Argo CD 배포 (--with-argocd 활성화 시)
+if [ "${INSTALL_ARGOCD}" = true ]; then
+  echo ">>> [--with-argocd] Deploying Argo CD to namespace 'argocd'..."
+  kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
+  kubectl apply --server-side=true --force-conflicts -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml || {
+    echo ">>> [WARN] Server-side apply failed, falling back to standard client apply..."
+    kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml || true
+  }
+  echo ">>> Argo CD manifests applied to 'argocd' namespace."
 fi
 
 # 10. 로컬 플랫폼 네임스페이스 및 풀스택 배포

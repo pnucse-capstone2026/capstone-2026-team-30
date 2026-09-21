@@ -1,25 +1,87 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# 로컬 가상 멀티클러스터(Kind Hub & Spoke) 원클릭 자동 구축 스크립트
+# 로컬 가상 멀티클러스터(Kind Hub & Spoke with Argo CD) 원클릭 자동 구축 스크립트
 # ==============================================================================
-# [도입 배경] AWS 클라우드 비용 없이 로컬에서 분산 멀티클러스터 거버넌스 및 
-#             대규모 Tier-2 성능 벤치마크를 정밀 재현하기 위함
-# [기대 효과] 2개의 독립된 Kind 클러스터(k8s-hub, k8s-spoke)에 Kyverno 및 RBAC를
-#             자동 배포하고 백엔드용 KUBERNETES_CLUSTERS 설정을 즉시 바인딩
+# [도입 배경] AWS 클라우드 비용 없이 로컬에서 분산 멀티클러스터 거버넌스,
+#             Argo CD 배포 인시던트 감지 및 MLOps 거버넌스를 정밀 재현하기 위함
+# [기대 효과] 2개의 독립된 Kind 클러스터(k8s-hub, k8s-spoke)에 Kyverno, Argo CD,
+#             Kubeflow CRD 및 RBAC를 자동 배포하고 백엔드용 KUBERNETES_CLUSTERS 설정을 즉시 바인딩
 # ==============================================================================
 
 set -euo pipefail
 
 HUB_CLUSTER="k8s-hub"
 SPOKE_CLUSTER="k8s-spoke"
+SPOKE_ID="external-argocd-cluster"
+INSTALL_ARGOCD=true
+INSTALL_MLOPS=true
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="${SCRIPT_DIR}/.."
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 LOCAL_BIN_DIR="${SCRIPT_DIR}/bin"
 CONFIG_PATH="${SCRIPT_DIR}/kind-config.yaml"
 
-mkdir -p "${LOCAL_BIN_DIR}"
+mkdir -p "${LOCAL_BIN_DIR}" 2>/dev/null || true
 export PATH="${LOCAL_BIN_DIR}:${PATH}"
+
+usage() {
+  cat <<HELP
+Usage: $(basename "$0") [OPTIONS]
+
+Setup local dual-cluster Kind environment (Hub & Spoke) with Kyverno and Argo CD.
+
+Options:
+  --hub-name <name>         Kind cluster name for Hub (default: k8s-hub)
+  --spoke-name <name>       Kind cluster name for Spoke (default: k8s-spoke)
+  --spoke-id <id>           Logical Cluster ID for Spoke (default: external-argocd-cluster)
+  --install-argocd          Deploy Argo CD to Spoke cluster (default: true)
+  --no-argocd               Skip Argo CD deployment on Spoke cluster
+  --install-mlops           Deploy Kubeflow Notebook CRD to Spoke cluster (default: true)
+  --no-mlops                Skip Kubeflow Notebook CRD deployment
+  -h, --help                Show this help message
+HELP
+  exit 0
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --hub-name)
+      HUB_CLUSTER="$2"
+      shift 2
+      ;;
+    --spoke-name)
+      SPOKE_CLUSTER="$2"
+      shift 2
+      ;;
+    --spoke-id)
+      SPOKE_ID="$2"
+      shift 2
+      ;;
+    --install-argocd)
+      INSTALL_ARGOCD=true
+      shift
+      ;;
+    --no-argocd)
+      INSTALL_ARGOCD=false
+      shift
+      ;;
+    --install-mlops)
+      INSTALL_MLOPS=true
+      shift
+      ;;
+    --no-mlops)
+      INSTALL_MLOPS=false
+      shift
+      ;;
+    -h|--help)
+      usage
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      usage
+      ;;
+  esac
+done
 
 KUBECTL="kubectl"
 if [ -f "${LOCAL_BIN_DIR}/kubectl" ]; then
@@ -27,10 +89,12 @@ if [ -f "${LOCAL_BIN_DIR}/kubectl" ]; then
 fi
 
 echo "=============================================================================="
-echo " 🏗️  Setting up Local Multi-Cluster (Kind Hub & Spoke)"
+echo " 🏗️  Setting up Local Multi-Cluster (Kind Hub & Spoke with Argo CD)"
 echo "=============================================================================="
-echo " 🌐 Hub Cluster   : ${HUB_CLUSTER}"
-echo " 🌐 Spoke Cluster : ${SPOKE_CLUSTER}"
+echo " 🌐 Hub Cluster   : ${HUB_CLUSTER} (id: ${HUB_CLUSTER})"
+echo " 🌐 Spoke Cluster : ${SPOKE_CLUSTER} (id: ${SPOKE_ID})"
+echo " 🐙 Argo CD on Spoke: ${INSTALL_ARGOCD}"
+echo " 🧪 MLOps on Spoke  : ${INSTALL_MLOPS}"
 echo "=============================================================================="
 
 # 1. Kind CLI 설치 확인
@@ -72,7 +136,7 @@ deploy_kyverno() {
 
   echo ">>> Deploying Kyverno to ${cluster_name} (${ctx})..."
   helm repo add kyverno https://kyverno.github.io/kyverno/ --force-update >/dev/null 2>&1 || true
-  helm repo update >/dev/null 2>&1
+  helm repo update kyverno >/dev/null 2>&1
 
   helm upgrade --install kyverno kyverno/kyverno \
     --kube-context "${ctx}" \
@@ -109,7 +173,7 @@ deploy_kyverno() {
     --set features.policyReports.enabled=true >/dev/null 2>&1 || true
 
   # 거버넌스 정책 배포
-  local policies_dir="${SCRIPT_DIR}/../k8s-manifests/policies"
+  local policies_dir="${ROOT_DIR}/k8s-manifests/policies"
   if [ -d "${policies_dir}" ]; then
     ${KUBECTL} --context "${ctx}" apply -f "${policies_dir}/" --recursive 2>/dev/null || true
     ${KUBECTL} --context "${ctx}" get clusterpolicies -o name 2>/dev/null | xargs -I {} ${KUBECTL} --context "${ctx}" patch {} --type='merge' -p '{"spec":{"validationFailureAction":"Audit"}}' >/dev/null 2>&1 || true
@@ -119,7 +183,25 @@ deploy_kyverno() {
 deploy_kyverno "${HUB_CLUSTER}"
 deploy_kyverno "${SPOKE_CLUSTER}"
 
-# 6. Spoke 클러스터 SA 토큰 및 엔드포인트 추출
+# 6. Spoke 클러스터에 Argo CD 배포 (인시던트 감지 시나리오 대응)
+if [ "${INSTALL_ARGOCD}" = true ]; then
+  echo ">>> [Spoke] Deploying Argo CD to '${SPOKE_CLUSTER}'..."
+  ${KUBECTL} --context "kind-${SPOKE_CLUSTER}" create namespace argocd --dry-run=client -o yaml | ${KUBECTL} --context "kind-${SPOKE_CLUSTER}" apply -f -
+  ${KUBECTL} --context "kind-${SPOKE_CLUSTER}" apply --server-side=true --force-conflicts -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml || {
+    echo ">>> [WARN] Argo CD server-side apply failed, falling back to standard client apply..."
+    ${KUBECTL} --context "kind-${SPOKE_CLUSTER}" apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml || true
+  }
+  echo ">>> [Spoke] Argo CD manifests applied."
+fi
+
+# 7. Spoke 클러스터에 Kubeflow Notebooks CRD & MLOps 네임스페이스 배포
+if [ "${INSTALL_MLOPS}" = true ]; then
+  echo ">>> [Spoke] Deploying Kubeflow Notebooks CRD & 'mlops-workspace' namespace..."
+  ${KUBECTL} --context "kind-${SPOKE_CLUSTER}" apply -f https://raw.githubusercontent.com/kubeflow/kubeflow/v1.8.0/components/notebook-controller/config/crd/bases/kubeflow.org_notebooks.yaml 2>/dev/null || true
+  ${KUBECTL} --context "kind-${SPOKE_CLUSTER}" create namespace mlops-workspace --dry-run=client -o yaml | ${KUBECTL} --context "kind-${SPOKE_CLUSTER}" apply -f -
+fi
+
+# 8. Spoke 클러스터 SA 토큰 및 엔드포인트 추출
 echo ">>> Configuring Spoke ServiceAccount and Token..."
 ${KUBECTL} --context "kind-${SPOKE_CLUSTER}" apply -f - <<EOF >/dev/null 2>&1
 apiVersion: v1
@@ -169,7 +251,7 @@ SPOKE_CA=$(${KUBECTL} config view --minify --raw -o jsonpath="{.clusters[?(@.nam
 HUB_SERVER=$(${KUBECTL} config view --minify --raw -o jsonpath="{.clusters[?(@.name=='kind-${HUB_CLUSTER}')].cluster.server}")
 HUB_CA=$(${KUBECTL} config view --minify --raw -o jsonpath="{.clusters[?(@.name=='kind-${HUB_CLUSTER}')].cluster.certificate-authority-data}")
 
-# 7. Multi-Cluster JSON 설정 파일 생성 (.env 및 scratch용)
+# 9. Multi-Cluster JSON 설정 파일 생성 (NestJS ClusterProvider 규격)
 MULTI_CLUSTERS_CONFIG=$(cat <<EOF
 [
   {
@@ -182,13 +264,14 @@ MULTI_CLUSTERS_CONFIG=$(cat <<EOF
     "default": true
   },
   {
-    "id": "${SPOKE_CLUSTER}",
-    "displayName": "Local Kind Remote Spoke Cluster",
+    "id": "${SPOKE_ID}",
+    "displayName": "Local Kind Spoke Cluster (Argo CD Managed)",
     "exceptionNamespace": "kyverno",
     "server": "${SPOKE_SERVER}",
     "caData": "${SPOKE_CA}",
     "token": "${SPOKE_TOKEN}",
-    "skipTLSVerify": true
+    "skipTLSVerify": true,
+    "default": false
   }
 ]
 EOF
@@ -197,13 +280,25 @@ EOF
 mkdir -p "${ROOT_DIR}/config"
 echo "${MULTI_CLUSTERS_CONFIG}" > "${ROOT_DIR}/config/local-multi-clusters.json"
 
+# 10. Hub 클러스터 내 'kyverno-platform' 네임스페이스 및 backend-env-secret 동기화
+${KUBECTL} --context "kind-${HUB_CLUSTER}" create namespace kyverno-platform --dry-run=client -o yaml | ${KUBECTL} --context "kind-${HUB_CLUSTER}" apply -f - 2>/dev/null || true
+
+${KUBECTL} --context "kind-${HUB_CLUSTER}" create secret generic backend-env-secret \
+  -n kyverno-platform \
+  --from-literal=CLUSTER_PROVIDER="multi" \
+  --from-literal=KUBERNETES_CLUSTERS="$(echo "${MULTI_CLUSTERS_CONFIG}" | tr -d '\n')" \
+  --from-literal=GITOPS_ENABLED="true" \
+  --dry-run=client -o yaml | ${KUBECTL} --context "kind-${HUB_CLUSTER}" apply -f - 2>/dev/null || true
+
 echo "=============================================================================="
-echo " 🎉 Local Multi-Cluster Setup Completed Successfully!"
+echo " 🎉 Local Multi-Cluster Setup with Argo CD Completed Successfully!"
 echo "=============================================================================="
-echo " 🌐 Hub   : kind-${HUB_CLUSTER} (${HUB_SERVER})"
-echo " 🌐 Spoke : kind-${SPOKE_CLUSTER} (${SPOKE_SERVER})"
+echo " 🌐 Hub   : kind-${HUB_CLUSTER} (id: ${HUB_CLUSTER}, server: ${HUB_SERVER})"
+echo " 🌐 Spoke : kind-${SPOKE_CLUSTER} (id: ${SPOKE_ID}, server: ${SPOKE_SERVER})"
+echo " 🐙 ArgoCD: $([ "${INSTALL_ARGOCD}" = true ] && echo "Installed on ${SPOKE_CLUSTER} (ns: argocd)" || echo "Skipped")"
 echo " 📄 Saved Config: config/local-multi-clusters.json"
-echo " 💡 Set in .env:"
+echo " 🔒 Injected Secret: backend-env-secret in namespace kyverno-platform (Hub)"
+echo " 💡 Set in .env (for local backend run):"
 echo "    CLUSTER_PROVIDER=multi"
 echo "    KUBERNETES_CLUSTERS='$(echo "${MULTI_CLUSTERS_CONFIG}" | tr -d '\n')'"
 echo "=============================================================================="

@@ -265,7 +265,7 @@ The complete architectural, implementation, and operational specifications for t
 
 * **Universal Deployment Engine (`install.sh` / `scripts/deploy.sh`)**: Environment-independent installer with automated EKS vs. On-Premise detection, dynamic cryptographic password and JWT generation, Kyverno health verification, and rollout tracking.
 * **Kubernetes Manifest Architecture**: Modular Kustomize base with AWS EKS overlay (ALB Ingress, gp3 StorageClass, Bedrock IRSA) and On-Premise overlay (NodePort 30080/30081, Ingress-Nginx).
-* **Local Development**: Kind single-node setup supporting Minimal Mode (Admission-only, zero disk I/O) and Full Mode, DevContainer configuration, and Docker multi-stage builds.
+* **Local Evaluation & Testing**: Kind single-node setup supporting Minimal Mode (Admission-only, zero disk I/O) and Full Mode, alongside Docker multi-stage builds.
 * **Testing & Verification Suite**: High-speed bare Kind single-cluster and multi-cluster integration test runners (`scripts/tests/`), alongside the 6-scenario E2E test suite (`scripts/run-e2e-cluster-test.sh`).
 * **Day-2 Operational Playbook**: CLI diagnostic cheat sheets, Kyverno admission latency troubleshooting, database migration/rollback guides, and teardown commands.
 
@@ -371,12 +371,15 @@ Deploy the full platform into any target Kubernetes cluster using the environmen
 ./install.sh --uninstall
 ```
 
+> 📖 **상세 단계별 가이드**: 클러스터 환경 준비, 단일/멀티클러스터 구축, Argo CD 연동, 사용자 계정 및 예외 관리 전 과정을 담은 **[종합 온보딩 및 설치 가이드 (Comprehensive Onboarding & Installation Guide)](docs/ONBOARDING_AND_INSTALLATION_GUIDE.md)**를 참조하세요.
+
 ---
 
 ## 9. In-Depth Documentation Index
 
 | Documentation Resource | Scope & Primary Focus |
 | :--- | :--- |
+| **[종합 온보딩 및 설치 가이드 (Comprehensive Onboarding & Installation Guide)](docs/ONBOARDING_AND_INSTALLATION_GUIDE.md)** | **[권장 필독]** 환경 준비, 로컬 Kind/EKS 설치, Argo CD Spoke 연동, 초기 로그인 및 운영 라이프사이클 전체 가이드 |
 | **[Chapter 1 & 2: Platform Overview & Core Governance Engine](docs/readme_drafts/ch1_2_architecture_core.md)** | Architecture, Hub-and-Spoke topology, Informer caching, PolicyExceptions, and DB models |
 | **[Chapter 3: MLOps Platform & FinOps Suite](docs/readme_drafts/ch3_mlops_platform.md)** | Kubeflow Notebooks, in-app reverse proxy, KFP pipelines, KServe, and GPU FinOps |
 | **[Chapter 4: AI Diagnostics, Policy Simulation & GitOps](docs/readme_drafts/ch4_ai_simulation_gitops.md)** | Dry-run simulation lab, AWS Bedrock Converse RCA, and GitOps PR auto-merge |

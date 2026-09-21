@@ -1,8 +1,8 @@
 #!/bin/bash
-# 로컬 개발용 가상 Kubernetes 클러스터 정지 및 리소스 완전히 삭제 스크립트 (자원 반환용)
-set -e
+# 로컬 개발용 가상 Kubernetes 클러스터 정지 및 리소스 완전히 삭제 스크립트 (단일 및 멀티클러스터 지원)
+set -euo pipefail
 
-CLUSTER_NAME="k8s-lab"
+TARGET_CLUSTER="${1:-all}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # 1. 로컬 가상 실행 경로 바인딩
@@ -11,15 +11,27 @@ export PATH="${LOCAL_BIN_DIR}:${PATH}"
 
 echo "================================================"
 echo " Stopping and Cleaning Local Kubernetes Lab Environment"
+echo " Target: ${TARGET_CLUSTER}"
 echo "================================================"
 
-# 2. Kind 클러스터 존재 여부 확인 후 삭제
-if kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}$"; then
-  echo ">>> Deleting Kind cluster '${CLUSTER_NAME}' to free up CPU/RAM..."
-  kind delete cluster --name "${CLUSTER_NAME}"
-  echo ">>> Cluster '${CLUSTER_NAME}' successfully removed."
+delete_cluster_if_exists() {
+  local c_name="$1"
+  if kind get clusters 2>/dev/null | grep -q "^${c_name}$"; then
+    echo ">>> Deleting Kind cluster '${c_name}' to free up CPU/RAM..."
+    kind delete cluster --name "${c_name}"
+    echo ">>> Cluster '${c_name}' successfully removed."
+  else
+    echo ">>> Cluster '${c_name}' does not exist. Skipping."
+  fi
+}
+
+if [ "${TARGET_CLUSTER}" = "all" ]; then
+  # 단일 랩 및 멀티클러스터(Hub/Spoke) 전수 검사 및 정리
+  for cluster in "k8s-lab" "k8s-hub" "k8s-spoke"; do
+    delete_cluster_if_exists "${cluster}"
+  done
 else
-  echo ">>> Cluster '${CLUSTER_NAME}' does not exist. Nothing to clean."
+  delete_cluster_if_exists "${TARGET_CLUSTER}"
 fi
 
 echo "================================================"
