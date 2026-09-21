@@ -14,7 +14,7 @@ import { K8sInformerService } from "./k8s-informer.service";
 const KYVERNO_GROUP = "kyverno.io";
 const POLICY_VERSION = "v1";
 const POLICY_PLURAL = "clusterpolicies";
-const EXCEPTION_VERSION = "v2beta1";
+const EXCEPTION_VERSION = "v2";
 const EXCEPTION_PLURAL = "policyexceptions";
 
 const WG_POLICY_GROUP = "wgpolicyk8s.io";

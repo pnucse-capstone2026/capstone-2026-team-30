@@ -34,7 +34,7 @@ jobs:
           cache: "pnpm"
 
       - name: Install Dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Lint (Frontend)
         run: pnpm --filter @kyverno-platform/frontend lint

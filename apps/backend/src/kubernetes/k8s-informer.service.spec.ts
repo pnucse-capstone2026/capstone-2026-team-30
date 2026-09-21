@@ -189,13 +189,13 @@ describe("K8sInformerService", () => {
 
       expect(listNamespacedCustomObjectMock).toHaveBeenCalledWith({
         group: "kyverno.io",
-        version: "v2beta1",
+        version: "v2",
         namespace: "kyverno",
         plural: "policyexceptions",
       });
 
       expect(result).toEqual({
-        apiVersion: "kyverno.io/v2beta1",
+        apiVersion: "kyverno.io/v2",
         kind: "PolicyExceptionList",
         items: [
           { metadata: { name: "namespaced-exception", namespace: "kyverno" } },
@@ -235,7 +235,7 @@ describe("K8sInformerService", () => {
       expect(listClusterCustomObjectMock).toHaveBeenCalled();
       expect(listNamespacedCustomObjectMock).toHaveBeenCalledWith({
         group: "kyverno.io",
-        version: "v2beta1",
+        version: "v2",
         namespace: "kyverno",
         plural: "policyexceptions",
       });

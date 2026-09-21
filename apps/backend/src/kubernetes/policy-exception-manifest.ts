@@ -65,7 +65,7 @@ export function buildPolicyExceptionManifest(
   }
 
   return {
-    apiVersion: "kyverno.io/v2beta1",
+    apiVersion: "kyverno.io/v2",
     kind: "PolicyException",
     metadata: {
       name: input.name,

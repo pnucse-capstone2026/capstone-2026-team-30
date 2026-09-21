@@ -42,6 +42,7 @@ scripts/bin/
 
 # Temporary Backups & Notes
 *.sql
+!apps/backend/prisma/migrations/**/*.sql
 *_backup.*
 /prompts/
 !docs/prompts/

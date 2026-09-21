@@ -1,6 +1,6 @@
 # Kyverno Governance Platform 자동 생성 샘플 정책 예외 매니페스트
 # synthetic-violating-app 파드에 대해 disallow-latest-tag 정책 검사를 우회 허용하기 위한 목적
-apiVersion: kyverno.io/v2beta1
+apiVersion: kyverno.io/v2
 kind: PolicyException
 metadata:
   name: pac-exception-example

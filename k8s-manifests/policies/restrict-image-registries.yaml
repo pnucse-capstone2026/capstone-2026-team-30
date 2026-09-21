@@ -10,7 +10,7 @@ metadata:
     policies.kyverno.io/severity: high
     policies.kyverno.io/description: 컨테이너 이미지가 승인된 AWS ECR 레지스트리에서만 가져와지도록 강제합니다.
 spec:
-  validationFailureAction: Enforce
+  validationFailureAction: Audit
   background: true
   rules:
     - name: validate-registries

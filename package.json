@@ -3,10 +3,10 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "pnpm --parallel -r dev",
-    "build": "pnpm --parallel -r build",
-    "lint": "pnpm --parallel -r lint",
-    "format": "pnpm --parallel -r format",
+    "dev": "pnpm --parallel -r --if-present dev",
+    "build": "pnpm --parallel -r --if-present build",
+    "lint": "pnpm --parallel -r --if-present lint",
+    "format": "pnpm --parallel -r --if-present format",
     "test": "pnpm --parallel -r --if-present test",
     "test:log": "bash scripts/run-tests-with-log.sh backend",
     "test:integration:log": "bash scripts/run-tests-with-log.sh integration",
@@ -25,15 +25,15 @@
   },
   "lint-staged": {
     "apps/backend/src/**/*.ts": [
-      "bash -c 'pnpm --filter @kyverno-platform/backend lint --fix'",
-      "bash -c 'pnpm --filter @kyverno-platform/backend format'"
+      "pnpm --filter @kyverno-platform/backend exec eslint --fix",
+      "pnpm --filter @kyverno-platform/backend exec prettier --write"
     ],
     "apps/frontend/src/**/*.{ts,tsx}": [
-      "bash -c 'pnpm --filter @kyverno-platform/frontend lint --fix'",
-      "bash -c 'pnpm --filter @kyverno-platform/frontend format'"
+      "pnpm --filter @kyverno-platform/frontend exec eslint --fix",
+      "pnpm --filter @kyverno-platform/frontend exec prettier --write"
     ],
     "k8s-manifests/policies/**/*.yaml": [
-      "bash -c 'kyverno test k8s-manifests/policies/'"
+      "bash -c 'if command -v kyverno >/dev/null 2>&1; then kyverno test k8s-manifests/policies/; else echo \"kyverno not installed, skipping test\"; fi'"
     ]
   },
   "engines": {

@@ -33,7 +33,7 @@ interface ClusterInformerRegistry {
 const KYVERNO_GROUP = "kyverno.io";
 const POLICY_VERSION = "v1";
 const POLICY_PLURAL = "clusterpolicies";
-const EXCEPTION_VERSION = "v2beta1";
+const EXCEPTION_VERSION = "v2";
 const EXCEPTION_PLURAL = "policyexceptions";
 
 const WG_POLICY_GROUP = "wgpolicyk8s.io";
@@ -228,7 +228,7 @@ export class K8sInformerService implements OnModuleInit, OnModuleDestroy {
       },
     );
 
-    // 4. PolicyExceptions Informer (/apis/kyverno.io/v2beta1/policyexceptions)
+    // 4. PolicyExceptions Informer (/apis/kyverno.io/v2/policyexceptions)
     this.registerInformer(
       registry,
       cluster.id,

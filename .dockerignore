@@ -6,7 +6,6 @@ dist
 **/dist
 .git
 .github
-.devcontainer
 .husky
 .pnpm-store
 **/.pnpm-store
