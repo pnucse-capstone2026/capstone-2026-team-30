@@ -17,6 +17,7 @@ out/
 *.log
 pino.log
 logs/
+dump.rdb
 
 # OS
 .DS_Store
