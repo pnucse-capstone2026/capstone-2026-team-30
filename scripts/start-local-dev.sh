@@ -46,8 +46,11 @@ echo ">>> [3/4] Starting NestJS Backend Server (Port: 3001)..."
 if lsof -ti:3001 >/dev/null 2>&1 || fuser 3001/tcp >/dev/null 2>&1; then
   echo "    ℹ️ Backend port 3001 is already in use. Skipping start."
 else
-  (cd "${ROOT_DIR}/apps/backend" && nohup node dist/main.js > "${LOG_DIR}/backend.log" 2>&1 & echo $! > "${LOG_DIR}/backend.pid")
-  BACKEND_PID=$(cat "${LOG_DIR}/backend.pid")
+  cd "${ROOT_DIR}/apps/backend"
+  nohup node dist/main.js > "${LOG_DIR}/backend.log" 2>&1 &
+  BACKEND_PID=$!
+  echo "${BACKEND_PID}" > "${LOG_DIR}/backend.pid"
+  cd "${ROOT_DIR}"
   echo "    ✓ Backend launched with PID: ${BACKEND_PID} (logs: logs/backend.log)"
 fi
 
@@ -66,8 +69,11 @@ echo ">>> [4/4] Starting Next.js Frontend Web Server (Port: 3000)..."
 if lsof -ti:3000 >/dev/null 2>&1 || fuser 3000/tcp >/dev/null 2>&1; then
   echo "    ℹ️ Frontend port 3000 is already in use. Skipping start."
 else
-  (cd "${ROOT_DIR}/apps/frontend" && nohup pnpm start > "${LOG_DIR}/frontend.log" 2>&1 & echo $! > "${LOG_DIR}/frontend.pid")
-  FRONTEND_PID=$(cat "${LOG_DIR}/frontend.pid")
+  cd "${ROOT_DIR}/apps/frontend"
+  nohup pnpm start > "${LOG_DIR}/frontend.log" 2>&1 &
+  FRONTEND_PID=$!
+  echo "${FRONTEND_PID}" > "${LOG_DIR}/frontend.pid"
+  cd "${ROOT_DIR}"
   echo "    ✓ Frontend launched with PID: ${FRONTEND_PID} (logs: logs/frontend.log)"
 fi
 

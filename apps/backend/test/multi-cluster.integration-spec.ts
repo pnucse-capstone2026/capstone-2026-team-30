@@ -339,7 +339,7 @@ describeCluster("multi-cluster provider against a real API server", () => {
 describeCluster("Kyverno CRD contract", () => {
   // KyvernoAdapter 의 EXCEPTION_VERSION 은 export 되지 않아 값을 그대로 적는다.
   // 어댑터 쪽 상수를 바꾸면 여기도 함께 바꿔야 한다.
-  const ADAPTER_EXCEPTION_VERSION = "v2beta1";
+  const ADAPTER_EXCEPTION_VERSION = "v2";
 
   it("still serves the apiVersion the adapter writes", () => {
     const served = execFileSync(

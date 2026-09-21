@@ -14,7 +14,7 @@ import {
 } from "./support/fake-cluster-provider";
 
 const KYVERNO_GROUP = "kyverno.io";
-const EXCEPTION_VERSION = "v2beta1";
+const EXCEPTION_VERSION = "v2";
 const EXCEPTION_PLURAL = "policyexceptions";
 
 describe("policy exception request flow (real adapter, fake cluster)", () => {

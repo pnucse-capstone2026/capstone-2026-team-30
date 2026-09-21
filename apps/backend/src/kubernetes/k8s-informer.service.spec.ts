@@ -183,7 +183,7 @@ describe("K8sInformerService", () => {
 
       expect(listClusterCustomObjectMock).toHaveBeenCalledWith({
         group: "kyverno.io",
-        version: "v2beta1",
+        version: "v2",
         plural: "policyexceptions",
       });
 
