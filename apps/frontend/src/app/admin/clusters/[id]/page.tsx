@@ -168,7 +168,7 @@ export default function AdminClusterDetailPage() {
         policyCount: 0,
         violationCount: 0,
         lastSyncedAt: new Date().toISOString().slice(0, 16).replace("T", " "),
-        owner: "플랫폼팀",
+        exceptionNamespace: targetMeta.exceptionNamespace,
         description: `${targetMeta.displayName || targetMeta.id} 클러스터입니다.`,
       };
     }
@@ -427,7 +427,7 @@ export default function AdminClusterDetailPage() {
                 ["Region", cluster.region],
                 ["연결 상태", clusterStatusLabel[cluster.status]],
                 ["Kyverno 상태", kyvernoStatusLabel[cluster.kyvernoStatus]],
-                ["담당 팀", cluster.owner],
+                ["예외 Namespace", cluster.exceptionNamespace || "kyverno"],
                 ["최근 동기화", cluster.lastSyncedAt],
               ].map(([label, value]) => (
                 <div

@@ -50,7 +50,7 @@ export const DEFAULT_PROCESSING_STANDARDS: ProcessingStandardsConfig = {
     lowHours: 168, // 7일
   },
   assignment: {
-    defaultAssigneeGroup: "SecOps Team",
+    defaultAssigneeGroup: "보안 관리자",
     autoAssignByNamespace: true,
   },
   approval: {

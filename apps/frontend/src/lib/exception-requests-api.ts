@@ -114,7 +114,7 @@ export function toExceptionRequest(
     clusterName: request.targetClusterDisplayName,
     k8sExceptionName: request.k8sExceptionName,
     requester: request.requestUserId,
-    team: "-",
+    team: undefined,
     reason: request.reason,
     requestedAt: formatDate(request.createdAt),
     expiresAt: formatDate(request.expiresAt),

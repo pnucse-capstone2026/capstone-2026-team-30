@@ -338,7 +338,7 @@ export default function AdminPolicyDetailPage() {
                 ["운영 상태", policyStatusLabel[policy.status]],
                 ["클러스터", policy.clusterDisplayName ?? policy.clusterName],
                 ["Namespace", policy.namespace ?? "cluster-wide"],
-                ["담당 팀", policy.owner ?? "플랫폼팀"],
+                ["담당자 / 관리 주체", policy.owner || "미지정"],
                 ["최근 수정", policy.updatedAt],
               ].map(([label, value]) => (
                 <div

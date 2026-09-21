@@ -199,7 +199,12 @@ export default function AdminExceptionDetailPage({
                         ],
                         ["네임스페이스", request.namespace],
                         ["클러스터", request.clusterName],
-                        ["신청자", `${request.requester} / ${request.team}`],
+                        [
+                          "신청자",
+                          request.team
+                            ? `${request.requester} (${request.team})`
+                            : request.requester,
+                        ],
                         ["검토자", request.reviewer],
                         ["만료일", request.expiresAt],
                         ["활성화일", request.activatedAt ?? "-"],

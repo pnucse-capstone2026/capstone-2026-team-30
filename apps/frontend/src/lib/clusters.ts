@@ -53,7 +53,8 @@ export type ManagedCluster = {
   policyCount: number;
   violationCount: number;
   lastSyncedAt: string;
-  owner: string;
+  owner?: string;
+  exceptionNamespace?: string;
   description: string;
 };
 

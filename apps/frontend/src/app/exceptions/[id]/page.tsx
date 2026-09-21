@@ -318,7 +318,7 @@ export default function MyExceptionRequestDetailPage({ params }: PageProps) {
                   icon={UserRound}
                   label="신청자"
                   value={request.requester}
-                  detail={request.team}
+                  detail={request.team && request.team !== "-" ? request.team : undefined}
                 />
                 <InfoCard
                   icon={CalendarClock}
@@ -504,7 +504,7 @@ function InfoCard({
   icon: typeof Layers3;
   label: string;
   value: string;
-  detail: string;
+  detail?: string;
 }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -515,7 +515,9 @@ function InfoCard({
       <p className="mt-3 truncate text-sm font-semibold text-slate-900">
         {value}
       </p>
-      <p className="mt-1 truncate text-xs text-slate-400">{detail}</p>
+      {detail ? (
+        <p className="mt-1 truncate text-xs text-slate-400">{detail}</p>
+      ) : null}
     </div>
   );
 }

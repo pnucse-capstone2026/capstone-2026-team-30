@@ -92,7 +92,7 @@ export class KyvernoRuleTemplateEngine {
       resolutionSteps: [
         "spec.template.spec.containers[].securityContext 설정을 확인합니다.",
         "privileged: true 구문을 제거하거나 false로 지정합니다.",
-        "해당 컨테이너에 특권 권한이 불가피하게 필요한 경우, 플랫폼 거버넌스 팀에 PolicyException(정책 예외)을 신청하세요.",
+        "해당 컨테이너에 특권 권한이 불가피하게 필요한 경우, 플랫폼 관리자에게 PolicyException(정책 예외)을 신청하세요.",
       ],
       suggestedFixYaml: undefined,
       governanceRationale:
@@ -139,7 +139,7 @@ export class KyvernoRuleTemplateEngine {
     team: devops
     app.kubernetes.io/name: my-app`,
       governanceRationale:
-        "클러스터 내 비용 추적(Cost Allocation), 장애 발생 시 담당 팀 자동 알림, 접근 제어를 위해 모든 워크로드의 소유권을 명확히 관리합니다.",
+        "클러스터 내 비용 추적(Cost Allocation), 장애 발생 시 담당자 자동 알림, 접근 제어를 위해 모든 워크로드의 소유권을 명확히 관리합니다.",
     },
     {
       id: "RESTRICT_REGISTRIES",
@@ -279,7 +279,7 @@ export class KyvernoRuleTemplateEngine {
       resolutionSteps: [
         "거부 오류 메시지에 명시된 룰(Rule) 요구사항 및 필드 스펙을 확인합니다.",
         "매니페스트의 spec 하위 설정 또는 필수 라벨/보안 설정을 수정 후 재배포하세요.",
-        "필요한 경우 플랫폼 팀에 사유를 입력하여 임시 PolicyException(정책 예외)을 신청하세요.",
+        "필요한 경우 플랫폼 관리자 또는 예외 신청 메뉴(/exceptions/new)를 통해 임시 PolicyException(정책 예외)을 신청하세요.",
       ],
       suggestedFixYaml: dto.resourceManifest
         ? `# 검토 필요 매니페스트\n${dto.resourceManifest}`

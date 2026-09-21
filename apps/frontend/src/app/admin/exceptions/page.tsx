@@ -546,7 +546,7 @@ export default function AdminExceptionsPage() {
                               {request.requester}
                             </p>
                             <p className="mt-1 text-[11px] text-slate-400">
-                              {request.team} · {request.clusterName}
+                              {request.team ? `${request.team} · ` : ""}{request.clusterName}
                             </p>
                           </TableCell>
                           <TableCell className="py-4">

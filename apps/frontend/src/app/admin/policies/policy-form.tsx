@@ -69,7 +69,7 @@ const defaultForm: PolicyFormState = {
   status: "draft",
   clusterName: "default",
   namespace: "",
-  owner: "플랫폼팀",
+  owner: "",
   ruleName: "",
   matchKinds: "Pod, Deployment",
   message: "",
@@ -102,7 +102,7 @@ export function PolicyForm({
           status: policy.status,
           clusterName: policy.clusterId ?? policy.clusterName,
           namespace: policy.namespace ?? "",
-          owner: policy.owner ?? "플랫폼팀",
+          owner: policy.owner ?? "",
           ruleName: `${policy.type}-${policy.name}`,
           matchKinds: "Pod, Deployment",
           message: policy.description,
@@ -128,7 +128,7 @@ export function PolicyForm({
         status: policy.status,
         clusterName: policy.clusterId ?? policy.clusterName,
         namespace: policy.namespace ?? "",
-        owner: policy.owner ?? "플랫폼팀",
+        owner: policy.owner ?? "",
         ruleName: policy.rules?.[0] || `${policy.type}-${policy.name}`,
         matchKinds: "Pod, Deployment",
         message: policy.description,
@@ -531,7 +531,7 @@ export function PolicyForm({
                     />
                   </Field>
                   <Field
-                    label="담당 팀 / 소유자"
+                    label="담당자 / 관리 주체"
                     htmlFor="policy-owner"
                     optional
                   >
@@ -541,7 +541,7 @@ export function PolicyForm({
                       onChange={(event) =>
                         updateForm("owner", event.target.value)
                       }
-                      placeholder="플랫폼팀"
+                      placeholder="예: 보안 관리자, 인프라 담당 (선택 사항)"
                       className="h-10 text-xs"
                     />
                   </Field>

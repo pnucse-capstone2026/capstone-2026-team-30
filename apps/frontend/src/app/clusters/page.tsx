@@ -165,7 +165,7 @@ export default function ClustersPage() {
           policyCount: 0,
           violationCount: 0,
           lastSyncedAt: new Date().toISOString().slice(0, 16).replace("T", " "),
-          owner: "플랫폼팀",
+          exceptionNamespace: item.exceptionNamespace,
           description: `${item.displayName || item.id} 클러스터입니다.`,
         };
       });
@@ -340,7 +340,7 @@ export default function ClustersPage() {
                   type="search"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="클러스터, 정책, 담당 팀 검색"
+                  placeholder="클러스터, 정책 검색"
                   className="h-10 w-full rounded-xl border-slate-200 bg-slate-50 pr-3 pl-9 text-xs lg:w-72"
                 />
               </div>

@@ -213,9 +213,10 @@ export function ProcessingStandardsDialog({
               <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3 dark:border-slate-800 dark:bg-slate-900/50">
                 <div>
                   <label className="block text-xs font-semibold text-slate-800 dark:text-slate-200">
-                    기본 처리 담당 팀 (Default Assignee Group)
+                    기본 처리 담당자 / 담당 조직 (Default Assignee)
                   </label>
-                  <select
+                  <Input
+                    type="text"
                     value={config.assignment.defaultAssigneeGroup}
                     onChange={(e) =>
                       handleAssignmentChange(
@@ -223,21 +224,12 @@ export function ProcessingStandardsDialog({
                         e.target.value,
                       )
                     }
-                    className="mt-2 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200"
-                  >
-                    <option value="SecOps Team">
-                      보안 운영팀 (SecOps Team)
-                    </option>
-                    <option value="DevOps Team">
-                      데브옵스팀 (DevOps Team)
-                    </option>
-                    <option value="Platform Engineering">
-                      플랫폼 엔지니어링팀
-                    </option>
-                    <option value="Compliance Audit Group">
-                      규정 준수 감사팀
-                    </option>
-                  </select>
+                    placeholder="예: 보안 관리자, 인프라 운영팀 (미입력 시 미지정)"
+                    className="mt-2 h-9 text-xs"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    정책 위반 발생 시 기본으로 할당될 담당자 이메일 또는 조직명을 자유롭게 지정합니다.
+                  </p>
                 </div>
 
                 <label className="flex items-center gap-3 pt-2">

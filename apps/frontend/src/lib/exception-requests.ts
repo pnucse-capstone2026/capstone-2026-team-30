@@ -24,7 +24,7 @@ export type ExceptionRequest = {
   clusterName: string;
   k8sExceptionName?: string;
   requester: string;
-  team: string;
+  team?: string;
   reason: string;
   requestedAt: string;
   expiresAt: string;

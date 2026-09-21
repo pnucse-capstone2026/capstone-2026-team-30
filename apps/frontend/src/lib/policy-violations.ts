@@ -119,7 +119,7 @@ export async function getViolations(
       detectedAt: item.detectedAt
         ? new Date(item.detectedAt).toLocaleString("ko-KR")
         : "최근",
-      assignee: "담당 보안팀",
+      assignee: (item as unknown as { assignee?: string }).assignee || "미지정",
       message: item.message,
       ruleName: item.ruleName,
       engineResponse: "fail",
@@ -211,7 +211,7 @@ export async function getViolationDetail(
       detectedAt: item.detectedAt
         ? new Date(item.detectedAt).toLocaleString("ko-KR")
         : "최근",
-      assignee: "담당 보안팀",
+      assignee: (item as unknown as { assignee?: string }).assignee || "미지정",
       message: item.message,
       ruleName: item.ruleName,
       engineResponse: "fail",
@@ -312,7 +312,7 @@ export async function updateViolationStatus(
     detectedAt: item.detectedAt
       ? new Date(item.detectedAt).toLocaleString("ko-KR")
       : "최근",
-    assignee: "담당 보안팀",
+    assignee: (item as unknown as { assignee?: string }).assignee || "미지정",
     message: item.message,
     ruleName: item.ruleName,
     engineResponse: "fail",

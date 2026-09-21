@@ -129,7 +129,7 @@ export default function AdminClustersPage() {
                 .toISOString()
                 .slice(0, 16)
                 .replace("T", " "),
-              owner: "플랫폼팀",
+              exceptionNamespace: item.exceptionNamespace,
               description: `${item.displayName || item.id} 클러스터입니다.`,
             };
           })
@@ -168,7 +168,7 @@ export default function AdminClustersPage() {
           cluster.name,
           cluster.environment,
           cluster.region,
-          cluster.owner,
+          cluster.exceptionNamespace,
           cluster.description,
         ]
           .join(" ")
@@ -443,9 +443,11 @@ export default function AdminClustersPage() {
                       <p className="text-xs text-slate-600">
                         {cluster.lastSyncedAt}
                       </p>
-                      <p className="mt-1 text-[11px] text-slate-400">
-                        {cluster.owner}
-                      </p>
+                      {cluster.exceptionNamespace && (
+                        <p className="mt-1 text-[11px] text-slate-400 font-mono">
+                          ns: {cluster.exceptionNamespace}
+                        </p>
+                      )}
                     </TableCell>
                     <TableCell className="py-4 pr-5 sm:pr-6">
                       <Link

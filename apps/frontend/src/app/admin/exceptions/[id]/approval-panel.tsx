@@ -122,7 +122,7 @@ export function ExceptionApprovalPanel({
       {
         label: "예외 신청 접수",
         at: request.requestedAt,
-        description: `${request.requester} / ${request.team}에서 ${request.policyName} 예외를 신청했습니다.`,
+        description: `${request.requester}${request.team ? ` (${request.team})` : ""}에서 ${request.policyName} 예외를 신청했습니다.`,
       },
       {
         label: "위험도 검토",

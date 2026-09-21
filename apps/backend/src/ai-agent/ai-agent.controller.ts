@@ -46,7 +46,7 @@ export class AiAgentController {
   @ApiOperation({
     summary: "Kyverno 정책 위반 오류 해설 리포트 생성",
     description:
-      "플랫폼 지식이 부족한 일반 팀을 위해 Kyverno 오류 메시지, 정책 YAML, 쿠버네티스 매니페스트, 클러스터 상태를 종합 분석하여 대화식 가이드를 생성합니다.",
+      "쿠버네티스 거버넌스 정책 이해를 돕기 위해 Kyverno 오류 메시지, 정책 YAML, 쿠버네티스 매니페스트, 클러스터 상태를 종합 분석하여 대화식 가이드를 생성합니다.",
   })
   @ApiResponse({
     status: 200,
