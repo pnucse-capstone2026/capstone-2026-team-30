@@ -16,15 +16,15 @@
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
-  <h1 align="center">PaC Kyverno 거버넌스 플랫폼</h1>
+  <h1 align="center">PaC Kyverno 대시보드</h1>
 
   <p align="center">
-    <strong>엔터프라이즈 쿠버네티스 Policy-as-Code (PaC), 자율형 MLOps 거버넌스 및 AI 장애 진단 플랫폼</strong>
+    <strong>쿠버네티스 Kyverno 기반 Policy-as-Code(PaC) 및 MLOps 거버넌스 대시보드</strong>
     <br />
-    선언적 Kyverno 정책 관리, Dual-Path GitOps 예외 승인 파이프라인, 배포 전 정책 시뮬레이션, Admission 차단 AI 진단, MLOps GPU 워크로드 거버넌스 및 실시간 멀티클러스터 관제를 위한 통합 제어 플랫폼입니다.
+    쿠버네티스 환경에서 Kyverno 정책 관리, 정책 예외 워크플로우, 배포 전 모의 검사, LLM 기반 위반 분석, 주피터 노트북 관리를 웹 인터페이스로 검증하기 위해 시작된 프로젝트입니다.
     <br />
     <br />
-    <a href="http://localhost:3000">대시보드 바로가기</a>
+    <a href="http://localhost:3000">대시보드 접속</a>
     &middot;
     <a href="http://localhost:3001/api/docs">Swagger API 문서</a>
   </p>
@@ -38,6 +38,7 @@
       <a href="#about-the-project">About The Project (프로젝트 소개)</a>
       <ul>
         <li><a href="#built-with">Built With (기술 스택)</a></li>
+        <li><a href="#limitations">Limitations (한계 및 안내)</a></li>
       </ul>
     </li>
     <li>
@@ -54,23 +55,28 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-현대 엔터프라이즈 클라우드 네이티브 환경은 다음과 같은 3대 운영 병목에 직면해 있습니다:
-1. **보안 컴플라이언스 딜레마**: 루트 권한 컨테이너, 변조 가능한 `:latest` 태그, 누락된 CPU/메모리 리소스 제한, 인가되지 않은 외부 레지스트리 이미지를 사용하는 워크로드가 클러스터에 무분별하게 유입됩니다.
-2. **고비용 MLOps 자원 낭비**: 대화형 Jupyter 노트북, 학습 작업 및 모델 서빙 엔드포인트에 할당된 고비용 GPU 인스턴스(NVIDIA A10G, T4 등)가 네임스페이스별 쿼터 제한이나 유휴 자원 회수 없이 방치되어 막대한 클라우드 비용을 발생시킵니다.
-3. **컨트롤 플레인 폴링 부하**: 기존의 정책 대시보드들이 PolicyReport 조회를 위해 `kube-apiserver`를 지속적으로 폴링함으로써 API Priority and Fairness(APF) 큐를 고갈시키고 etcd I/O 부하를 유발합니다.
+본 프로젝트는 쿠버네티스 환경에서 **Policy-as-Code(PaC) 엔진인 Kyverno**와 MLOps 작업 환경을 연계하여 관리할 수 있는 웹 기반 통합 제어 도구입니다.
 
-**PaC Kyverno 거버넌스 플랫폼**은 이러한 문제를 해결하기 위한 프로덕션급 엔드투엔드 솔루션을 제공합니다:
-* **CQRS Informer 아키텍처 기반 API 부하 제로화**: `@kubernetes/client-node`의 Informer와 DeltaFIFO 인메모리 캐시를 활용하여 클러스터 API 폴링을 배제하고 서브밀리초(Sub-millisecond) 단위의 초고속 조회를 보장합니다.
-* **닫힌 루프(Closed-Loop) 정책 생명주기 관리**: 실시간 PolicyReport 수집, 승인 워크플로우, UUIDv7 분산 락, 임시 정책 예외 자동 만료(TTL)를 지원합니다.
-* **Dual-Path GitOps 동기화 파이프라인**: 런타임 클러스터 즉시 완화(`PolicyException` CRD)와 비동기 GitHub Pull Request 자동 생성 및 자동 머지를 결합하여 개발 생산성과 보안 통제를 동시에 달성합니다.
-* **자율형 MLOps 거버넌스 & 인앱 역방향 프록시**: 네임스페이스별 GPU 쿼터 강제, 유휴 리소스 자동 회수, Kubeflow 파이프라인 및 KServe 모델 서빙 관제와 함께 안전한 인앱 웹 프록시(`/notebook/*`)를 제공합니다.
-* **배포 전 사전 시뮬레이션 및 AI 진단**: 배포 전 Dry-Run 모의 검증 샌드박스(`/simulation`)와 AWS Bedrock(Claude 3.5 Sonnet / Amazon Nova) 기반의 Admission Enforce 차단 원인 정밀 분석 및 자동 교정 패치(Diff) 생성을 지원합니다.
+클라우드 네이티브 환경에서 발생할 수 있는 보안 정책 위반, 자원 관리, 그리고 정책 적용으로 인한 배포 차단 문제를 해결해보고자 실무적 표준을 최대한 참고하여 구현했습니다.
+
+### 주요 구현 기능
+
+* **정책 예외(PolicyException) 신청 및 승인 워크플로우**: 부득이하게 정책을 우회해야 하는 워크로드를 위해 대시보드에서 임시 예외를 신청하고, 관리자 승인 시 클러스터에 `PolicyException` CRD를 반영하고 Git 저장소에 PR을 생성하는 흐름을 구현했습니다.
+* **매니페스트 사전 검사 (Dry-Run)**: 클러스터 배포 전 YAML 매니페스트를 대시보드에 입력하여 등록된 Kyverno 정책에 위반되는지 미리 확인해보는 테스트 도구(`/simulation`)를 제공합니다.
+* **LLM 기반 차단 원인 분석 실험**: Admission Webhook 차단 이벤트 발생 시 AWS Bedrock 모델을 호출하여 차단 원인을 요약하고 수정 가이드(YAML Diff)를 제안받는 실험적 기능(`/diagnostics`)을 포함했습니다.
+* **Informer 기반 리소스 캐싱 및 조회**: `@kubernetes/client-node`의 Informer와 인메모리 캐시를 구성하여 `kube-apiserver` 직접 폴링 빈도를 낮추고 대시보드 응답성을 개선하도록 설계했습니다.
+* **간이 주피터 노트북 관리 및 프록시**: 네임스페이스별 리소스 제한을 고려하여 대화형 Jupyter 노트북 파드를 생성하고, 웹 UI에서 인앱 역방향 프록시(`/notebooks`)를 통해 접근할 수 있도록 구성했습니다.
+
+### Limitations
+
+* 본 프로젝트는 학부 졸업 연구 목적으로 제작된 프로토타입(Proof of Concept)입니다.
+* 상용 프로덕션 환경의 엄격한 보안 요구사항, 고가용성(HA), 대규모 트래픽 부하 검증 등은 완벽히 충족되지 않았을 수 있습니다.
 
 <p align="right">(<a href="#readme-top">맨 위로 이동</a>)</p>
 
 ### Built With
 
-본 프로젝트는 다음과 같은 핵심 기술 스택을 기반으로 구축되었습니다:
+본 프로젝트에서 사용된 주요 기술 스택입니다:
 
 * [![Next.js][Next-badge]][Next-url]
 * [![React][React-badge]][React-url]
@@ -121,14 +127,15 @@
    cp apps/frontend/.env.example apps/frontend/.env.local
    ```
 
-4. **로컬 백엔드 인프라 실행 (PostgreSQL 및 Redis)**:
+4. **로컬 백엔드 인프라 실행 (PostgreSQL 17 및 Redis 7)**:
    ```sh
-   docker compose up -d postgres redis
+   docker compose up -d
    ```
 
-5. **데이터베이스 스키마 마이그레이션 및 시드 데이터 주입**:
+5. **데이터베이스 스키마 마이그레이션 및 기본 계정 시딩**:
    ```sh
-   pnpm --filter backend prisma:migrate:dev
+   pnpm db:migrate
+   pnpm db:seed
    ```
 
 6. **로컬 개발 서버 실행**:
@@ -136,41 +143,42 @@
    pnpm dev
    ```
    * 웹 대시보드 (Frontend): [http://localhost:3000](http://localhost:3000)
-   * 백엔드 REST API: [http://localhost:3001](http://localhost:3001)
+   * 백엔드 REST API (Swagger): [http://localhost:3001/api/docs](http://localhost:3001/api/docs)
 
-> 💡 **원클릭 자동 구성 스크립트**: 로컬 Kind 클러스터 생성, Kyverno 설치 및 데이터베이스 부트스트랩을 한 번에 실행하려면 `./scripts/setup-local-cluster.sh` 스크립트를 사용할 수 있습니다.
+> 💡 **로컬 Kind 클러스터 연동**: 실제 로컬 쿠버네티스 환경에서 Kyverno 어드미션 제어 및 정책 위반을 테스트하려면 `./scripts/setup-local-cluster.sh`로 경량 클러스터를 구동할 수 있습니다. (정리 시 `./scripts/cleanup-local-cluster.sh` 실행)
+>
+> 💡 **AWS EKS 클러스터 구축**: 실제 AWS EKS에 배포하고자 하는 경우 `./scripts/setup-eks-cluster.sh [클러스터명] [리전]` 또는 멀티클러스터 `./scripts/setup-multicluster-eks.sh`를 사용할 수 있습니다.
 
 <p align="right">(<a href="#readme-top">맨 위로 이동</a>)</p>
 
 <!-- USAGE EXAMPLES -->
 ## Usage
 
-### 1. 웹 대시보드 접속 및 기본 계정 정보
-로컬 개발 서버 또는 컨테이너가 정상 구동되면 웹 브라우저에서 [http://localhost:3000](http://localhost:3000)으로 접속합니다.
+### 1. 웹 대시보드 접속 및 테스트 계정
+로컬 개발 서버가 구동되면 웹 브라우저에서 [http://localhost:3000](http://localhost:3000)으로 접속합니다.
 
-* **플랫폼 관리자 (Platform Administrator)**:
+* **관리자 계정 (Platform Admin)**:
   * 이메일: `admin@test.com`
   * 비밀번호: `test1234!`
-  * 권한: 클러스터 등록/관리, Kyverno 정책 등록 및 편집, 예외 신청 승인/반려, 시스템 감사 로그 열람
-* **일반 개발자 (Application Developer)**:
+  * 역할: 클러스터/정책 관리, 예외 신청 승인 및 반려, 감사 로그 확인
+* **일반 개발자 계정 (Developer)**:
   * 이메일: `dev@test.com`
   * 비밀번호: `test1234!`
-  * 권한: 정책 위반 내역 조회, 임시 정책 예외 신청, MLOps Jupyter 노트북 생성 및 인앱 접속
+  * 역할: 정책 위반 내역 확인, 임시 정책 예외 신청, Jupyter 노트북 생성 및 접속
 
-### 2. 대화형 Swagger API 문서
-백엔드가 제공하는 전체 REST API 명세는 [http://localhost:3001/api/docs](http://localhost:3001/api/docs)에서 Swagger UI를 통해 실시간으로 확인하고 테스트할 수 있습니다.
+### 2. API 문서 (Swagger)
+백엔드 REST API 명세는 [http://localhost:3001/api/docs](http://localhost:3001/api/docs)의 Swagger UI를 통해 확인할 수 있습니다.
 
-### 3. 핵심 운영 워크플로우
+### 3. 주요 기능 둘러보기
 
-* **배포 전 정책 시뮬레이션 랩 (`/simulation`)**:
-  * Git 커밋을 푸시하거나 실제 클러스터에 배포하기 전에 쿠버네티스 리소스 매니페스트(YAML)를 입력하여 활성화된 Kyverno 정책에 대한 위반 여부를 사전 검증합니다.
-* **Dual-Path 정책 예외 라이프사이클 (`/exceptions`)**:
-  * 보안 규정상 부득이하게 위반이 발생하는 워크로드에 대해 임시 예외를 신청합니다.
-  * 관리자가 승인하면 클러스터 런타임에 `PolicyException` CRD가 즉시 반영됨과 동시에 사내 GitOps 저장소로 Pull Request가 비동기 생성 및 자동 머지됩니다.
-* **Admission Enforce 차단 AI 진단 (`/diagnostics`)**:
-  * 배포 시점에 Kyverno Admission Webhook에 의해 차단된 이벤트를 감지하고, AWS Bedrock을 통해 근본 원인(RCA) 분석 및 검증을 통과한 YAML 교정 패치(Diff)를 제공받습니다.
-* **MLOps GPU 거버넌스 및 인앱 웹 프록시 (`/notebooks`)**:
-  * 네임스페이스별 GPU 쿼터 정책이 적용된 Kubeflow 대화형 Jupyter 노트북 인스턴스를 생성하고, 별도의 포트포워딩 없이 플랫폼 웹 콘솔 내에서 안전한 역방향 프록시를 통해 즉시 작업 공간에 접속합니다.
+* **정책 시뮬레이션 (`/simulation`)**:
+  * YAML 매니페스트를 입력하여 클러스터 배포 전 활성화된 Kyverno 정책에 걸리는 부분이 있는지 사전 검증합니다.
+* **정책 예외 관리 (`/exceptions`)**:
+  * 특정 워크로드에 대한 예외 신청을 등록하고, 관리자 승인 시 `PolicyException` CRD 생성 및 Git PR 생성을 연동합니다.
+* **차단 원인 진단 (`/diagnostics`)**:
+  * Admission Webhook에 의해 차단된 이벤트를 확인하고, AWS Bedrock을 통해 원인 설명 및 수정 예시 매니페스트(Diff)를 제안받습니다.
+* **주피터 노트북 환경 (`/notebooks`)**:
+  * 리소스 제한이 적용된 Jupyter 파드를 생성하고, 웹 콘솔 내 리버스 프록시를 통해 접속할 수 있습니다.
 
 <p align="right">(<a href="#readme-top">맨 위로 이동</a>)</p>
 

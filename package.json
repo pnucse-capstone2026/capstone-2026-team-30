@@ -8,16 +8,10 @@
     "lint": "pnpm --parallel -r --if-present lint",
     "format": "pnpm --parallel -r --if-present format",
     "test": "pnpm --parallel -r --if-present test",
-    "test:log": "bash scripts/run-tests-with-log.sh backend",
-    "test:integration:log": "bash scripts/run-tests-with-log.sh integration",
-    "test:all:log": "bash scripts/run-tests-with-log.sh all",
-    "test:bare:single": "bash scripts/tests/run-bare-single-cluster-test.sh",
-    "test:bare:multicluster": "bash scripts/tests/run-bare-multicluster-test.sh",
-    "test:cleanup": "bash scripts/tests/cleanup-all-test-clusters.sh",
-    "prepare": "husky",
-    "user:setup": "bash scripts/setup-user-environment.sh",
-    "user:shell": "bash scripts/user-shell.sh",
-    "user:docker": "bash scripts/user-docker-sandbox.sh"
+    "db:generate": "pnpm --filter @kyverno-platform/backend prisma:generate",
+    "db:migrate": "pnpm --filter @kyverno-platform/backend prisma:migrate",
+    "db:seed": "pnpm --filter @kyverno-platform/backend prisma:seed",
+    "prepare": "husky"
   },
   "devDependencies": {
     "husky": "^9.0.11",
