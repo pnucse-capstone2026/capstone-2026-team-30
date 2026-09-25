@@ -15,6 +15,27 @@ export PATH="${LOCAL_BIN_DIR}:${PATH}"
 
 KUBECTL="${LOCAL_BIN_DIR}/kubectl"
 HELM="${LOCAL_BIN_DIR}/helm"
+
+if [ ! -f "${KUBECTL}" ]; then
+  KUBECTL="kubectl"
+fi
+if [ ! -f "${HELM}" ]; then
+  HELM="helm"
+fi
+
+export HOME="/tmp"
+export XDG_CACHE_HOME="/tmp/.cache"
+export XDG_CONFIG_HOME="/tmp/.config"
+export PATH="/tmp/bin:${LOCAL_BIN_DIR}:${PATH}"
+export KUBECONFIG="${KUBECONFIG:-/tmp/kubeconfig}"
+
+mkdir -p /tmp/.cache /tmp/.config /tmp/.aws
+if [ -d "/home/user/.aws" ]; then
+  cp -rf /home/user/.aws/* /tmp/.aws/ 2>/dev/null || true
+  chmod -R u+rwX /tmp/.aws 2>/dev/null || true
+fi
+touch "${KUBECONFIG}" 2>/dev/null || true
+
 REGION="us-east-1"
 HUB_CLUSTER="kyverno-eks-lab"
 SPOKE_CLUSTER="kyverno-eks-spoke-01"
@@ -126,6 +147,17 @@ SPOKE_TOKEN=$("${KUBECTL}" --context="${SPOKE_CTX}" get secret kyverno-remote-ag
 
 echo ">>> Spoke Server: ${SPOKE_SERVER}"
 echo ">>> Spoke Token retrieved successfully!"
+
+# KubeView Helm 배포 (Spoke)
+echo ">>> Deploying KubeView via Helm on Spoke (${SPOKE_CLUSTER})..."
+"${HELM}" repo add kubeview https://code.benco.io/kubeview/deploy/helm --kube-context="${SPOKE_CTX}" 2>/dev/null || true
+"${HELM}" repo update kubeview 2>/dev/null || true
+"${HELM}" upgrade --install kubeview kubeview/kubeview \
+  --kube-context="${SPOKE_CTX}" \
+  --namespace kubeview \
+  --create-namespace \
+  --set limitNamespace=""
+"${KUBECTL}" --context="${SPOKE_CTX}" -n kubeview rollout status deployment/kubeview --timeout=120s || true
 
 # 3. Hub 클러스터 인프라, Kyverno HA, Bedrock IRSA 및 플랫폼 배포
 echo "=========================================================="
@@ -272,11 +304,24 @@ echo ">>> Creating backend-env-secret with multi-cluster configuration on Hub...
   --from-literal=NODE_ENV="production" \
   --dry-run=client -o yaml | "${KUBECTL}" --context="${HUB_CTX}" apply -f -
 
-# Hub 백엔드 및 프론트엔드 배포
-echo ">>> Deploying Backend and Frontend to Hub..."
+# Hub KubeView Helm 배포
+echo ">>> [Step 3.6] Deploying KubeView via Helm on Hub (${HUB_CLUSTER})..."
+"${HELM}" repo add kubeview https://code.benco.io/kubeview/deploy/helm --kube-context="${HUB_CTX}" 2>/dev/null || true
+"${HELM}" repo update kubeview 2>/dev/null || true
+"${HELM}" upgrade --install kubeview kubeview/kubeview \
+  --kube-context="${HUB_CTX}" \
+  --namespace kyverno-platform \
+  --set limitNamespace=""
+"${KUBECTL}" --context="${HUB_CTX}" -n kyverno-platform rollout status deployment/kubeview --timeout=120s || true
+
+# Hub 백엔드 및 프론트엔드 배포 (기존 ECR 이미지 활용)
+echo ">>> [Step 3.7] Deploying Backend and Frontend to Hub using existing ECR images..."
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 BACKEND_IMAGE="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/kyverno-backend:latest"
 FRONTEND_IMAGE="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/kyverno-frontend:latest"
+
+echo ">>> ECR Backend Image  : ${BACKEND_IMAGE}"
+echo ">>> ECR Frontend Image : ${FRONTEND_IMAGE}"
 
 sed "s|image: .*/kyverno-backend:.*|image: ${BACKEND_IMAGE}|g" "${ROOT_DIR}/k8s-manifests/system/backend.yaml" | "${KUBECTL}" --context="${HUB_CTX}" apply -f -
 sed "s|image: .*/kyverno-frontend:.*|image: ${FRONTEND_IMAGE}|g" "${ROOT_DIR}/k8s-manifests/system/frontend.yaml" | "${KUBECTL}" --context="${HUB_CTX}" apply -f -
@@ -284,9 +329,24 @@ sed "s|image: .*/kyverno-frontend:.*|image: ${FRONTEND_IMAGE}|g" "${ROOT_DIR}/k8
 "${KUBECTL}" --context="${HUB_CTX}" set image deployment/kyverno-backend backend="${BACKEND_IMAGE}" -n kyverno-platform
 "${KUBECTL}" --context="${HUB_CTX}" set image deployment/kyverno-frontend frontend="${FRONTEND_IMAGE}" -n kyverno-platform
 
-"${KUBECTL}" --context="${HUB_CTX}" rollout status deployment/kyverno-backend -n kyverno-platform --timeout=60s || echo "[WARN] Backend deployment rollout pending or image pending in ECR."
-"${KUBECTL}" --context="${HUB_CTX}" rollout status deployment/kyverno-frontend -n kyverno-platform --timeout=60s || echo "[WARN] Frontend deployment rollout pending or image pending in ECR."
+echo ">>> Waiting for Backend and Frontend rollout to complete..."
+"${KUBECTL}" --context="${HUB_CTX}" rollout status deployment/kyverno-backend -n kyverno-platform --timeout=180s
+"${KUBECTL}" --context="${HUB_CTX}" rollout status deployment/kyverno-frontend -n kyverno-platform --timeout=180s
 
 echo "=========================================================="
 echo " Multi-Cluster Platform Deployment Finished Successfully! 🎉"
+echo "=========================================================="
+echo ""
+echo ">>> [Port-Forward Commands for Live Demo Presentation]"
+echo "1. PaC Kyverno Governance Dashboard (Hub):"
+echo "   kubectl --context=${HUB_CTX} port-forward svc/kyverno-frontend 3000:3000 -n kyverno-platform"
+echo "   👉 http://localhost:3000"
+echo ""
+echo "2. KubeView Live Topology (Spoke - Main Workloads):"
+echo "   kubectl --context=${SPOKE_CTX} port-forward svc/kubeview 8080:80 -n kubeview"
+echo "   👉 http://localhost:8080"
+echo ""
+echo "3. Argo CD Dashboard (Spoke):"
+echo "   kubectl --context=${SPOKE_CTX} port-forward svc/argocd-server 8443:443 -n argocd"
+echo "   👉 https://localhost:8443"
 echo "=========================================================="

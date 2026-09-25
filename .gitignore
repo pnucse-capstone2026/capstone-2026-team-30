@@ -47,5 +47,8 @@ scripts/bin/
 !k8s-manifests/system/*.sql
 *_backup.*
 /prompts/
-!docs/prompts/
+
+# Documentation & Archives
+docs/
+archive/
 
