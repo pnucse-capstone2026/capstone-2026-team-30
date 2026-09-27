@@ -332,7 +332,9 @@ pnpm dev
 
 ### 6.2. 시연 영상
 
-> TODO: 프로젝트 시연 영상 링크 추가
+[![시연 영상](https://i.ytimg.com/vi/Gngvrf_XGBg/maxresdefault.jpg)](https://www.youtube.com/watch?v=Gngvrf_XGBg)
+
+이미지를 누르면 YouTube에서 시연 영상을 볼 수 있습니다.
 
 ## 7. 팀 구성
 
