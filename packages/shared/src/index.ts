@@ -1,0 +1,3 @@
+// @kyverno-platform/shared
+
+export {};

@@ -1,0 +1,21 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": "..",
+  "testRegex": "test/.*\\.integration-spec\\.ts$",
+  "transform": {
+    "^.+\\.(t|j)s$": [
+      "ts-jest",
+      {
+        "tsconfig": "<rootDir>/test/tsconfig.json"
+      }
+    ]
+  },
+  "transformIgnorePatterns": [
+    "/node_modules/\\.pnpm/(?!(@kubernetes\\+client-node|openid-client|oauth4webapi|jose)@)"
+  ],
+  "testEnvironment": "node",
+  "globalSetup": "<rootDir>/test/setup/global-setup.ts",
+  "globalTeardown": "<rootDir>/test/setup/global-teardown.ts",
+  "testTimeout": 30000,
+  "maxWorkers": 1
+}

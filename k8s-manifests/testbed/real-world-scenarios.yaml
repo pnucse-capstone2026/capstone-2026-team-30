@@ -1,0 +1,255 @@
+# 실제 EKS 및 로컬 테스트 환경을 모사한 Kyverno 정책별 정밀 검증용 워크로드 매니페스트
+# [도입 배경] 크래시/재시작 루프에 의한 I/O 폭주를 원천 차단하고 정책별 정확히 2개의 위반 데이터를 생성하기 위함
+# [기대 효과] 호스트 디스크/CPU 부하 0% 유지 및 대시보드 PolicyReport 수집의 일관성/결정론적 신뢰성 보장
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: governance-testbed
+  labels:
+    environment: testbed
+    kyverno-governance: enabled
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    environment: production
+    kyverno-governance: enabled
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlops-workspace
+  labels:
+    environment: mlops
+    kyverno-governance: enabled
+
+# ==============================================================================
+# 1. [disallow-latest-tag] 정책 검증 파드 (위반 2개)
+# ==============================================================================
+---
+# 1-1. [위반] latest 태그 명시 사용
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tag-violation-latest
+  namespace: governance-testbed
+  labels:
+    app: tag-violation-latest
+    policy-target: disallow-latest-tag
+spec:
+  restartPolicy: Always
+  containers:
+    - name: app
+      image: registry.k8s.io/pause:latest
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 50m
+          memory: 64Mi
+      securityContext:
+        privileged: false
+---
+# 1-2. [위반] 태그 생략 (묵시적 latest)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tag-violation-no-tag
+  namespace: governance-testbed
+  labels:
+    app: tag-violation-no-tag
+    policy-target: disallow-latest-tag
+spec:
+  restartPolicy: Always
+  containers:
+    - name: app
+      image: registry.k8s.io/pause
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 50m
+          memory: 64Mi
+      securityContext:
+        privileged: false
+
+# ==============================================================================
+# 2. [disallow-privileged-containers] 정책 검증 파드 (위반 2개)
+# ==============================================================================
+---
+# 2-1. [위반] 메인 컨테이너 특권(privileged: true) 모드
+apiVersion: v1
+kind: Pod
+metadata:
+  name: priv-violation-main
+  namespace: governance-testbed
+  labels:
+    app: priv-violation-main
+    policy-target: disallow-privileged-containers
+spec:
+  restartPolicy: Always
+  containers:
+    - name: app
+      image: registry.k8s.io/pause:3.10
+      securityContext:
+        privileged: true
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 50m
+          memory: 64Mi
+---
+# 2-2. [위반] 프로덕션 네임스페이스 내 특권 모드 디버거
+apiVersion: v1
+kind: Pod
+metadata:
+  name: priv-violation-prod-debugger
+  namespace: production
+  labels:
+    app: priv-violation-prod-debugger
+    policy-target: disallow-privileged-containers
+spec:
+  restartPolicy: Always
+  containers:
+    - name: debugger
+      image: registry.k8s.io/pause:3.10
+      securityContext:
+        privileged: true
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 50m
+          memory: 64Mi
+
+# ==============================================================================
+# 3. [require-resource-limits] 정책 검증 파드 (위반 2개)
+# ==============================================================================
+---
+# 3-1. [위반] 컴퓨팅 리소스 limits/requests 전체 누락
+apiVersion: v1
+kind: Pod
+metadata:
+  name: limit-violation-missing-all
+  namespace: governance-testbed
+  labels:
+    app: limit-violation-missing-all
+    policy-target: require-resource-limits
+spec:
+  restartPolicy: Always
+  containers:
+    - name: app
+      image: registry.k8s.io/pause:3.10
+      securityContext:
+        privileged: false
+---
+# 3-2. [위반] Memory limit 누락 (CPU limit/requests 및 Memory requests만 설정)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: limit-violation-missing-memory-limit
+  namespace: production
+  labels:
+    app: limit-violation-missing-memory-limit
+    policy-target: require-resource-limits
+spec:
+  restartPolicy: Always
+  containers:
+    - name: app
+      image: registry.k8s.io/pause:3.10
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 50m
+      securityContext:
+        privileged: false
+
+# ==============================================================================
+# 4. [PolicyException] 거버넌스 예외 승인 검증 파드 (1개)
+# ==============================================================================
+---
+# [예외] PolicyException(pac-exception-example)에 의해 disallow-latest-tag 정책 검사 우회
+apiVersion: v1
+kind: Pod
+metadata:
+  name: synthetic-violating-app
+  namespace: governance-testbed
+  labels:
+    app: synthetic-violating-app
+spec:
+  restartPolicy: Always
+  containers:
+    - name: app
+      image: registry.k8s.io/pause:latest
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 50m
+          memory: 64Mi
+      securityContext:
+        privileged: false
+
+# ==============================================================================
+# 5. [Compliant] 전체 거버넌스 정책 준수 파드 (2개)
+# ==============================================================================
+---
+# 5-1. [준수] governance-testbed 네임스페이스 표준 백엔드 API
+apiVersion: v1
+kind: Pod
+metadata:
+  name: compliant-payment-api
+  namespace: governance-testbed
+  labels:
+    app: payment-api
+    tier: backend
+spec:
+  restartPolicy: Always
+  containers:
+    - name: api-server
+      image: registry.k8s.io/pause:3.10
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 50m
+          memory: 64Mi
+      securityContext:
+        privileged: false
+---
+# 5-2. [준수] production 네임스페이스 표준 프론트엔드 웹 서비스
+apiVersion: v1
+kind: Pod
+metadata:
+  name: compliant-frontend-service
+  namespace: production
+  labels:
+    app: frontend-service
+    tier: frontend
+spec:
+  restartPolicy: Always
+  containers:
+    - name: web
+      image: registry.k8s.io/pause:3.10
+      resources:
+        requests:
+          cpu: 20m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi
+      securityContext:
+        privileged: false

@@ -1,0 +1,12 @@
+# Core 거버넌스 플랫폼 기본 Kustomization 매니페스트
+# 도입 배경: 핵심 거버넌스 컴포넌트(백엔드, 프론트엔드, DB, RBAC)만을 Base로 유지
+# 기대 효과: 플랫폼 최소 배포 지원 및 확장 모듈과의 의존성 격리
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: kyverno-platform
+resources:
+  - namespace.yaml
+  - rbac.yaml
+  - postgres.yaml
+  - backend.yaml
+  - frontend.yaml

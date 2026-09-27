@@ -1,0 +1,21 @@
+# 로컬 개발 및 최소 테스트 환경을 위한 Kind 단일 노드 클러스터 설정
+# [도입 배경] 단일 컨트롤 플레인 노드로 전체 워크로드를 수용하여 호스트 CPU/메모리 사용량을 최소화
+# [기대 효과] 멀티 노드 추가 생성을 차단하고 로컬 리소스 부담을 극소화하면서 Ingress 포트 매핑 지원
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+# 단일 컨트롤 플레인 노드 (워커 노드 역할 겸임하여 자원 소비 최소화)
+- role: control-plane
+  kubeadmConfigPatches:
+  - |
+    kind: InitConfiguration
+    nodeRegistration:
+      kubeletExtraArgs:
+        node-labels: "ingress-ready=true"
+  extraPortMappings:
+  - containerPort: 80
+    hostPort: 80
+    protocol: TCP
+  - containerPort: 443
+    hostPort: 443
+    protocol: TCP

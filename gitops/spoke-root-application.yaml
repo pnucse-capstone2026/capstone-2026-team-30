@@ -1,0 +1,25 @@
+# Argo CD Spoke Cluster Root Application (App of Apps Pattern)
+# 대상 클러스터: AWS EKS Spoke (kyverno-eks-spoke-01)
+# 도입 배경: 거버넌스 정책, 테스트베드 워크로드, 정책 예외를 선언적으로 총괄 관리하는 진입점
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: spoke-cluster-root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/YeongrimGo/test-for.git'
+    targetRevision: main
+    path: gitops/spoke-apps
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

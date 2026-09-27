@@ -1,0 +1,50 @@
+# [위반 테스트 1] disallow-latest-tag 정책 검증용 워크로드
+# [테스트 목적] ':latest' 태그를 사용하거나 태그를 생략한 컨테이너 배포 시 Kyverno의 차단 또는 위반 탐지 검증
+# [배포 명령어] kubectl apply -f k8s-manifests/testbed/11-violation-disallow-latest-tag.yaml
+# [삭제 명령어] kubectl delete -f k8s-manifests/testbed/11-violation-disallow-latest-tag.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-tag-violation-latest
+  namespace: governance-testbed
+  labels:
+    app: test-tag-violation-latest
+    policy-target: disallow-latest-tag
+spec:
+  restartPolicy: Always
+  containers:
+    - name: app
+      image: registry.k8s.io/pause:latest
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 50m
+          memory: 64Mi
+      securityContext:
+        privileged: false
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-tag-violation-no-tag
+  namespace: governance-testbed
+  labels:
+    app: test-tag-violation-no-tag
+    policy-target: disallow-latest-tag
+spec:
+  restartPolicy: Always
+  containers:
+    - name: app
+      image: registry.k8s.io/pause
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 50m
+          memory: 64Mi
+      securityContext:
+        privileged: false

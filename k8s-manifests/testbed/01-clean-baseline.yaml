@@ -1,0 +1,85 @@
+# [클린 베이스라인] 거버넌스 정책을 완벽하게 준수하는 정상 워크로드 세트
+# [도입 목적] 위반 0건의 깨끗한 초기 상태를 구성하고, 정상 동작 파드를 검증하기 위함
+# [자원 사양] 초경량 pause:3.10 컨테이너로 호스트 CPU/메모리 부하 0% 유지
+
+---
+# 1. governance-testbed 네임스페이스의 표준 백엔드 결제 API (정상)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: compliant-payment-api
+  namespace: governance-testbed
+  labels:
+    app: payment-api
+    tier: backend
+spec:
+  restartPolicy: Always
+  containers:
+    - name: api-server
+      image: public.ecr.aws/docker/library/busybox:1.36
+      command: ["sleep", "infinity"]
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 50m
+          memory: 64Mi
+      securityContext:
+        privileged: false
+        runAsNonRoot: true
+        runAsUser: 10001
+---
+# 2. production 네임스페이스의 표준 프론트엔드 웹 서비스 (정상)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: compliant-frontend-service
+  namespace: production
+  labels:
+    app: frontend-service
+    tier: frontend
+spec:
+  restartPolicy: Always
+  containers:
+    - name: web
+      image: public.ecr.aws/docker/library/busybox:1.36
+      command: ["sleep", "infinity"]
+      resources:
+        requests:
+          cpu: 20m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi
+      securityContext:
+        privileged: false
+        runAsNonRoot: true
+        runAsUser: 10001
+---
+# 3. mlops-workspace 네임스페이스의 표준 LLM 모델 서빙 파드 (정상)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: compliant-vllm-serving
+  namespace: mlops-workspace
+  labels:
+    app: vllm-serving
+    task: inference
+spec:
+  restartPolicy: Always
+  containers:
+    - name: vllm-engine
+      image: public.ecr.aws/docker/library/busybox:1.36
+      command: ["sleep", "infinity"]
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+      securityContext:
+        privileged: false
+        runAsNonRoot: true
+        runAsUser: 10001

@@ -1,0 +1,59 @@
+# 클러스터 노드 OOM 예방 및 컴퓨팅 자원 불균형(Noisy Neighbor) 방지를 위해 CPU/Memory requests & limits 설정을 강제하는 Kyverno 정책
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-resource-limits
+  annotations:
+    policies.kyverno.io/title: Require Resource Limits and Requests
+    policies.kyverno.io/category: Resource Management
+    policies.kyverno.io/minversion: "1.6.0"
+    policies.kyverno.io/severity: Medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      모든 Pod 컨테이너에 대해 CPU 및 Memory requests와 limits 설정을 필수화하여
+      노드의 OOM(Out Of Memory) 상태 진입을 예방하고 클러스터 내 예측 가능한 자원 할당을 보증합니다.
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: validate-resource-requests-limits
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+                - kyverno-platform
+                - argocd
+                - kubeflow
+                - local-path-storage
+                - kube-public
+                - kube-node-lease
+                - notebook-controller-system
+      validate:
+        message: "모든 컨테이너는 CPU/Memory의 requests 및 limits 설정을 요구합니다."
+        pattern:
+          spec:
+            =(initContainers):
+              - name: "*"
+                resources:
+                  requests:
+                    cpu: "?*"
+                    memory: "?*"
+                  limits:
+                    cpu: "?*"
+                    memory: "?*"
+            containers:
+              - name: "*"
+                resources:
+                  requests:
+                    cpu: "?*"
+                    memory: "?*"
+                  limits:
+                    cpu: "?*"
+                    memory: "?*"

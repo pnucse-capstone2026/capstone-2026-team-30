@@ -1,0 +1,14 @@
+# Pod Security Standards 위반(disallow-privileged-containers 및 require-resource-limits) 감지를 검증하기 위한 특권 모드 디버거 파드
+apiVersion: v1
+kind: Pod
+metadata:
+  name: violating-privileged-debugger
+  namespace: governance-testbed
+  labels:
+    app: violating-privileged-debugger
+spec:
+  containers:
+    - name: debugger
+      image: registry.k8s.io/pause:3.10
+      securityContext:
+        privileged: true

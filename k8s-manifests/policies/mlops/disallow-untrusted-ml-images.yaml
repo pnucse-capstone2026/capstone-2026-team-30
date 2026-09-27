@@ -1,0 +1,46 @@
+# 검증되지 않은 외부 Docker 이미지 레지스트리 배포를 차단하여 ML 공급망 보안 강화
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-untrusted-ml-images
+  annotations:
+    policies.kyverno.io/title: Disallow Untrusted ML Container Registries
+    policies.kyverno.io/category: MLOps Supply Chain Security
+    policies.kyverno.io/minversion: "1.6.0"
+    policies.kyverno.io/severity: High
+    policies.kyverno.io/subject: Pod, Notebook
+    policies.kyverno.io/description: >-
+      사내 승인된 ML 컨테이너 레지스트리(ECR, Kubeflow 공식, NVIDIA NGC 등)에서 제공되는
+      이미지만 사용하도록 강제하여 악성 코드 및 신뢰할 수 없는 ML 라이브러리 반입을 차단합니다.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: validate-ml-registries
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - mlops-workspace
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+                - kyverno-platform
+                - local-path-storage
+                - kube-public
+                - kube-node-lease
+      validate:
+        message: "승인되지 않은 레지스트리의 ML 컨테이너 이미지는 사용할 수 없습니다. 사내 승인 레지스트리(ecr.mycompany.com, quay.io/kubeflow, gcr.io/kubeflow-images, nvcr.io 등)를 사용하세요."
+        pattern:
+          spec:
+            =(template):
+              spec:
+                containers:
+                  - image: "public.ecr.aws/* | ecr.mycompany.com/* | quay.io/kubeflow/* | docker.io/kubeflow/* | gcr.io/kubeflow-images/* | nvcr.io/* | jupyter/*"
+            containers:
+              - image: "public.ecr.aws/* | ecr.mycompany.com/* | quay.io/kubeflow/* | docker.io/kubeflow/* | gcr.io/kubeflow-images/* | nvcr.io/* | jupyter/*"

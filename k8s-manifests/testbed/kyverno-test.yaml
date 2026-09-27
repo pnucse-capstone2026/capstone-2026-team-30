@@ -1,0 +1,79 @@
+# Synthetic Violations Testbed용 Kyverno CLI 자동화 검증 스위트
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: governance-testbed-test
+policies:
+  - ../policies/disallow-latest-tag.yaml
+  - ../policies/require-resource-limits.yaml
+  - ../policies/disallow-privileged-containers.yaml
+resources:
+  - violating-web-app.yaml
+  - violating-privileged-debugger.yaml
+  - compliant-app.yaml
+results:
+  # violating-web-app 위반 검증
+  - policy: disallow-latest-tag
+    rule: disallow-latest-tag
+    resource: violating-web-app
+    kind: Pod
+    result: fail
+  - policy: disallow-latest-tag
+    rule: require-image-tag
+    resource: violating-web-app
+    kind: Pod
+    result: pass
+  - policy: require-resource-limits
+    rule: validate-resource-requests-limits
+    resource: violating-web-app
+    kind: Pod
+    result: fail
+  - policy: disallow-privileged-containers
+    rule: disallow-privileged-containers
+    resource: violating-web-app
+    kind: Pod
+    result: pass
+
+  # violating-privileged-debugger 위반 검증
+  - policy: disallow-privileged-containers
+    rule: disallow-privileged-containers
+    resource: violating-privileged-debugger
+    kind: Pod
+    result: fail
+  - policy: require-resource-limits
+    rule: validate-resource-requests-limits
+    resource: violating-privileged-debugger
+    kind: Pod
+    result: fail
+  - policy: disallow-latest-tag
+    rule: disallow-latest-tag
+    resource: violating-privileged-debugger
+    kind: Pod
+    result: pass
+  - policy: disallow-latest-tag
+    rule: require-image-tag
+    resource: violating-privileged-debugger
+    kind: Pod
+    result: pass
+
+  # compliant-app 전체 통과 검증
+  - policy: disallow-latest-tag
+    rule: require-image-tag
+    resource: compliant-app
+    kind: Pod
+    result: pass
+  - policy: disallow-latest-tag
+    rule: disallow-latest-tag
+    resource: compliant-app
+    kind: Pod
+    result: pass
+  - policy: require-resource-limits
+    rule: validate-resource-requests-limits
+    resource: compliant-app
+    kind: Pod
+    result: pass
+  - policy: disallow-privileged-containers
+    rule: disallow-privileged-containers
+    resource: compliant-app
+    kind: Pod
+    result: pass

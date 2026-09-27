@@ -1,0 +1,26 @@
+# Wave 3: 시연 시나리오 1 & 2용 테스트베드 환경 (Demo Testbed)
+# 도입 배경: 시연 발표 중 개발자 워크로드 배포 및 차단/감사 실습을 위한 격리 네임스페이스 및 베이스라인 제공
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: 03-demo-testbed
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/YeongrimGo/PaC-KyvernoDashboard.git'
+    targetRevision: main
+    path: k8s-manifests/testbed
+    directory:
+      include: '{00-namespace.yaml,01-clean-baseline.yaml,compliant-app.yaml}'
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: governance-testbed
+  syncPolicy:
+    automated:
+      prune: false # 시연 중 동적 생성/삭제 파드의 보존을 위해 prune 비활성화
+      selfHeal: false
+    syncOptions:
+      - CreateNamespace=true

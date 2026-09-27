@@ -1,0 +1,37 @@
+{
+  "name": "kyverno-governance-platform",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel -r --if-present dev",
+    "build": "pnpm --parallel -r --if-present build",
+    "lint": "pnpm --parallel -r --if-present lint",
+    "format": "pnpm --parallel -r --if-present format",
+    "test": "pnpm --parallel -r --if-present test",
+    "db:generate": "pnpm --filter @kyverno-platform/backend prisma:generate",
+    "db:migrate": "pnpm --filter @kyverno-platform/backend prisma:migrate",
+    "db:seed": "pnpm --filter @kyverno-platform/backend prisma:seed",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.0.11",
+    "lint-staged": "^15.2.7"
+  },
+  "lint-staged": {
+    "apps/backend/src/**/*.ts": [
+      "pnpm --filter @kyverno-platform/backend exec eslint --fix",
+      "pnpm --filter @kyverno-platform/backend exec prettier --write"
+    ],
+    "apps/frontend/src/**/*.{ts,tsx}": [
+      "pnpm --filter @kyverno-platform/frontend exec eslint --fix",
+      "pnpm --filter @kyverno-platform/frontend exec prettier --write"
+    ],
+    "k8s-manifests/policies/**/*.yaml": [
+      "bash -c 'if command -v kyverno >/dev/null 2>&1; then kyverno test k8s-manifests/policies/; else echo \"kyverno not installed, skipping test\"; fi'"
+    ]
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  }
+}

@@ -1,0 +1,26 @@
+# Kyverno 실시간 Admission 거부(Enforce) 정책 매니페스트
+# 최신(:latest) 태그를 사용하는 불안정한 컨테이너의 클러스터 배포를 즉각 차단하기 위한 목적
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: e2e-disallow-latest-tag-enforce
+  annotations:
+    policies.kyverno.io/title: E2E Enforce Disallow Latest Tag
+    policies.kyverno.io/category: Governance E2E Testing
+    policies.kyverno.io/severity: high
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    - name: disallow-latest-tag
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: "E2E-GOVERNANCE-DENIAL: ':latest' 태그는 이미지 불변성을 해치므로 배포가 차단되었습니다."
+        pattern:
+          spec:
+            containers:
+              - image: "!*:latest"

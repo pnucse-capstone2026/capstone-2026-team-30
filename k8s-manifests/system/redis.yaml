@@ -1,0 +1,75 @@
+# Kyverno Platform 분산 이벤트 버스 및 Pub/Sub 인프라를 위한 Redis 배포 매니페스트
+# 멀티 인스턴스 백엔드 간 실시간 정책 위반 및 인시던트 알림 동기화와 연결 에러 해소 목적
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: kyverno-platform
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/part-of: kyverno-governance-platform
+    team: devops
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+        app.kubernetes.io/name: redis
+        team: devops
+    spec:
+      containers:
+        - name: redis
+          # AWS Public ECR 공식 캐시 이미지를 활용하여 외부 Docker Hub rate limit 방지 및 빠른 기동 보장
+          image: public.ecr.aws/docker/library/redis:7-alpine
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          # Redis 서비스 준비 상태 검증
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # Redis 프로세스 생존 상태 검증
+          livenessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+---
+# 클러스터 내부 백엔드 서비스 연동을 위한 ClusterIP Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: kyverno-platform
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/part-of: kyverno-governance-platform
+    team: devops
+spec:
+  type: ClusterIP
+  ports:
+    - port: 6379
+      targetPort: 6379
+      name: redis
+  selector:
+    app: redis

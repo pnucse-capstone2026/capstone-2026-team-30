@@ -1,0 +1,33 @@
+# Kyverno Governance Platform 자동 생성 샘플 정책 예외 매니페스트
+# synthetic-violating-app 파드에 대해 disallow-latest-tag 정책 검사를 우회 허용하기 위한 목적
+apiVersion: kyverno.io/v2
+kind: PolicyException
+metadata:
+  name: pac-exception-example
+  namespace: governance-testbed
+  labels:
+    app.kubernetes.io/managed-by: pac-kyverno-dashboard
+    pac.kyverno.io/request-id: "example-request-001"
+    pac.kyverno.io/target-cluster: "default-cluster"
+  annotations:
+    pac.kyverno.io/requester-id: "user-101"
+    pac.kyverno.io/approver-id: "admin-001"
+    pac.kyverno.io/expires-at: "2026-12-31T23:59:59Z"
+    pac.kyverno.io/reason: "테스트베드 워크로드 연동을 위한 예시 예외 승인"
+spec:
+  exceptions:
+    - policyName: disallow-latest-tag
+      ruleNames:
+        - require-image-tag
+        - disallow-latest-tag
+  match:
+    any:
+      - resources:
+          kinds:
+            - Pod
+            - Deployment
+          names:
+            - synthetic-violating-app
+            - synthetic-violating-app-*
+          namespaces:
+            - governance-testbed

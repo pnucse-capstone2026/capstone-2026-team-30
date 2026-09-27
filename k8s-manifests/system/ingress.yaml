@@ -1,0 +1,53 @@
+# EKS 클러스터 외부 단일 진입점(ALB) 제공 및 포트포워딩 전면 제거를 위한 Ingress 매니페스트
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kyverno-ingress
+  namespace: kyverno-platform
+  labels:
+    app.kubernetes.io/name: kyverno-ingress
+    app.kubernetes.io/part-of: kyverno-governance-platform
+  annotations:
+    # AWS Load Balancer Controller를 통한 ALB 자동 프로비저닝 지정
+    kubernetes.io/ingress.class: alb
+    # 인터넷망에서 직접 접근 가능한 Public ALB 생성
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    # Pod IP 주소로 직접 트래픽을 전달하여 홉 수 감소 및 성능 최적화
+    alb.ingress.kubernetes.io/target-type: ip
+    # HTTP 80 포트 수신 및 외부 인터넷 접속 허용
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/inbound-cidrs: 0.0.0.0/0
+    alb.ingress.kubernetes.io/healthcheck-path: /api/health
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: '15'
+    alb.ingress.kubernetes.io/success-codes: '200'
+    # SSE 실시간 세션 및 모니터링 스트림 유지를 위한 ALB 유휴 연결 제한시간 300초 설정
+    alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=300
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          # NestJS 백엔드 API 라우팅 (우선순위 상위 매칭)
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: kyverno-backend
+                port:
+                  number: 3001
+          # Kubeflow Jupyter Notebook 웹 리버스 프록시 라우팅
+          - path: /notebook
+            pathType: Prefix
+            backend:
+              service:
+                name: kyverno-backend
+                port:
+                  number: 3001
+          # Next.js 프론트엔드 대시보드 UI 라우팅
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kyverno-frontend
+                port:
+                  number: 3000

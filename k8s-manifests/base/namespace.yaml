@@ -1,0 +1,8 @@
+# Kyverno Governance Platform 전용 격리 네임스페이스 정의
+# 타 애플리케이션 리소스와의 혼선을 방지하고 세부 RBAC/Quota 제어를 적용 목적
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kyverno-platform
+  labels:
+    app.kubernetes.io/part-of: kyverno-governance-platform

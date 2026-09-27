@@ -1,0 +1,376 @@
+"use client";
+
+import Link from "next/link";
+import { use, useCallback, useEffect, useState } from "react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  Clock3,
+  Code2,
+  Copy,
+  FilePlus2,
+  ShieldAlert,
+  XCircle,
+} from "lucide-react";
+import { toast } from "sonner";
+
+import { DashboardPageShell } from "@/components/dashboard/dashboard-page-shell";
+import { AiErrorExplainerDialog } from "@/components/ai-agent/ai-error-explainer-dialog";
+import { ViolationReportDialog } from "@/components/violations/violation-report-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useAuthStore } from "@/lib/auth-store";
+import { useDataStore } from "@/lib/data-store";
+import {
+  exceptionClassName,
+  exceptionLabel,
+  getViolationDetail,
+  policyViolations,
+  severityClassName,
+  severityLabel,
+  statusClassName,
+  statusLabel,
+  type PolicyViolation,
+} from "@/lib/policy-violations";
+
+type MyViolationDetailPageProps = {
+  params: Promise<{
+    id: string;
+  }>;
+};
+
+const statusIcon = {
+  open: XCircle,
+  inReview: Clock3,
+  resolved: CheckCircle2,
+};
+
+/**
+ * 사용자용 정책 위반 상세 페이지 컴포넌트입니다.
+ */
+export default function MyViolationDetailPage({
+  params,
+}: MyViolationDetailPageProps) {
+  const { id: rawId } = use(params);
+  const id = decodeURIComponent(rawId);
+  const user = useAuthStore((state) => state.user);
+  const sidebarVariant = user?.role === "ADMIN" ? "admin" : "user";
+
+  const [violation, setViolation] = useState<PolicyViolation | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchViolations = useDataStore((state) => state.fetchViolations);
+  const initializeAuth = useAuthStore((state) => state.initialize);
+
+  const loadData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      await initializeAuth();
+      const clusterIdFromKey = id.includes(":") ? id.split(":")[0] : "";
+      const detailFromApi = await getViolationDetail(clusterIdFromKey, id);
+      if (detailFromApi) {
+        setViolation(detailFromApi);
+        setIsLoading(false);
+        return;
+      }
+
+      const freshViolations = await fetchViolations(true);
+      const foundInStore = freshViolations.find((v) => v.id === id);
+      if (foundInStore) {
+        setViolation(foundInStore);
+        setIsLoading(false);
+        return;
+      }
+    } catch {
+      // ignore
+    }
+
+    setViolation(null);
+    setIsLoading(false);
+  }, [fetchViolations, id, initializeAuth]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  if (isLoading) {
+    return (
+      <DashboardPageShell
+        activeHref="/violations"
+        title="위반 상세"
+        description="정책 위반 원인과 조치 방향을 확인합니다."
+      >
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-sm text-slate-500">
+          위반 상세 정보를 불러오는 중입니다...
+        </div>
+      </DashboardPageShell>
+    );
+  }
+
+  if (!violation) {
+    return (
+      <DashboardPageShell
+        variant={sidebarVariant}
+        activeHref={
+          user?.role === "ADMIN" ? "/admin/violations" : "/violations"
+        }
+        title="위반 상세"
+        description="정책 위반 원인과 조치 방향을 확인합니다."
+      >
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-700">
+          <h2 className="text-lg font-semibold">
+            정책 위반 항목을 찾을 수 없습니다.
+          </h2>
+          <p className="mt-2 text-sm text-slate-500">
+            요청하신 ID ({id})에 해당하는 위반 기록이 존재하지 않거나
+            삭제되었습니다.
+          </p>
+          <Button asChild className="mt-4 rounded-xl bg-[#0b2342] text-white">
+            <Link
+              href={
+                user?.role === "ADMIN" ? "/admin/violations" : "/violations"
+              }
+            >
+              목록으로 돌아가기
+            </Link>
+          </Button>
+        </div>
+      </DashboardPageShell>
+    );
+  }
+
+  const StatusIcon = statusIcon[violation.status];
+
+  return (
+    <DashboardPageShell
+      variant={sidebarVariant}
+      activeHref={user?.role === "ADMIN" ? "/admin/violations" : "/violations"}
+      title="위반 상세"
+      description="정책 위반 원인과 조치 방향을 확인합니다."
+      actions={
+        <Button
+          asChild
+          variant="outline"
+          className="hidden h-10 rounded-xl border-slate-200 bg-white sm:inline-flex"
+        >
+          <Link
+            href={user?.role === "ADMIN" ? "/admin/violations" : "/violations"}
+          >
+            <ArrowLeft className="size-4" />
+            목록
+          </Link>
+        </Button>
+      }
+    >
+      <section className="flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
+        <div>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Badge className={severityClassName[violation.severity]}>
+              <AlertTriangle className="size-3" />
+              {severityLabel[violation.severity]}
+            </Badge>
+            <Badge className={statusClassName[violation.status]}>
+              <StatusIcon className="size-3" />
+              {statusLabel[violation.status]}
+            </Badge>
+            <Badge className={exceptionClassName[violation.exceptionStatus]}>
+              {exceptionLabel[violation.exceptionStatus]}
+            </Badge>
+          </div>
+          <h2 className="text-2xl font-semibold tracking-tight">
+            {violation.resourceKind} / {violation.resourceName}
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
+            {violation.message}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <AiErrorExplainerDialog
+            errorMessage={violation.message}
+            policyName={violation.policyName}
+            resourceManifest={violation.manifest}
+            clusterContext={violation.clusterName}
+          />
+          <ViolationReportDialog violation={violation} />
+          {violation.relatedExceptionId ? (
+            <Button
+              asChild
+              className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]"
+            >
+              <Link href={`/exceptions/${violation.relatedExceptionId}`}>
+                내 신청 보기
+              </Link>
+            </Button>
+          ) : (
+            <Button
+              asChild
+              className="h-10 rounded-xl bg-[#0b2342] text-white hover:bg-[#12325b]"
+            >
+              <Link
+                href={`${user?.role === "ADMIN" ? "/admin/exceptions/new" : "/exceptions/new"}?policy=${encodeURIComponent(violation.policyName)}&rule=${encodeURIComponent(violation.ruleName)}&cluster=${encodeURIComponent(violation.clusterId || violation.clusterName)}&resource=${encodeURIComponent(violation.resourceName)}&kind=${encodeURIComponent(violation.resourceKind)}&namespace=${encodeURIComponent(violation.namespace || "")}`}
+              >
+                <FilePlus2 className="size-4" />
+                예외 신청 작성
+              </Link>
+            </Button>
+          )}
+        </div>
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="space-y-6">
+          <article className="rounded-2xl border border-slate-200 bg-white p-6">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                <ShieldAlert className="size-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold">위반 정보</h3>
+                <p className="mt-1 text-xs text-slate-400">
+                  정책 엔진이 감지한 리소스와 규칙입니다.
+                </p>
+              </div>
+            </div>
+            <dl className="mt-5 grid gap-4 md:grid-cols-2">
+              <InfoCard
+                label="정책"
+                value={violation.policyName}
+                detail={violation.ruleName}
+              />
+              <InfoCard
+                label="대상 리소스"
+                value={`${violation.resourceKind} / ${violation.resourceName}`}
+                detail={`${violation.clusterName} / ${violation.namespace}`}
+              />
+              <InfoCard
+                label="문제 경로"
+                value={violation.resourcePath}
+                detail="YAML 기준 위치"
+              />
+              <InfoCard
+                label="발생 시간"
+                value={violation.detectedAt}
+                detail={violation.admissionReviewId}
+              />
+            </dl>
+          </article>
+
+          <article className="rounded-2xl border border-slate-200 bg-white p-6">
+            <h3 className="text-sm font-semibold">권장 조치</h3>
+            <p className="mt-1 text-xs text-slate-400">
+              예외 신청 전에 수정 가능한 항목인지 먼저 확인합니다.
+            </p>
+            <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900">
+              {violation.recommendation}
+            </div>
+          </article>
+
+          <article className="rounded-2xl border border-slate-200 bg-white">
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex size-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+                  <Code2 className="size-4.5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold">리소스 매니페스트</h3>
+                  <p className="mt-1 text-xs text-slate-400">
+                    검사 시점의 YAML 일부
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-lg border-slate-200"
+                onClick={() => {
+                  navigator.clipboard.writeText(violation.manifest);
+                  toast.success("매니페스트가 클립보드에 복사되었습니다.");
+                }}
+              >
+                <Copy className="size-3.5" />
+                복사
+              </Button>
+            </div>
+            <pre className="overflow-x-auto p-6 text-xs leading-6 text-slate-700">
+              <code>{violation.manifest}</code>
+            </pre>
+          </article>
+        </div>
+
+        <aside className="space-y-6">
+          <article className="rounded-2xl border border-slate-200 bg-white p-5">
+            <h3 className="text-sm font-semibold">처리 상태</h3>
+            <dl className="mt-5 space-y-3 text-sm">
+              <StatusRow
+                label="심각도"
+                value={severityLabel[violation.severity]}
+              />
+              <StatusRow label="상태" value={statusLabel[violation.status]} />
+              <StatusRow
+                label="예외"
+                value={exceptionLabel[violation.exceptionStatus]}
+              />
+              <StatusRow label="엔진 응답" value={violation.engineResponse} />
+            </dl>
+          </article>
+
+          <article className="rounded-2xl border border-slate-200 bg-white p-5">
+            <h3 className="text-sm font-semibold">진행 이력</h3>
+            <div className="mt-5 space-y-4">
+              {violation.events.map((event) => (
+                <div
+                  key={`${event.label}-${event.at}`}
+                  className="border-l-2 border-slate-200 pl-4"
+                >
+                  <p className="text-xs font-semibold text-slate-900">
+                    {event.label}
+                  </p>
+                  <p className="mt-1 text-[11px] text-slate-400">{event.at}</p>
+                  <p className="mt-2 text-xs leading-5 text-slate-500">
+                    {event.description}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </article>
+        </aside>
+      </section>
+    </DashboardPageShell>
+  );
+}
+
+/**
+ * 상세 정보 카드 컴포넌트입니다.
+ */
+function InfoCard({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <dt className="text-xs font-medium text-slate-500">{label}</dt>
+      <dd className="mt-3 break-words text-sm font-semibold text-slate-900">
+        {value}
+      </dd>
+      <dd className="mt-1 break-words text-xs text-slate-400">{detail}</dd>
+    </div>
+  );
+}
+
+/**
+ * 상태 요약 행 컴포넌트입니다.
+ */
+function StatusRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <dt className="text-slate-500">{label}</dt>
+      <dd className="truncate font-medium text-slate-900">{value}</dd>
+    </div>
+  );
+}

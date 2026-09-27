@@ -1,0 +1,27 @@
+# Spoke Cluster: GitOps 워크로드 배포 테스트베드 (Demo Testbed)
+# 도입 배경: 개발팀의 비즈니스 서비스(Clean Baseline 및 샘플 앱)를 GitOps 방식으로 배포
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: 02-spoke-demo-testbed
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/YeongrimGo/test-for.git'
+    targetRevision: main
+    path: k8s-manifests/testbed
+    directory:
+      include: '{00-namespace.yaml,01-clean-baseline.yaml,compliant-app.yaml}'
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: governance-testbed
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

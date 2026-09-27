@@ -1,0 +1,22 @@
+# Kyverno 정책 예외(PolicyException) 매니페스트
+# 특정 긴급 비즈니스 사유로 인해 정책 위반 워크로드(e2e-violating-pod)의 배포를 예외 승인하기 위한 목적
+apiVersion: kyverno.io/v2
+kind: PolicyException
+metadata:
+  name: e2e-allow-violating-pod-exception
+  annotations:
+    kyverno.io/description: "E2E 테스트 자동화를 위한 긴급 임시 예외 허용"
+spec:
+  exceptions:
+    - policyName: e2e-disallow-latest-tag-enforce
+      ruleNames:
+        - disallow-latest-tag
+  match:
+    any:
+      - resources:
+          kinds:
+            - Pod
+          namespaces:
+            - e2e-governance-test
+          names:
+            - e2e-violating-pod*

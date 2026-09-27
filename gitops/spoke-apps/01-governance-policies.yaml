@@ -1,0 +1,27 @@
+# Spoke Cluster: Kyverno 보안 거버넌스 정책 번들
+# 도입 배경: Git 저장소(SSOT)에 선언된 ClusterPolicy를 Spoke 클러스터에 지속 수렴(Reconcile)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: 01-spoke-governance-policies
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/YeongrimGo/test-for.git'
+    targetRevision: main
+    path: k8s-manifests/policies
+    directory:
+      recurse: true
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: kyverno
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - SkipDryRunOnMissingResource=true
+      - ServerSideApply=true

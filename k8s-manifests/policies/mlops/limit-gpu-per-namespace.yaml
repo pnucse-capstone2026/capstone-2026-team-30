@@ -1,0 +1,50 @@
+# MLOps 워크로드의 GPU 리소스 과다 점유를 방지하고 팀별 네임스페이스 할당량을 강제하는 Kyverno 정책
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: limit-gpu-per-namespace
+  annotations:
+    policies.kyverno.io/title: Limit GPU Allocation Per Namespace
+    policies.kyverno.io/category: MLOps Governance & Cost Optimization
+    policies.kyverno.io/minversion: "1.6.0"
+    policies.kyverno.io/severity: High
+    policies.kyverno.io/subject: Pod, Notebook
+    policies.kyverno.io/description: >-
+      단일 Pod 또는 Notebook 컨테이너가 허용된 최대 GPU 수량(기본 8개)을 초과하여
+      요청하는 것을 방지하여 특정 워크로드의 클러스터 리소스 독점을 막습니다.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: check-gpu-limits
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - mlops-workspace
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+                - kyverno-platform
+                - local-path-storage
+                - kube-public
+                - kube-node-lease
+      validate:
+        message: "단일 Pod/Notebook 컨테이너의 GPU 요청 수량은 최대 8개를 초과할 수 없습니다."
+        pattern:
+          spec:
+            =(template):
+              spec:
+                containers:
+                  - =(resources):
+                      =(limits):
+                        =(nvidia.com/gpu): "<=8"
+            =(containers):
+              - =(resources):
+                  =(limits):
+                    =(nvidia.com/gpu): "<=8"

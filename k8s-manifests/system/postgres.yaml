@@ -1,0 +1,86 @@
+# EKS 클러스터 내부 PostgreSQL 데이터베이스 배포 매니페스트
+# 외부 DB 의존 없이 클러스터 내부에서 백엔드 데이터를 영속화하기 위한 목적
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: kyverno-platform
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/part-of: kyverno-governance-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17-alpine
+          env:
+            - name: POSTGRES_USER
+              value: devuser
+            - name: POSTGRES_PASSWORD
+              value: devpassword
+            - name: POSTGRES_DB
+              value: kyverno_dashboard
+          ports:
+            - containerPort: 5432
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          # 데이터베이스 엔진 초기화 완료 및 클라이언트 연결 수락 상태 확인
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - devuser
+                - -d
+                - kyverno_dashboard
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 5
+          # DB 프로세스 다운 시 컨테이너 자동 재시작 보장
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - devuser
+                - -d
+                - kyverno_dashboard
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: init-sql-vol
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: init-sql-vol
+          configMap:
+            name: postgres-init-sql
+---
+# 클러스터 내부 서비스 지정을 위한 ClusterIP Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: kyverno-platform
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: postgres

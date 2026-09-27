@@ -1,0 +1,179 @@
+# MLOps Kubeflow Notebook Controller 배포 매니페스트
+# 도입 배경: Kubeflow Notebook CRD를 감지하여 실제 Pod(StatefulSet) 및 접근용 ClusterIP Service를 자동 프로비저닝
+# 기대 효과: 사용자 포트포워딩(kubectl port-forward svc/<name> 8888:80) 및 JupyterLab IDE 웹 접속의 완전한 정상화
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubeflow
+  labels:
+    app.kubernetes.io/part-of: kubeflow
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: notebook-controller-service-account
+  namespace: kubeflow
+  labels:
+    app: notebook-controller
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: notebook-controller-leader-election-role
+  namespace: kubeflow
+  labels:
+    app: notebook-controller
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["configmaps/status"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: notebook-controller-role
+  labels:
+    app: notebook-controller
+rules:
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["*"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "get", "list", "patch", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["*"]
+  - apiGroups: ["kubeflow.org"]
+    resources: ["notebooks", "notebooks/finalizers", "notebooks/status"]
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: notebook-controller-leader-election-rolebinding
+  namespace: kubeflow
+  labels:
+    app: notebook-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: notebook-controller-leader-election-role
+subjects:
+  - kind: ServiceAccount
+    name: notebook-controller-service-account
+    namespace: kubeflow
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: notebook-controller-role-binding
+  labels:
+    app: notebook-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: notebook-controller-role
+subjects:
+  - kind: ServiceAccount
+    name: notebook-controller-service-account
+    namespace: kubeflow
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notebook-controller-config
+  namespace: kubeflow
+  labels:
+    app: notebook-controller
+data:
+  CLUSTER_DOMAIN: cluster.local
+  CULL_IDLE_TIME: "1440"
+  ENABLE_CULLING: "false"
+  IDLENESS_CHECK_PERIOD: "1"
+  ISTIO_GATEWAY: kubeflow/kubeflow-gateway
+  USE_ISTIO: "false"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notebook-controller-deployment
+  namespace: kubeflow
+  labels:
+    app: notebook-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notebook-controller
+  template:
+    metadata:
+      labels:
+        app: notebook-controller
+    spec:
+      serviceAccountName: notebook-controller-service-account
+      containers:
+        - name: manager
+          image: docker.io/kubeflownotebookswg/notebook-controller:v1.8.0
+          imagePullPolicy: IfNotPresent
+          command:
+            - /manager
+          env:
+            - name: USE_ISTIO
+              valueFrom:
+                configMapKeyRef:
+                  name: notebook-controller-config
+                  key: USE_ISTIO
+            - name: ISTIO_GATEWAY
+              valueFrom:
+                configMapKeyRef:
+                  name: notebook-controller-config
+                  key: ISTIO_GATEWAY
+            - name: CLUSTER_DOMAIN
+              valueFrom:
+                configMapKeyRef:
+                  name: notebook-controller-config
+                  key: CLUSTER_DOMAIN
+            - name: ENABLE_CULLING
+              valueFrom:
+                configMapKeyRef:
+                  name: notebook-controller-config
+                  key: ENABLE_CULLING
+            - name: CULL_IDLE_TIME
+              valueFrom:
+                configMapKeyRef:
+                  name: notebook-controller-config
+                  key: CULL_IDLE_TIME
+            - name: IDLENESS_CHECK_PERIOD
+              valueFrom:
+                configMapKeyRef:
+                  name: notebook-controller-config
+                  key: IDLENESS_CHECK_PERIOD
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 10

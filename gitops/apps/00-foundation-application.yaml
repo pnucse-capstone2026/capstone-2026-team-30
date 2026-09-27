@@ -1,0 +1,69 @@
+# Wave 0: Kyverno 정책 엔진 및 Kubeflow Notebook Controller (Foundation Layer)
+# 도입 배경: 거버넌스 정책 CRD와 MLOps 워크스페이스 컨트롤러를 선행 배포하여 후속 리소스의 무결성 확보
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: 00-kyverno-engine
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  source:
+    chart: kyverno
+    repoURL: https://kyverno.github.io/kyverno/
+    targetRevision: 3.2.6
+    helm:
+      releaseName: kyverno
+      valuesObject:
+        features:
+          admissionReports:
+            enabled: false # 로컬/시연 환경 etcd WAL 쓰기 병목 방지
+        admissionController:
+          replicas: 1
+          container:
+            resources:
+              requests:
+                cpu: 100m
+                memory: 256Mi
+              limits:
+                cpu: 1000m
+                memory: 768Mi # .agents/PERFORMANCE_AND_SYSTEM_RESOURCES.md 표준 준수 (Direct Reclaim 방지)
+        backgroundController:
+          backgroundScanInterval: 1h # 백그라운드 스캔 주기 1h 설정
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kyverno
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: 00-kubeflow-notebooks
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/YeongrimGo/PaC-KyvernoDashboard.git'
+    targetRevision: main
+    path: k8s-manifests/system
+    directory:
+      include: 'notebook-controller.yaml'
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: kubeflow
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

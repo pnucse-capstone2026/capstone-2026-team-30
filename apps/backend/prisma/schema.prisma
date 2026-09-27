@@ -1,0 +1,247 @@
+// This is your Prisma schema file
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  APPROVER
+  REQUESTER
+  VIEWER
+}
+
+enum ExceptionStatus {
+  PENDING
+  APPLYING
+  APPROVED
+  REJECTED
+  CANCELLING
+  EXPIRING
+  EXPIRED
+  CANCELLED
+  FAILED
+}
+
+enum AuditActorType {
+  USER
+  SYSTEM
+}
+
+model User {
+  id               String    @id @default(uuid(7))
+  email            String    @unique
+  pwdHash          String
+  role             Role
+  currentSessionId String?   // 현재 활성화된 고유 세션 식별자 (동시접속 차단용)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  disabledAt       DateTime?
+
+  requestedExceptionRequests PolicyExceptionRequest[] @relation("PolicyExceptionRequestRequester")
+  approvedExceptionRequests  PolicyExceptionRequest[] @relation("PolicyExceptionRequestApprover")
+  auditLogs                  AuditLog[]               @relation("AuditLogActor")
+  refreshTokens              RefreshToken[]
+  userClusters               UserCluster[]
+  notificationReads          NotificationRead[]
+}
+
+model Notification {
+  id               String   @id @default(uuid(7))
+  title            String   @db.VarChar(253)
+  message          String   @db.VarChar(2000)
+  type             String   @db.VarChar(50)
+  severity         String   @db.VarChar(50)
+  href             String   @db.VarChar(512)
+  targetRoles      Role[]
+  targetUserEmails String[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
+model NotificationRead {
+  userId         String
+  notificationId String   @db.VarChar(128)
+  readAt         DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, notificationId])
+  @@index([userId])
+}
+
+/// 사용자가 접근할 수 있는 클러스터. 클러스터는 DB 엔티티가 아니라 설정값(env)이라
+/// FK 를 걸지 않고 id 문자열만 참조한다 — PolicyExceptionRequest.targetClusterId 와
+/// 같은 방식이다. 존재 검증은 ClusterProvider 가 담당한다.
+model UserCluster {
+  userId    String
+  clusterId String   @db.VarChar(128)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, clusterId])
+  @@index([clusterId])
+}
+
+model Permission {
+  id          String   @id @default(uuid(7))
+  key         String   @unique
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  role         Role
+  permissionId String
+  createdAt    DateTime @default(now())
+
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([role, permissionId])
+  @@index([permissionId])
+}
+
+/// 위반이 어느 클러스터에서 발생했는지만 구별한다. 나머지 확장(심각도, 처리 상태,
+/// 대상 리소스 등)과 수집 경로는 위반/오류 관리 기능에서 함께 설계한다.
+model ViolationHistory {
+  id                       String   @id @default(uuid(7))
+  policyName               String
+  ruleName                 String
+  targetClusterId          String   @db.VarChar(128)
+  targetClusterDisplayName String   @db.VarChar(253)
+  namespace                String   @default("cluster-wide") @db.VarChar(63)
+  resourceKind             String   @default("Unknown") @db.VarChar(63)
+  resourceName             String   @default("Unknown") @db.VarChar(253)
+  severity                 String   @default("medium") @db.VarChar(20)
+  status                   String   @default("open") @db.VarChar(20)
+  message                  String?  @db.VarChar(2000)
+  occurredAt               DateTime
+
+  @@index([policyName])
+  @@index([occurredAt])
+  @@index([targetClusterId, occurredAt])
+  @@index([targetClusterId, namespace, occurredAt])
+  @@index([severity])
+}
+
+model PolicyExceptionRequest {
+  id                       String          @id @default(uuid(7))
+  status                   ExceptionStatus @default(PENDING)
+  reason                   String          @db.VarChar(2000)
+  policyName               String          @db.VarChar(253)
+  ruleNames                String[]
+  appliedRuleNames         String[]        @default([])
+  resourceKind             String          @db.VarChar(63)
+  resourceName             String          @db.VarChar(253)
+  resourceNamespace        String?         @db.VarChar(63)
+  targetClusterId          String          @db.VarChar(128)
+  targetClusterDisplayName String          @db.VarChar(253)
+  k8sExceptionName         String          @db.VarChar(253)
+  expiresAt                DateTime
+  decisionNote             String?         @db.VarChar(2000)
+  decidedAt                DateTime?
+  activatedAt              DateTime?
+  applyAttempts            Int             @default(0)
+  lastError                String?         @db.VarChar(1000)
+  nextAttemptAt            DateTime?
+  reconcileClaimId         String?         @db.Uuid
+  reconcileLeaseUntil      DateTime?
+  createdAt                DateTime        @default(now())
+  updatedAt                DateTime        @updatedAt
+  requestUserId            String
+  approverUserId           String?
+
+  requestUser  User  @relation("PolicyExceptionRequestRequester", fields: [requestUserId], references: [id])
+  approverUser User? @relation("PolicyExceptionRequestApprover", fields: [approverUserId], references: [id], onDelete: Restrict)
+
+  @@unique([targetClusterId, k8sExceptionName])
+  @@index([status, createdAt])
+  @@index([status, expiresAt])
+  @@index([status, nextAttemptAt])
+  @@index([policyName])
+  @@index([requestUserId, createdAt])
+  @@index([approverUserId])
+}
+
+model AuditLog {
+  id           String           @id @default(uuid(7))
+  action       String           @db.VarChar(100)
+  entityType   String           @db.VarChar(100)
+  entityId     String
+  actorType    AuditActorType
+  beforeStatus ExceptionStatus?
+  afterStatus  ExceptionStatus?
+  metadata     Json?
+  createdAt    DateTime         @default(now())
+  userId       String?
+
+  user User? @relation("AuditLogActor", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid(7))
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  userId    String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([revokedAt])
+}
+
+enum IncidentStatus {
+  ACTIVE
+  RESOLVED_BY_EXCEPTION
+  RESOLVED_BY_HOTFIX
+  IGNORED
+}
+
+/// ArgoCD Sync 차단 및 Kyverno Admission Webhook 차단으로 인한 배포 중단 인시던트
+model DeploymentIncident {
+  id             String         @id @default(uuid(7))
+  clusterId      String         @db.VarChar(128)
+  namespace      String         @db.VarChar(63)
+  resourceKind   String         @db.VarChar(63)
+  resourceName   String         @db.VarChar(253)
+  policyName     String         @db.VarChar(253)
+  ruleName       String?        @db.VarChar(253)
+  blockReason    String         @db.Text
+  gitopsAppName  String?        @db.VarChar(253)
+  gitCommitSha   String?        @db.VarChar(64)
+  gitRepository  String?        @db.VarChar(512)
+  status         IncidentStatus @default(ACTIVE)
+  blockCount     Int            @default(1)
+  firstBlockedAt DateTime       @default(now())
+  lastBlockedAt  DateTime       @default(now())
+  resolvedAt     DateTime?
+  exceptionId    String?        @db.VarChar(128)
+  metadata       Json?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([clusterId, status])
+  @@index([clusterId, namespace, status])
+  @@index([status, lastBlockedAt])
+  @@index([gitopsAppName])
+}

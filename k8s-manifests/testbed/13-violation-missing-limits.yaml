@@ -1,0 +1,42 @@
+# [위반 테스트 3] require-resource-limits 정책 검증용 워크로드
+# [테스트 목적] requests 및 limits를 누락하여 클러스터 자원 고갈을 유발하는 파드 검증
+# [배포 명령어] kubectl apply -f k8s-manifests/testbed/13-violation-missing-limits.yaml
+# [삭제 명령어] kubectl delete -f k8s-manifests/testbed/13-violation-missing-limits.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-limit-violation-missing-all
+  namespace: governance-testbed
+  labels:
+    app: test-limit-violation-missing-all
+    policy-target: require-resource-limits
+spec:
+  restartPolicy: Always
+  containers:
+    - name: app
+      image: registry.k8s.io/pause:3.10
+      securityContext:
+        privileged: false
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-limit-violation-missing-memory-limit
+  namespace: production
+  labels:
+    app: test-limit-violation-missing-memory-limit
+    policy-target: require-resource-limits
+spec:
+  restartPolicy: Always
+  containers:
+    - name: app
+      image: registry.k8s.io/pause:3.10
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 50m
+      securityContext:
+        privileged: false

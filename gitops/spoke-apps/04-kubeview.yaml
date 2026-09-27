@@ -1,0 +1,28 @@
+# Spoke Cluster: KubeView 실시간 토폴로지 시각화 Application
+# 도입 배경: 클러스터에 가동 중인 노드와 파드의 배치 상태를 경량 그래픽 다이어그램으로 시각화
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: 04-spoke-kubeview
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+  source:
+    repoURL: 'https://code.benco.io/kubeview/deploy/helm'
+    chart: kubeview
+    targetRevision: 2.2.1
+    helm:
+      parameters:
+        - name: limitNamespace
+          value: '""'
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: kubeview
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

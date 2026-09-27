@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "noEmit": true,
+    // ESM 전용인 @kubernetes/client-node 를 jest 가 CJS 로 변환해 들여올 수 있어야
+    // 한다(jest 런타임은 require(ESM) 을 지원하지 않는다). transformIgnorePatterns
+    // 예외로 그 패키지의 .js 를 ts-jest 에 태우므로 allowJs 가 필요하다.
+    "allowJs": true,
+    "types": ["node", "jest"]
+  },
+  "include": ["./**/*.ts"],
+  "exclude": ["../node_modules", "../dist"]
+}

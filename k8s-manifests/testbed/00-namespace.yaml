@@ -1,0 +1,24 @@
+# 실시간 거버넌스 테스트베드 및 워크로드 격리를 위한 독립 네임스페이스 정의
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: governance-testbed
+  labels:
+    environment: testbed
+    kyverno-governance: enabled
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    environment: production
+    kyverno-governance: enabled
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlops-workspace
+  labels:
+    environment: mlops
+    kyverno-governance: enabled

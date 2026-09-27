@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+.next/
+out/
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+pino.log
+logs/
+dump.rdb
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+
+# AI Agents & Copilots
+.gemini/
+.continue/
+.cursor/
+.aider*
+.agents/
+*chat.history.md
+openai-*.log
+anthropic-*.log
+gemini-*.log
+*.prompt
+
+# Local Cluster Scripts Binaries
+scripts/bin/
+
+# Temporary Backups & Notes
+*.sql
+!apps/backend/prisma/migrations/**/*.sql
+!k8s-manifests/system/*.sql
+*_backup.*
+/prompts/
+
+# Documentation & Archives
+archive/
+

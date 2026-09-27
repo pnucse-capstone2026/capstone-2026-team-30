@@ -1,0 +1,21 @@
+# 거버넌스 정책 통과(Pass) 수집 데이터 검증용 규격 준수 파드
+apiVersion: v1
+kind: Pod
+metadata:
+  name: compliant-app
+  namespace: governance-testbed
+  labels:
+    app: compliant-app
+spec:
+  containers:
+    - name: app
+      image: nginx:1.25.4
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+      securityContext:
+        privileged: false
